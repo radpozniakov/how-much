@@ -24,6 +24,15 @@ ROOM_CAPACITY = 30
 # Upper bound on a display name's length, applied after trimming (D-34).
 MAX_DISPLAY_NAME_LENGTH = 40
 
+# The estimation deck: Fibonacci numbers only, as string tokens (D-7, D-8). No
+# 40/100, no special cards. Stored as strings so votes serialize uniformly and
+# the set is the single source of truth for what counts as a valid card.
+FIBONACCI_DECK: tuple[str, ...] = ("0", "1", "2", "3", "5", "8", "13", "21")
+
+# Upper bound on the current item's topic, applied after trimming. Mirrors the
+# bounded display name and keeps the in-memory room from growing unbounded.
+MAX_TOPIC_LENGTH = 200
+
 
 def room_link(code: str) -> str:
     """Build the shareable link for a room code (see D-30 for the path convention)."""

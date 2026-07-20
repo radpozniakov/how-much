@@ -9,7 +9,13 @@ def test_create_room_returns_201_and_expected_shape(client):
     assert resp.status_code == 201
     body = resp.json()
     assert set(body) == {"participant_id", "room", "link"}
-    assert set(body["room"]) == {"code", "host_id", "participants"}
+    assert set(body["room"]) == {
+        "code",
+        "host_id",
+        "participants",
+        "current_item",
+        "host_voting",
+    }
 
 
 def test_created_code_matches_configured_length_and_alphabet(client):

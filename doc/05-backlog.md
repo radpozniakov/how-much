@@ -97,16 +97,38 @@ stays Alice; create with no name → `422`.
 
 **Refs:** FR-1, FR-3, FR-4, FR-5 · D-6, D-9, D-10, D-13, D-32, D-33, D-34
 
-### S3 — Voting round · `TODO`
+### S3 — Voting round · `DONE`
 
 **Goal:** a round can be run and votes are private until reveal.
 
-- Set the single current **item** (optional free-text topic).
-- Fibonacci deck `0,1,2,3,5,8,13,21`; cast a vote, change it before reveal.
-- Expose *who has voted* without exposing values.
-- Host voting toggle: host may opt in/out; others always vote (FR-14, D-14).
-- Tests: vote recorded, re-vote overwrites, values never leaked pre-reveal,
-  invalid card rejected, host-excluded case.
+**Built**
+- `app/rooms/models.py` — `Room` gains the round: `current_item`, private
+  `votes` (`participant_id → card`), and `host_voting`. Methods `set_item`
+  (host-only, trims/clears the topic), `cast_vote` (guards in order:
+  unknown-participant → host-opted-out → invalid-card; overwrites on re-vote),
+  `set_host_voting` (host-only; opting out drops the host's vote), and
+  `expected_voter_ids()` (all voters minus an opted-out host — the S4 reveal gate).
+- `app/rooms/errors.py` — `InvalidCard`, `HostNotVoting`, `UnknownParticipant`,
+  `NotHost` (all transport-free `RoomError` subclasses).
+- `app/config.py` — `FIBONACCI_DECK` (`0,1,2,3,5,8,13,21`, D-8) as the single
+  source of valid cards; `MAX_TOPIC_LENGTH` (200).
+- `app/rooms/router.py` — `PUT /rooms/{code}/item`, `/vote`, `/host-voting`;
+  `ParticipantView` gains `has_voted` and `RoomView` gains `current_item` +
+  `host_voting` — **card values are never on any view pre-reveal** (FR-10). Card
+  validated at the DTO (fast 422) and re-checked in the domain. `_require_room`
+  helper centralizes 404 + case-insensitive lookup.
+- `app/main.py` — one `@app.exception_handler(RoomError)` maps domain errors to
+  status codes (`RoomFull`/`HostNotVoting`→409, `InvalidCard`→422,
+  `UnknownParticipant`→404, `NotHost`→403) with a `{"detail": …}` body; the S2
+  inline `RoomFull` try/except was removed in favour of it.
+
+**Verified** — `pytest -q` → **61 passed**; `ruff check` + `ruff format --check`
+clean. The vote-leak test asserts structurally that the view exposes presence
+(`has_voted`) but no card value; host opt-out drops the host's vote and rejects a
+host vote (409); non-host set-item/toggle → 403.
+
+**Out of scope (deferred):** reveal/reset, results math (average/consensus), and
+`reset_round()` → S4; real-time broadcast → S6.
 
 **Validate:** cast/change votes via API; the pre-reveal view shows voter presence
 but no numbers. **Refs:** FR-8–FR-11, FR-14 · D-7, D-8, D-11, D-14

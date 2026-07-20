@@ -1,8 +1,10 @@
 """HTTP routes for rooms.
 
 Room creation is the one action that fits request/response rather than the
-real-time socket (D-5), so it lives here. Joining and all round actions move
-onto the WebSocket in S6.
+real-time socket (D-5), so it lives here. Joining and all round actions are HTTP
+for now to keep the domain testable before any transport; they move onto the
+WebSocket in S6. Domain errors raised below are translated to status codes by
+the ``RoomError`` handler registered in :mod:`app.main`.
 """
 
 from __future__ import annotations
@@ -11,7 +13,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
 
 from app import config
-from app.rooms.errors import RoomFull
 from app.rooms.models import Room
 from app.rooms.store import store
 
@@ -36,18 +37,67 @@ class JoinRequest(BaseModel):
         return value
 
 
+class SetItemRequest(BaseModel):
+    """Set (or clear) the current item's topic. Host-only, enforced in the
+    domain via ``participant_id`` (no auth — D-9)."""
+
+    participant_id: str
+    topic: str | None = None
+
+    @field_validator("topic")
+    @classmethod
+    def _clean_topic(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if len(value) > config.MAX_TOPIC_LENGTH:
+            raise ValueError(
+                f"topic must be at most {config.MAX_TOPIC_LENGTH} characters"
+            )
+        # Blank collapses to None so the domain clears the item.
+        return value or None
+
+
+class CastVoteRequest(BaseModel):
+    """Cast or change the caller's vote. The card is validated against the deck
+    here (fast 422 at the boundary); the domain re-checks as defense in depth."""
+
+    participant_id: str
+    card: str
+
+    @field_validator("card")
+    @classmethod
+    def _known_card(cls, value: str) -> str:
+        if value not in config.FIBONACCI_DECK:
+            raise ValueError(f"{value!r} is not a valid card")
+        return value
+
+
+class HostVotingRequest(BaseModel):
+    """Toggle whether the host votes this round (host-only, FR-14)."""
+
+    participant_id: str
+    voting: bool
+
+
 class ParticipantView(BaseModel):
     id: str
     name: str
+    # Whether this participant has a vote in the current round. Presence only —
+    # the card value is never exposed before reveal (FR-10).
+    has_voted: bool
 
 
 class RoomView(BaseModel):
-    """The shape every client sees: who's here and who's the host. Grows with the
-    round in later slices; over the socket (S6) this is what gets broadcast."""
+    """The shape every client sees: who's here, who's the host, the current item,
+    and who has voted — but never the vote values pre-reveal (FR-10). Over the
+    socket (S6) this is what gets broadcast."""
 
     code: str
     host_id: str | None
     participants: list[ParticipantView]
+    current_item: str | None
+    host_voting: bool
 
 
 class JoinResponse(BaseModel):
@@ -69,9 +119,21 @@ def _room_view(room: Room) -> RoomView:
         code=room.code,
         host_id=room.host_id,
         participants=[
-            ParticipantView(id=p.id, name=p.name) for p in room.participants.values()
+            ParticipantView(id=p.id, name=p.name, has_voted=p.id in room.votes)
+            for p in room.participants.values()
         ],
+        current_item=room.current_item,
+        host_voting=room.host_voting,
     )
+
+
+def _require_room(code: str) -> Room:
+    """Resolve a room by code (case-insensitive — codes are generated uppercase,
+    D-17). Raises 404 if there is no such room."""
+    room = store.get(code.strip().upper())
+    if room is None:
+        raise HTTPException(status_code=404, detail="Room not found")
+    return room
 
 
 @router.post("", status_code=201, response_model=CreateRoomResponse)
@@ -93,12 +155,30 @@ async def create_room(body: JoinRequest) -> CreateRoomResponse:
 @router.post("/{code}/participants", status_code=201, response_model=JoinResponse)
 async def join_room(code: str, body: JoinRequest) -> JoinResponse:
     """Join an existing room by code with a display name (FR-3)."""
-    # Codes are generated uppercase; accept any casing the user types (D-17).
-    room = store.get(code.strip().upper())
-    if room is None:
-        raise HTTPException(status_code=404, detail="Room not found")
-    try:
-        participant = room.add_participant(body.name)
-    except RoomFull as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    room = _require_room(code)
+    participant = room.add_participant(body.name)
     return JoinResponse(participant_id=participant.id, room=_room_view(room))
+
+
+@router.put("/{code}/item", response_model=RoomView)
+async def set_item(code: str, body: SetItemRequest) -> RoomView:
+    """Set or clear the current item's topic (host-only, FR-8)."""
+    room = _require_room(code)
+    room.set_item(body.participant_id, body.topic)
+    return _room_view(room)
+
+
+@router.put("/{code}/vote", response_model=RoomView)
+async def cast_vote(code: str, body: CastVoteRequest) -> RoomView:
+    """Cast or change the caller's vote (FR-9, FR-11)."""
+    room = _require_room(code)
+    room.cast_vote(body.participant_id, body.card)
+    return _room_view(room)
+
+
+@router.put("/{code}/host-voting", response_model=RoomView)
+async def set_host_voting(code: str, body: HostVotingRequest) -> RoomView:
+    """Toggle whether the host votes this round (host-only, FR-14)."""
+    room = _require_room(code)
+    room.set_host_voting(body.participant_id, body.voting)
+    return _room_view(room)

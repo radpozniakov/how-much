@@ -18,3 +18,32 @@ class RoomFull(RoomError):
     def __init__(self, capacity: int) -> None:
         self.capacity = capacity
         super().__init__(f"Room is full (max {capacity})")
+
+
+class InvalidCard(RoomError):
+    """A vote carried a value that is not in the Fibonacci deck (D-8)."""
+
+    def __init__(self, card: str) -> None:
+        self.card = card
+        super().__init__(f"{card!r} is not a valid card")
+
+
+class HostNotVoting(RoomError):
+    """The host tried to vote while opted out of voting (D-14)."""
+
+    def __init__(self) -> None:
+        super().__init__("Host is not voting in this round")
+
+
+class UnknownParticipant(RoomError):
+    """An action referenced a participant who is not in the room."""
+
+    def __init__(self) -> None:
+        super().__init__("Participant is not in this room")
+
+
+class NotHost(RoomError):
+    """A host-only action was attempted by someone who is not the host (D-12)."""
+
+    def __init__(self) -> None:
+        super().__init__("Only the host may perform this action")
