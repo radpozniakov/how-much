@@ -1,11 +1,13 @@
-"""how-much backend — scaffold.
+"""how-much backend.
 
-Only transport plumbing lives here for now: a health endpoint and a placeholder
-WebSocket that echoes messages. Room/voting logic arrives in later backlog tasks.
+Transport plumbing (health + a placeholder echo WebSocket) plus the room HTTP
+API. The real message protocol replaces the echo socket in S6.
 """
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.rooms.router import router as rooms_router
 
 app = FastAPI(title="how-much", version="0.1.0")
 
@@ -17,6 +19,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(rooms_router)
 
 
 @app.get("/health")

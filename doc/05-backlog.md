@@ -1,105 +1,184 @@
 # 05 — Backlog
 
-Sequenced tasks to build the MVP defined in [02-current-scope.md](02-current-scope.md).
-Ordered so each task builds on the previous one. Only **T1** is detailed for now;
-later tasks are scoped at a high level and will be expanded when reached.
+Sequenced work to build the MVP defined in [02-current-scope.md](02-current-scope.md).
+
+## Approach — vertical slices, backend-first
+
+Each item below is a **thin vertical slice through the domain**: a single
+capability that can be validated the moment it lands, not a horizontal layer that
+only pays off later. We sequence in three passes:
+
+1. **Backend domain (S1–S5)** — the room/voting model built as tested Python
+   services with a minimal HTTP surface. **No WebSocket yet.** Each slice is proven
+   by unit/API tests and `curl` before we move on. This front-loads the risky,
+   valuable logic and keeps it independent of any transport.
+2. **Real-time transport (S6)** — WebSocket wrapped *around* a domain that already
+   works: connection lifecycle, message protocol, and presence/round broadcast.
+3. **Frontend (S7–S9)** — thin UI slices, each demoable in the browser, wiring the
+   live backend to real screens.
+
+Then deployment polish (S10). Rationale: the domain is where correctness matters
+and is cheapest to test in isolation; WebSocket is a delivery mechanism, not a
+feature; the UI is meaningless until there's behavior behind it.
 
 Status legend: `TODO` · `IN PROGRESS` · `DONE`
 
 ---
 
-## T1 — Scaffold the backend + compose · `DONE`
+## Done — scaffolding
 
-**Goal:** a runnable backend skeleton with one command to bring it up, and live
-code reload via a volume mount. No product logic — just structure, tooling, and
-wiring. **Frontend is deferred to T1b** (added later, per decision to focus BE
-first).
+### T1 — Backend + compose skeleton · `DONE`
 
-**Backend (Python / FastAPI) — done**
-- `backend/` with `requirements.txt` (FastAPI + `uvicorn[standard]`).
-- `backend/app/main.py` — FastAPI app: `GET /health` → `200 {"status":"ok"}`.
-- Placeholder WebSocket `/ws` that accepts a connection and echoes messages
-  (proves transport; replaced in T2).
-- `backend/Dockerfile` (python:3.12-slim, `uvicorn --reload`).
-- `backend/.dockerignore`.
+Runnable FastAPI skeleton (`GET /health`, placeholder `/ws` echo), `Dockerfile`,
+and `docker-compose.yml` with a bind mount + `uvicorn --reload`. **Verified:**
+`compose up` clean, `/health` → `200 {"status":"ok"}`, hot reload ~2s no rebuild.
 
-**Orchestration — done**
-- `docker-compose.yml` with the `backend` service on port `8000`.
-- Bind mount `./backend/app:/app/app` so host edits reflect in the container;
-  `uvicorn --reload` (WatchFiles) restarts on change — **verified** (edit appeared
-  in ~2s, no rebuild).
+### T1b — Frontend skeleton · `DONE`
 
-**Verified**
-1. `docker compose up -d --build` starts the container cleanly.
-2. `curl localhost:8000/health` → `200 {"status":"ok"}`.
-3. Hot reload confirmed both directions (add/remove endpoint without rebuild).
-
-## T1b — Scaffold the frontend · `DONE`
-
-**Docker setup**
-- Frontend generated via Vite CLI (React 19 + TypeScript, Vite 8) in `frontend/`.
-- `frontend/Dockerfile` (node:22-bookworm-slim, `npm ci`, `npm run dev -- --host`).
-- `frontend/.dockerignore`.
-- `frontend` service in `docker-compose.yml`: port `5173`, source bind-mounted for
-  HMR, anonymous volume for `node_modules`, `VITE_USE_POLLING=true`,
-  `depends_on: backend`.
-- `vite.config.ts` `server` block (`host: true`, polling gated by
-  `VITE_USE_POLLING`). **Verified**: host edit triggered `hmr update /src/App.tsx`.
-
-**Tooling**
-- Prettier + `eslint-config-prettier` (`format` / `format:check` scripts). (D-26)
-
-**App wiring**
-- `src/config.ts` reads `VITE_API_URL` / `VITE_WS_URL` (defaults `localhost:8000`);
-  compose sets them; `.env.example` documents them. (D-27)
-- Backend dev CORS so the browser can call the API cross-origin. (D-28)
-- Landing page (`src/App.tsx`) probes `GET /health` and the WS `/ws`.
-
-**Verified (real browser via DevTools):** both checks green — HTTP `ok` and WS
-`how-much ws connected`; no console errors (one benign StrictMode WS warning).
+Vite (React 19 + TS) in `frontend/`, `Dockerfile`, `frontend` compose service
+(port 5173, bind mount + anon `node_modules` + polling HMR), Prettier (D-26),
+`VITE_*` config (D-27), dev CORS (D-28), landing page probing `/health` + `/ws`.
+**Verified (real browser):** both checks green, no console errors.
 
 ---
 
-## T2 — WebSocket transport & connection lifecycle · `TODO`
+## Phase A — Backend domain (no WebSocket)
 
-Real message envelope/protocol (message types, client→server & server→client),
-connection open/close handling, and broadcast plumbing. Foundation for all
-real-time features. (Ref: NFR-1, FR-17)
+> Delivered as tested services + minimal HTTP. Each slice ships with tests and is
+> checkable via `curl`. The placeholder `/ws` echo from T1 stays untouched here.
 
-## T3 — Room model & in-memory store · `TODO`
+### S1 — Room domain + creation · `DONE`
 
-Room entity, participant entity, the in-memory registry, capacity cap (30),
-system-generated room ID + join code, and the 1-minute empty-room cleanup timer.
-(Ref: FR-1, FR-2, FR-5, FR-6, D-4, D-6, D-19)
+**Goal:** create a room and get back a way to share it.
 
-## T4 — Create & join flow · `TODO`
+**Built**
+- `app/rooms/models.py` — `Room` dataclass with `id` (uuid4 hex, D-19) + `code`
+  (6-char unambiguous alphabet, `secrets`-generated); `generate_id`/`generate_code`.
+- `app/rooms/store.py` — `RoomStore` in-memory registry keyed by code, with
+  collision-retried `create()`, `get()`, `__contains__`, `__len__`, `clear()`;
+  exposed as a module-level `store` singleton (D-4). The seam S2–S5 extend.
+- `app/rooms/router.py` — `POST /rooms` → `201 {"id","code","link"}`
+  (`CreateRoomResponse`); link built from configurable base (D-30).
+- `app/config.py` — `PUBLIC_BASE_URL`, `ROOM_CODE_LENGTH`, `room_link()`.
+- Wired into `app/main.py`; echo `/ws` untouched.
 
-Room creation (returns code + shareable link), join by code/link with display name
-(non-unique), host assignment on create, and host auto-transfer on disconnect.
-(Ref: FR-1–FR-4, FR-7, D-13, D-17)
+**Tests (pytest + `TestClient`, 13 total)** — code length/alphabet (ambiguous
+chars excluded), id hex/uniqueness (1000×), store create/get/miss/clear, unique
+codes across 1000 creates; API: `201` + response shape, code length/alphabet,
+`link == base + /room/{code}`, distinct rooms, round-trips into the store.
 
-## T5 — Voting round · `TODO`
+**Verified**
+1. `pytest -q` → 13 passed; `ruff check` + `ruff format --check` clean.
+2. `curl -X POST :8000/rooms` → `201` with `id`/`code`/`link`.
+3. `HOWMUCH_PUBLIC_BASE_URL` override reflected in `link` (trailing slash stripped).
 
-Set current item/topic, private card selection from the Fibonacci deck, change vote
-before reveal, and broadcast who-has-voted (without values). (Ref: FR-8–FR-11)
+**Refs:** FR-1, FR-2, FR-2a · D-4, D-19, D-29, D-30, D-31
 
-## T6 — Reveal, reset & results · `TODO`
+### S2 — Join, participants, capacity & host · `TODO`
 
-Host-only reveal and reset; on reveal show all cards + average + consensus flag.
-(Ref: FR-12, FR-13, FR-15, FR-16, D-12, D-16)
+**Goal:** people can be in a room, and it has a host.
 
-## T7 — Host voting toggle · `TODO`
+- `Participant` entity (internal ID, display name; names non-unique).
+- Join by code → participant added; creator resolves to **host** (D-13).
+- Capacity cap **30**; joins beyond are rejected with a clear message.
+- Tests: join adds participant, duplicate names coexist, 31st join rejected,
+  first/creator is host.
 
-Host can opt in/out of voting; participants always vote. (Ref: FR-14, D-14)
+**Validate:** join a room via API and read back the participant list; capacity
+rejection returns a clear error. **Refs:** FR-3, FR-4, FR-5, FR-1 · D-6, D-9, D-10, D-13
 
-## T8 — Frontend UI · `TODO`
+### S3 — Voting round · `TODO`
 
-Create/join screens, room view with live presence, deck of cards, host controls,
-and the results display. Wires T2–T7 to the UI. (Ref: FR-10, FR-15–FR-17)
+**Goal:** a round can be run and votes are private until reveal.
 
-## T9 — Deployment polish · `TODO`
+- Set the single current **item** (optional free-text topic).
+- Fibonacci deck `0,1,2,3,5,8,13,21`; cast a vote, change it before reveal.
+- Expose *who has voted* without exposing values.
+- Host voting toggle: host may opt in/out; others always vote (FR-14, D-14).
+- Tests: vote recorded, re-vote overwrites, values never leaked pre-reveal,
+  invalid card rejected, host-excluded case.
 
-Finalize Docker/compose for a deployable setup, config, and run docs. (Ref: NFR-3)
+**Validate:** cast/change votes via API; the pre-reveal view shows voter presence
+but no numbers. **Refs:** FR-8–FR-11, FR-14 · D-7, D-8, D-11, D-14
+
+### S4 — Reveal, reset & results · `TODO`
+
+**Goal:** the payoff — reveal all cards with stats, then start fresh.
+
+- Host-only reveal → all votes visible; host-only reset → new round.
+- Results: every participant's card + **average** of numeric votes + **consensus**
+  flag (all equal).
+- Tests: non-host reveal/reset rejected, average math, consensus true/false,
+  reset clears votes and topic.
+
+**Validate:** run a full round via API — reveal shows all cards + correct
+average/consensus; reset returns a clean round. **Refs:** FR-12, FR-13, FR-15, FR-16 · D-12, D-16
+
+### S5 — Room lifecycle: leave, host transfer & cleanup · `TODO`
+
+**Goal:** rooms stay controllable and don't leak memory.
+
+- Participant leave as a domain operation.
+- Host **auto-transfer** to another participant when the host leaves.
+- Empty room discarded **1 minute** after the last participant leaves
+  (tested with an injectable clock, not a real wait).
+- Tests: leave removes participant, host leaving promotes another, empty-room
+  timer fires and frees the room, re-occupancy cancels cleanup.
+
+**Validate:** simulate leaves in tests; host transfer and timed cleanup both fire.
+**Refs:** FR-6, FR-7 · D-13, D-18
+
+---
+
+## Phase B — Real-time transport
+
+### S6 — WebSocket transport & live state · `TODO`
+
+**Goal:** wrap the working domain in real-time delivery.
+
+- Replace the T1 echo `/ws` with a real message **envelope/protocol** (typed
+  client→server and server→client messages).
+- Connection open/close lifecycle; disconnect wired to the S5 leave/transfer path.
+- **Broadcast** presence and round state to everyone in a room (FR-17).
+- Room creation stays HTTP (D-5); joins and round actions move onto the socket.
+- Tests: two WS clients see live presence, who-voted, and reveal in sync;
+  disconnect triggers host transfer.
+
+**Validate:** two `wscat`/pytest clients in one room see presence + a full round
+update in real time. **Refs:** NFR-1, FR-17 · D-5
+
+---
+
+## Phase C — Frontend (thin UI slices)
+
+> Each slice is demoable in a real browser against the live backend.
+
+### S7 — Create & join screens · `TODO`
+
+Create screen → shows code + shareable link; join by link or code with a display
+name; room view listing live participants. **Validate:** two browsers create/join
+one room and see each other. **Refs:** FR-1–FR-4, FR-17
+
+### S8 — Voting UI · `TODO`
+
+Deck of Fibonacci cards, private selection, change-before-reveal, and who-voted
+indicators. **Validate:** in-browser voting; nobody sees values pre-reveal.
+**Refs:** FR-9–FR-11, FR-17
+
+### S9 — Reveal, results & host controls · `TODO`
+
+Host-only reveal/reset buttons, results display (all cards + average + consensus),
+host voting toggle, set-topic input. **Validate:** full round end-to-end across two
+browsers. **Refs:** FR-12–FR-16 · D-12, D-14, D-16
+
+---
+
+## Phase D — Deployment
+
+### S10 — Deployment polish · `TODO`
+
+Tighten dev CORS to explicit origins (D-28), finalize Docker/compose for a
+deployable setup, config, and run docs. **Refs:** NFR-3
 
 ---
 

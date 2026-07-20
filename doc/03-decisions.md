@@ -76,3 +76,23 @@ initial requirements interview.
   dev. To be tightened to explicit origins before deployment (T9).
 - **D-18 Room cleanup: grace period when empty.** Room persists while occupied,
   discarded **1 minute** after the last participant leaves.
+
+## S1 — Room domain
+
+- **D-29 Room has two identifiers.** `id` = uuid4 hex — the canonical, opaque,
+  non-guessable identity (D-19), used internally and later for WS routing. `code`
+  = short join token users type and the token in the shareable link (D-17).
+  Codes are 6 chars from an unambiguous alphabet (`A–Z`+digits minus `0/O/1/I/L`),
+  drawn with `secrets` (unpredictable — the code is the only barrier to a room),
+  and collision-retried against the store. The in-memory store is keyed by code.
+- **D-30 Shareable link built from a configurable base URL.** The create response
+  must contain a link (FR-2a), so the backend composes it as
+  `{HOWMUCH_PUBLIC_BASE_URL}/room/{code}`, default `http://localhost:5173` (the
+  frontend origin, since the link opens in a browser). The `/room/{code}` path is
+  a frontend-route convention, firmed up in S7. Config is plain `os.getenv` in
+  `app/config.py` — no settings library for a handful of knobs.
+- **D-31 Test stack: pytest + FastAPI `TestClient`.** Dev-only (pinned in
+  `requirements-dev.txt`, not in the runtime image). Tests in `backend/tests/`;
+  `pyproject` sets `pythonpath=["."]` + `testpaths=["tests"]`. Domain logic is
+  tested directly; HTTP via `TestClient`. Aligns with the BE-first, test-per-slice
+  approach — no WebSocket needed to validate the domain.
