@@ -1,0 +1,38 @@
+# how-much — development compose.
+#
+# Both services bind-mount their source and run their dev servers with live
+# reload, so code changes on the host are picked up without rebuilding images.
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Live-mount source for hot reload. Edits on the host reflect in the
+      # container immediately; uvicorn --reload restarts the server.
+      - ./backend/app:/app/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      # Live-mount source for HMR...
+      - ./frontend:/app
+      # ...but keep the container's own node_modules (native Linux binaries)
+      # instead of the host's macOS install.
+      - /app/node_modules
+    environment:
+      # Enable Vite file-watch polling so HMR works over the macOS bind mount.
+      - VITE_USE_POLLING=true
+      # Backend endpoints. Point at the host-published ports (not the compose
+      # service name) — these run in the user's browser, not the container.
+      - VITE_API_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000/ws
+    depends_on:
+      - backend
+    restart: unless-stopped

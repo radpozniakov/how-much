@@ -34,3 +34,4 @@ Limits: up to **30 participants** per room.
 | [doc/02-current-scope.md](doc/02-current-scope.md) | MVP scope: in / out / definition of done |
 | [doc/03-decisions.md](doc/03-decisions.md) | Decision log with rationale |
 | [doc/04-glossary.md](doc/04-glossary.md) | Terminology |
+| [doc/05-backlog.md](doc/05-backlog.md) | Sequenced build tasks (T1…T9) |

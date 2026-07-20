@@ -40,5 +40,39 @@ initial requirements interview.
   either. No room listing/discovery.
 - **D-19 Room has a system-generated unique ID, no editable name.** Rooms aren't
   named or renamed; the generated ID identifies them. Nothing for the host to edit.
+- **D-20 Backend framework: FastAPI + uvicorn.** Standard ASGI stack with
+  first-class HTTP + WebSocket support and a `--reload` file watcher that pairs
+  well with the dev volume mount. `uvicorn[standard]` pulls in `websockets` and
+  `watchfiles`.
+- **D-21 Dev hot reload via bind mount.** `docker-compose.yml` mounts
+  `./backend/app` into the container and runs `uvicorn --reload`, so host code
+  edits reflect live without rebuilding the image.
+- **D-22 Backend scaffolded before the frontend.** Focus BE + compose first (T1);
+  the frontend service (T1b) is added afterward.
+- **D-23 Backend lint/format: Ruff.** Config in `backend/pyproject.toml`
+  (`target py312`, line length 88, rule set `E,W,F,I,UP,B,C4,SIM`, double-quote
+  format). Pinned in `backend/requirements-dev.txt` — dev-only, not in the runtime
+  image. Run with `ruff check .` and `ruff format .` (or `uvx ruff@<ver> …`).
+- **D-24 Frontend dev container: node:22-bookworm-slim, Vite dev server.** Runs
+  `npm run dev --host` on port 5173. Debian slim (not alpine) for reliable native
+  binaries (Vite 8 / rolldown).
+- **D-25 Frontend hot reload: bind mount + anonymous node_modules + polling.**
+  Source is bind-mounted; `node_modules` uses an anonymous volume so the
+  container's Linux install isn't shadowed by the host's macOS one. Vite watch
+  polling is enabled via `VITE_USE_POLLING=true` because macOS Docker bind mounts
+  don't deliver fs events into the container.
+- **D-26 Frontend format: Prettier + eslint-config-prettier.** Config in
+  `frontend/.prettierrc.json` (`semi: false`, `singleQuote`, `trailingComma: all`,
+  `printWidth: 80`, matching the Vite template style). `eslint-config-prettier` is
+  applied last in the flat ESLint config so lint and format don't conflict.
+  Scripts: `npm run format` / `format:check`.
+- **D-27 Frontend reads backend URLs from `VITE_*` env.** `src/config.ts` exposes
+  `API_URL` / `WS_URL` from `VITE_API_URL` / `VITE_WS_URL`, defaulting to
+  `localhost:8000`. Defaults point at the host-published ports (not the compose
+  service name) because the code runs in the user's browser. Compose sets these
+  explicitly for the container; `.env.example` documents them.
+- **D-28 Dev-permissive CORS on the backend.** `CORSMiddleware` with
+  `allow_origins=["*"]` so the browser frontend can call the API cross-origin in
+  dev. To be tightened to explicit origins before deployment (T9).
 - **D-18 Room cleanup: grace period when empty.** Room persists while occupied,
   discarded **1 minute** after the last participant leaves.

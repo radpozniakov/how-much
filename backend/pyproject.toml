@@ -1,0 +1,12 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+src = ["app"]
+
+[tool.ruff.lint]
+# A pragmatic default set: pycodestyle errors/warnings, pyflakes, isort,
+# pyupgrade, bugbear, comprehensions, and simplify.
+select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
