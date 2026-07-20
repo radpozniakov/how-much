@@ -1,8 +1,10 @@
 """how-much backend.
 
 Transport plumbing (health + the room WebSocket + a placeholder echo socket) plus
-the room HTTP API. Real-time presence lands in S6a via ``ws_router``; the round
-message protocol follows in S6b. The placeholder ``/ws`` echo stays until S10.
+the room HTTP API. Real-time presence lands in S6a via ``ws_router``, and the round
+message protocol (set_item/cast_vote/…/reveal/reset) lands over the same socket in
+S6b — the HTTP round routes stay alongside it (D-35) until the frontend exercises
+the socket path. The placeholder ``/ws`` echo stays until S10.
 """
 
 import asyncio

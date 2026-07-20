@@ -17,12 +17,16 @@ domain ``leave`` runs.
 from __future__ import annotations
 
 import contextlib
+import logging
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import WebSocket
 
 from app.rooms.messages import room_state_frame
 from app.rooms.models import Room
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
@@ -70,10 +74,20 @@ class ConnectionManager:
         room = self._rooms.get(code)
         if not room:
             return
-        for ws in list(room.values()):
-            # skip a concurrently-dropping client; do not abort the fan-out
-            with contextlib.suppress(Exception):
+        for participant_id, ws in list(room.items()):
+            # Skip a concurrently-dropping client; do not abort the fan-out. The
+            # send is logged at debug rather than swallowed silently, so a real
+            # bug (e.g. a non-serializable frame failing for *every* client) is
+            # visible in the logs instead of invisible.
+            try:
                 await ws.send_json(frame)
+            except Exception:
+                logger.debug(
+                    "broadcast to %s in room %s failed; skipping",
+                    participant_id,
+                    code,
+                    exc_info=True,
+                )
 
     def has_room(self, code: str) -> bool:
         return code in self._rooms
@@ -89,3 +103,16 @@ async def broadcast_room_state(room: Room) -> None:
     The one place a state change becomes a broadcast; called at every presence
     mutation site (HTTP + WS). A no-op when the room has no connected sockets."""
     await manager.broadcast(room.code, room_state_frame(room))
+
+
+async def apply_and_broadcast(room: Room, action: Callable[[], None]) -> None:
+    """Run a domain mutation, then broadcast the new snapshot (D-36).
+
+    ``action`` is a zero-arg closure over a synchronous ``Room`` method. The
+    broadcast is bound to a *successful* mutation: if ``action`` raises (a domain
+    ``RoomError``), it propagates and no broadcast is sent, so a rejected action
+    never disturbs other clients. This single seam is used by both transports —
+    the HTTP round routes and the WS receive loop — so broadcast can't be
+    forgotten at a call site."""
+    action()
+    await broadcast_room_state(room)

@@ -177,7 +177,9 @@ def test_http_delete_while_connected_net_effect(client):
     assert host_id in room.participants
 
 
-def test_second_handshake_frame_is_unsupported_and_stays_connected(client):
+def test_handshake_frame_mid_session_is_bad_request_and_stays_connected(client):
+    """After the handshake, a stray join/attach is not a round frame (S6b) — it is
+    rejected as bad_request without dropping the live socket."""
     code, host_id = _create(client)
     with client.websocket_connect(f"/ws/rooms/{code}") as ws:
         ws.send_json({"type": "attach", "participant_id": host_id})
@@ -186,8 +188,8 @@ def test_second_handshake_frame_is_unsupported_and_stays_connected(client):
         first = ws.receive_json()
         ws.send_json({"type": "attach", "participant_id": host_id})
         second = ws.receive_json()
-    assert first["type"] == "error" and first["reason"] == "unsupported"
-    assert second["type"] == "error" and second["reason"] == "unsupported"
+    assert first["type"] == "error" and first["reason"] == "bad_request"
+    assert second["type"] == "error" and second["reason"] == "bad_request"
 
 
 def test_room_state_carries_no_card_value_pre_reveal(client):

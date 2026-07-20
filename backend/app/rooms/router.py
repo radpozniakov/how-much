@@ -1,10 +1,13 @@
 """HTTP routes for rooms.
 
 Room creation is the one action that fits request/response rather than the
-real-time socket (D-5), so it lives here. Joining and all round actions are HTTP
-for now to keep the domain testable before any transport; they move onto the
-WebSocket in S6. Domain errors raised below are translated to status codes by
-the ``RoomError`` handler registered in :mod:`app.main`.
+real-time socket (D-5), so it lives here. Joining and the round actions also run
+over the WebSocket now (S6), but their HTTP routes are kept alongside it (D-35) so
+the domain stays ``curl``-testable until the frontend exercises the socket path;
+they are dropped in S10. Every mutation here routes through
+``apply_and_broadcast`` so a change made over HTTP reflects to connected sockets
+(D-36). Domain errors raised below are translated to status codes by the
+``RoomError`` handler registered in :mod:`app.main`.
 """
 
 from __future__ import annotations
@@ -13,7 +16,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
 
 from app import config
-from app.rooms.connection import broadcast_room_state
+from app.rooms.connection import apply_and_broadcast, broadcast_room_state
 from app.rooms.models import Room
 from app.rooms.store import store
 from app.rooms.views import RoomView, room_view
@@ -138,7 +141,9 @@ async def join_room(code: str, body: JoinRequest) -> JoinResponse:
 async def set_item(code: str, body: SetItemRequest) -> RoomView:
     """Set or clear the current item's topic (host-only, FR-8)."""
     room = _require_room(code)
-    room.set_item(body.participant_id, body.topic)
+    await apply_and_broadcast(
+        room, lambda: room.set_item(body.participant_id, body.topic)
+    )
     return room_view(room)
 
 
@@ -146,7 +151,9 @@ async def set_item(code: str, body: SetItemRequest) -> RoomView:
 async def cast_vote(code: str, body: CastVoteRequest) -> RoomView:
     """Cast or change the caller's vote (FR-9, FR-11)."""
     room = _require_room(code)
-    room.cast_vote(body.participant_id, body.card)
+    await apply_and_broadcast(
+        room, lambda: room.cast_vote(body.participant_id, body.card)
+    )
     return room_view(room)
 
 
@@ -154,7 +161,9 @@ async def cast_vote(code: str, body: CastVoteRequest) -> RoomView:
 async def set_host_voting(code: str, body: HostVotingRequest) -> RoomView:
     """Toggle whether the host votes this round (host-only, FR-14)."""
     room = _require_room(code)
-    room.set_host_voting(body.participant_id, body.voting)
+    await apply_and_broadcast(
+        room, lambda: room.set_host_voting(body.participant_id, body.voting)
+    )
     return room_view(room)
 
 
@@ -162,7 +171,7 @@ async def set_host_voting(code: str, body: HostVotingRequest) -> RoomView:
 async def reveal_round(code: str, body: HostActionRequest) -> RoomView:
     """Reveal the round: all cards + stats become visible (host-only, FR-12)."""
     room = _require_room(code)
-    room.reveal(body.participant_id)
+    await apply_and_broadcast(room, lambda: room.reveal(body.participant_id))
     return room_view(room)
 
 
@@ -170,7 +179,7 @@ async def reveal_round(code: str, body: HostActionRequest) -> RoomView:
 async def reset_round(code: str, body: HostActionRequest) -> RoomView:
     """Reset for a fresh round: clears votes, topic, and results (host-only, FR-13)."""
     room = _require_room(code)
-    room.reset_round(body.participant_id)
+    await apply_and_broadcast(room, lambda: room.reset_round(body.participant_id))
     return room_view(room)
 
 

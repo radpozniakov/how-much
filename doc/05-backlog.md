@@ -274,22 +274,70 @@ disappear live; dropping the host promotes the oldest remaining participant; an
 emptied room is reclaimed after the grace period. **Refs:** NFR-1, FR-17, FR-6,
 FR-7 · D-5, D-13, D-15, D-18, D-35, D-36
 
-### S6b — Round actions over the socket · `TODO`
+### S6b — Round actions over the socket · `DONE`
 
 **Goal:** run a full estimation round in real time.
 
-- **Client→server round messages** — `set_item`, `cast_vote`, `set_host_voting`,
-  `reveal`, `reset`, each dispatching to the matching domain method and
-  broadcasting the new `room_state` (D-36). The broadcast is the same `RoomView`
-  the HTTP layer emits, so the FR-10 pre-reveal gate holds for free — card values
-  stay private until the host reveals.
-- **Error frames** — a domain error (not-host, invalid-card, host-not-voting,
-  round-revealed) returns to the *offending* client as an `error` frame instead of
-  an HTTP status; other clients are unaffected.
-- **HTTP round routes retained** (D-35) — the S3/S4 `PUT`/`POST` endpoints stay for
-  `curl`-driven logic testing; because both transports mutate the domain and fire
-  the same broadcast (D-36), a `curl` action reflects to connected sockets. Removed
-  after the frontend lands (folded into S10).
+**Built**
+- `app/rooms/messages.py` — five round frames (`SetItemFrame`, `CastVoteFrame`,
+  `SetHostVotingFrame`, `RevealFrame`, `ResetFrame`) that carry **no
+  `participant_id`**: the socket already knows the caller (identity fixed at
+  handshake), so the handler acts as that connection and a client can't spoof
+  another (F2). `SetItemFrame` replicates the HTTP `MAX_TOPIC_LENGTH` bound exactly
+  (`len(strip())`) since `Room.set_item` only trims (F3). Separate handshake/round
+  registries share one `_parse` helper; `parse_handshake_frame` (renamed from
+  `parse_client_frame`) and `parse_round_frame` each reject the other phase's
+  frames as `BadFrame`. `room_error_reason(exc)` maps each domain error to a stable
+  WS slug (`not_host`, `invalid_card`, `host_not_voting`, `round_revealed`,
+  `not_in_room`; default `internal`) — the socket's counterpart to `main`'s
+  HTTP-status map.
+- `app/rooms/connection.py` — `apply_and_broadcast(room, action)`: run the domain
+  mutation, then broadcast the new snapshot. The single seam both transports use,
+  so the fan-out can't be forgotten at a call site; broadcast fires only on
+  success, so a rejected action never disturbs other clients (D-36).
+- `app/rooms/ws.py` — the receive loop replaces the S6a `unsupported` placeholder:
+  `receive_json` → `parse_round_frame` → `isinstance` dispatch (via
+  `_apply_round`) through `apply_and_broadcast`, using the socket's own identity. A
+  bad frame answers `bad_request` and **stays connected**; `WebSocketDisconnect`
+  propagates to the existing `finally` (the single-owner leave still runs); the
+  room is re-resolved each action (`room_not_found` if it was reclaimed mid-session);
+  a `RoomError` goes back to the sender alone.
+- `app/rooms/router.py` — the five S3/S4 round routes now route through
+  `apply_and_broadcast` too (they previously did **not** broadcast), so a `curl`
+  action reflects to connected sockets (D-35/D-36); response shape unchanged, and a
+  domain error still 4xx-es before any broadcast.
+
+**Verified** — `pytest -q` → **152 passed** (139 prior + 13 new); `ruff check` +
+`ruff format --check` clean. New coverage in `test_ws_rounds.py`: full round
+(item → private vote → reveal shows cards + average + consensus → reset clears);
+connection-identity (a spoofed `participant_id` is ignored); error-to-sender-only
+(non-host reveal errors the sender, no stray broadcast, domain unchanged); the
+`invalid_card` / `round_revealed` / `host_not_voting` slugs; **D-36 both
+directions** (HTTP `PUT /vote` reflects to a socket; a WS `reveal` reaches a second
+socket and the store); over-long topic → `bad_request` (F3); malformed frame keeps
+the socket alive; act-after-HTTP-DELETE → `not_in_room`; act-after-sweep →
+`room_not_found`; and an F1 regression asserting all five HTTP round routes
+broadcast. `test_ws_presence.py`'s second-handshake test now asserts `bad_request`.
+
+**Out of scope (deferred):** dropping the S3/S4 HTTP round routes and the `/ws`
+echo → **S10** (D-35); heartbeat/handshake-timeout (accepted MVP risk); a distinct
+`invalid_topic` WS slug for UX parity with the HTTP 422 (S10).
+
+**Accepted limitations (no-auth MVP, D-9):**
+- *Identity is not authentication.* A `participant_id` is broadcast to everyone in
+  the room (it appears in every `room_state`), and `attach` admits any id currently
+  in the room — so any member can reconnect *as* another member, including the
+  host, and drive host-only actions. This matches the pre-existing HTTP model
+  (the S3/S4 routes already trust a body-supplied `participant_id`). The S6b
+  "round frames carry no `participant_id`" rule (F2) is therefore **per-socket
+  integrity, not impersonation defence**: it stops redirecting an action *within an
+  established socket*, nothing more. Real auth is out of scope for the MVP.
+- *Reconnect requires the client to keep its id.* A socket `join` mints a fresh
+  participant every time; only `attach` resumes an existing identity. So the
+  frontend (S7+) **must persist the `participant_id`** returned at create/join and
+  reconnect via `attach` — otherwise a dropped client comes back as a brand-new
+  person and the old identity is grace-swept. The server assumes this contract but
+  does not enforce it.
 
 **Validate:** two clients run item → private votes → reveal → reset entirely over
 the socket, in sync; a rejected action (non-host reveal, bad card) errors only the
