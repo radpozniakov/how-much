@@ -347,25 +347,90 @@ sender. **Refs:** NFR-1, FR-8–FR-17 · D-5, D-8, D-12, D-14, D-35, D-36
 
 ## Phase C — Frontend (thin UI slices)
 
-> Each slice is demoable in a real browser against the live backend.
+> Each slice is demoable in a real browser (`compose up`) against the live
+> backend, unchanged. All three share one **frontend foundation** that S7
+> establishes and S8–S9 extend, mirroring how S6a laid the socket lifecycle down
+> before S6b added round actions:
+>
+> - **Routing** — `/` (create/join) and `/room/:code` (room), matching the D-30
+>   link shape `{base}/room/{code}`. This replaces the T1b scaffold probe page.
+> - **A typed WebSocket client** — opens `/ws/rooms/{code}`, sends the handshake
+>   frame, and applies every inbound `room_state` snapshot into a room store as
+>   the **single source of truth** (D-36) — the UI renders the last snapshot and
+>   never keeps its own authoritative copy. `error` frames surface to the acting
+>   user. It reuses the frame shapes the backend already defines in `messages.py`.
+> - **Identity + reconnect** — the frontend persists the `participant_id` from
+>   create/join and reconnects via `attach` (the D-15 / S6b contract the server
+>   *assumes but does not enforce*). Past the empty-room grace (D-18) a stale id
+>   is rejected `not_in_room`, so reconnect falls back to a fresh join (D-15).
+>
+> The UI drives the **socket** path, not the S3/S4 HTTP round routes — those
+> routes and the `/ws` echo are retired once these slices are live (S10, D-35).
 
-### S7 — Create & join screens · `TODO`
+### S7 — Room shell: connect, create, join & live presence · `TODO`
 
-Create screen → shows code + shareable link; join by link or code with a display
-name; room view listing live participants. **Validate:** two browsers create/join
-one room and see each other. **Refs:** FR-1–FR-4, FR-17
+**Goal:** be in a room in a browser — create or join by link/code, land in the
+room, and see everyone appear and disappear live. The foundation slice (largest),
+mirroring S6a.
+
+**Scope**
+- The routing, WS-client, room-store, and identity/reconnect foundation above.
+- **Create** via HTTP `POST /rooms {name}` → show the code + copyable shareable
+  link, then navigate into `/room/:code` and `attach` the socket with the
+  returned `participant_id`.
+- **Join** via HTTP `POST /rooms/{code}/participants {name}` (by link or typed
+  code) → then `attach`. HTTP-then-`attach` (not a socket `join`) is deliberate:
+  the joiner must learn its **own** `participant_id`, and a `room_state` snapshot
+  can't reveal it — names are non-unique (D-10), so a client can't pick itself
+  out of the roster. The id is also what detects "am I host?" and enables
+  reconnect. Map `404` (unknown room) / `409` (full, show the cap) / `422`
+  (bad name) to inline errors.
+- Room roster with a live participant list + host badge, and a connection-status
+  indicator (connecting / live / reconnecting).
+
+**Notes:** host auto-transfer (D-13/FR-7) and empty-room cleanup (D-18/FR-6) are
+backend behaviors here — the UI only reflects them as roster / host-badge changes
+via the broadcast. No voting yet.
+
+**Validate:** two browsers create/join one room via the shared link and see each
+other live; reloading re-`attach`es as the *same* participant; closing the host's
+tab promotes the oldest remaining participant in the other browser's roster.
+**Refs:** FR-1–FR-7, FR-17, FR-18, NFR-1 · D-5, D-9, D-10, D-13, D-15, D-17, D-18,
+D-30, D-36, D-37, D-38, D-39
 
 ### S8 — Voting UI · `TODO`
 
-Deck of Fibonacci cards, private selection, change-before-reveal, and who-voted
-indicators. **Validate:** in-browser voting; nobody sees values pre-reveal.
-**Refs:** FR-9–FR-11, FR-17
+**Goal:** cast and change a private vote; see *who* has voted, never the values.
+
+**Scope**
+- The Fibonacci deck (`0,1,2,3,5,8,13,21`, D-8/FR-9) as selectable cards; picking
+  a card sends `cast_vote`, re-picking changes it (FR-11), the own selection is
+  highlighted locally and disabled once the snapshot is `revealed`.
+- Who-voted indicators driven purely by `has_voted` in the snapshot — presence
+  only, no card value is ever rendered pre-reveal (FR-10). The current topic
+  (`current_item`) shows read-only (the host sets it in S9).
+
+**Validate:** in two browsers both vote; each sees the other marked *voted* but no
+numbers appear until reveal. **Refs:** FR-9–FR-11, FR-17 · D-8
 
 ### S9 — Reveal, results & host controls · `TODO`
 
-Host-only reveal/reset buttons, results display (all cards + average + consensus),
-host voting toggle, set-topic input. **Validate:** full round end-to-end across two
-browsers. **Refs:** FR-12–FR-16 · D-12, D-14, D-16
+**Goal:** the host runs the round; everyone sees the payoff, then a clean reset.
+
+**Scope**
+- Host-only controls, gated on `host_id === my participant_id`: reveal (`reveal`),
+  reset (`reset`), a set-topic input (`set_item`, bounded to `MAX_TOPIC_LENGTH`
+  like the frame), and the host-voting toggle (`set_host_voting`, D-14/FR-14).
+- Results view built from `results` in the snapshot (present *only* once
+  `revealed`): every participant's card joined to the roster by id, the average,
+  and a consensus flag (FR-15/FR-16/D-16). Reset returns to a clean round.
+- Surface rejected actions from `error` frames to the acting user only
+  (`not_host`, `invalid_card`, `host_not_voting`, `round_revealed`).
+
+**Validate:** a full round end-to-end across two browsers — host sets a topic,
+both vote privately, host reveals (all cards + correct average + consensus), host
+resets to a fresh round; a non-host sees no host controls. **Refs:** FR-12–FR-16,
+FR-17 · D-12, D-14, D-16
 
 ---
 

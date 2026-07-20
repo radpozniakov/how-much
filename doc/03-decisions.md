@@ -144,3 +144,30 @@ initial requirements interview.
   transport (D-35) safe rather than a source of drift. The FR-10 pre-reveal gate is
   inherited for free: the snapshot is the same guarded `RoomView`, so card values
   are absent until reveal regardless of transport.
+
+## S7 — Frontend room shell
+
+- **D-37 Client-side routing: `/` and `/room/:code`.** The SPA has two routes —
+  `/` (create/join) and `/room/:code` (the room) — so the D-30 shareable link
+  `{base}/room/{code}` deep-links straight into a room. The T1b scaffold probe
+  page is replaced by these. No server-side routing or history API beyond what the
+  SPA needs; a bare `/room/:code` with no persisted identity (D-39) prompts for a
+  display name and joins fresh (D-38).
+- **D-38 Join over HTTP, then `attach` the socket — not a socket `join`.** Both
+  create (`POST /rooms`) and join (`POST /rooms/{code}/participants`) go over HTTP
+  and return the caller's `participant_id`; the socket then sends `attach` with
+  that id. The socket-native `join` frame is *not* used by the frontend: a client
+  must learn its **own** `participant_id`, and a `room_state` snapshot can't reveal
+  it — names are non-unique (D-10), so a client cannot pick itself out of the
+  roster. The id is also what answers "am I host?" (`host_id ==` mine) and what
+  makes reconnect possible (D-39). This reuses the creator's existing HTTP-then-
+  `attach` path (D-5/S6a) for every participant, so one identity flow covers all.
+- **D-39 Persist `participant_id` (+ code) client-side; reconnect via `attach`.**
+  The frontend stores the `participant_id` and room `code` from create/join (e.g.
+  `sessionStorage`) and, on reload or socket drop, reconnects by `attach`ing that
+  id — honoring the S6b contract the server *assumes but does not enforce*. If the
+  id is stale (the room was swept after the D-18 empty-room grace, or the
+  participant was already removed), `attach` is rejected `not_in_room` and the
+  client falls back to a fresh join (D-15) — a reconnect past grace is a new
+  participant, and any in-round vote is lost (FR-18). No slot-holding or timers on
+  either side.
