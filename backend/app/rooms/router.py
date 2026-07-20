@@ -80,6 +80,13 @@ class HostVotingRequest(BaseModel):
     voting: bool
 
 
+class HostActionRequest(BaseModel):
+    """A host-only command that carries no value — just who is asking. Host status
+    is enforced in the domain via ``participant_id`` (no auth — D-9)."""
+
+    participant_id: str
+
+
 class ParticipantView(BaseModel):
     id: str
     name: str
@@ -88,16 +95,33 @@ class ParticipantView(BaseModel):
     has_voted: bool
 
 
+class ResultsView(BaseModel):
+    """A revealed round's payload (FR-15, FR-16): every card plus the stats. Only
+    present once the host has revealed — absent (``None``) otherwise, so no card
+    value is reachable pre-reveal.
+
+    ``votes`` maps participant_id -> card; names are not duplicated here — the
+    roster in ``participants`` carries them, and the frontend joins by id."""
+
+    votes: dict[str, str]
+    average: float | None
+    consensus: bool
+
+
 class RoomView(BaseModel):
     """The shape every client sees: who's here, who's the host, the current item,
-    and who has voted — but never the vote values pre-reveal (FR-10). Over the
-    socket (S6) this is what gets broadcast."""
+    who has voted, and whether the round is revealed — but never the vote values
+    until reveal (FR-10), which arrive in ``results``. Over the socket (S6) this
+    is what gets broadcast."""
 
     code: str
     host_id: str | None
     participants: list[ParticipantView]
     current_item: str | None
     host_voting: bool
+    revealed: bool
+    # Populated only for a revealed round; None hides all card values pre-reveal.
+    results: ResultsView | None
 
 
 class JoinResponse(BaseModel):
@@ -114,6 +138,19 @@ class CreateRoomResponse(JoinResponse):
     link: str
 
 
+def _results_view(room: Room) -> ResultsView | None:
+    """Map the domain's results to the DTO. The reveal gate lives in the domain
+    (`Room.results()` returns None pre-reveal), so this simply reflects it."""
+    results = room.results()
+    if results is None:
+        return None
+    return ResultsView(
+        votes=results.votes,
+        average=results.average,
+        consensus=results.consensus,
+    )
+
+
 def _room_view(room: Room) -> RoomView:
     return RoomView(
         code=room.code,
@@ -124,6 +161,8 @@ def _room_view(room: Room) -> RoomView:
         ],
         current_item=room.current_item,
         host_voting=room.host_voting,
+        revealed=room.revealed,
+        results=_results_view(room),
     )
 
 
@@ -181,4 +220,20 @@ async def set_host_voting(code: str, body: HostVotingRequest) -> RoomView:
     """Toggle whether the host votes this round (host-only, FR-14)."""
     room = _require_room(code)
     room.set_host_voting(body.participant_id, body.voting)
+    return _room_view(room)
+
+
+@router.post("/{code}/reveal", response_model=RoomView)
+async def reveal_round(code: str, body: HostActionRequest) -> RoomView:
+    """Reveal the round: all cards + stats become visible (host-only, FR-12)."""
+    room = _require_room(code)
+    room.reveal(body.participant_id)
+    return _room_view(room)
+
+
+@router.post("/{code}/reset", response_model=RoomView)
+async def reset_round(code: str, body: HostActionRequest) -> RoomView:
+    """Reset for a fresh round: clears votes, topic, and results (host-only, FR-13)."""
+    room = _require_room(code)
+    room.reset_round(body.participant_id)
     return _room_view(room)

@@ -47,3 +47,15 @@ class NotHost(RoomError):
 
     def __init__(self) -> None:
         super().__init__("Only the host may perform this action")
+
+
+class RoundRevealed(RoomError):
+    """A round-mutating action was attempted after the round was revealed (FR-11).
+
+    Once cards are shown, the results are final: a late vote, a topic change, or a
+    host-voting toggle would silently mutate the already-revealed cards or
+    average/consensus. The host resets the round to make further changes.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("Round is already revealed")

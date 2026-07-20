@@ -15,6 +15,8 @@ def test_create_room_returns_201_and_expected_shape(client):
         "participants",
         "current_item",
         "host_voting",
+        "revealed",
+        "results",
     }
 
 

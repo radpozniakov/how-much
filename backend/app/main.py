@@ -14,6 +14,7 @@ from app.rooms.errors import (
     NotHost,
     RoomError,
     RoomFull,
+    RoundRevealed,
     UnknownParticipant,
 )
 from app.rooms.router import router as rooms_router
@@ -26,6 +27,7 @@ app = FastAPI(title="how-much", version="0.1.0")
 _ROOM_ERROR_STATUS: dict[type[RoomError], int] = {
     RoomFull: 409,
     HostNotVoting: 409,
+    RoundRevealed: 409,
     InvalidCard: 422,
     UnknownParticipant: 404,
     NotHost: 403,
