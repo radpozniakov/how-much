@@ -96,3 +96,19 @@ initial requirements interview.
   `pyproject` sets `pythonpath=["."]` + `testpaths=["tests"]`. Domain logic is
   tested directly; HTTP via `TestClient`. Aligns with the BE-first, test-per-slice
   approach — no WebSocket needed to validate the domain.
+
+## S2 — Join, participants & host
+
+- **D-32 Host = first participant to join.** Operationalizes D-13 ("creator is
+  host") given create and join are separate anonymous calls: the creator holds the
+  code and joins first, so the first join claims the host role. No host token to
+  carry. Host *auto-transfer* when the host leaves is S5, not here.
+- **D-33 Join contract: `POST /rooms/{code}/participants`.** Body `{name}` → `201`
+  `{participant_id, room{code, host_id, participants[]}}`. `RoomView` is the shape
+  clients read (and what S6 broadcasts over the socket). Errors: `404` unknown
+  room, `409` room full (message includes the cap, FR-5), `422` invalid name.
+  Joining is HTTP now for BE-first validation; it moves onto the WebSocket in S6.
+- **D-34 Display name: trimmed, non-blank, ≤ 40 chars, non-unique.** Validated in
+  `JoinRequest`; leading/trailing whitespace stripped, blank rejected, length
+  bounded (`MAX_DISPLAY_NAME_LENGTH`) to keep the roster legible. Duplicates are
+  allowed (D-10) — the internal uuid distinguishes participants (D-4/D-9).

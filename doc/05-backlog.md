@@ -74,18 +74,32 @@ codes across 1000 creates; API: `201` + response shape, code length/alphabet,
 
 **Refs:** FR-1, FR-2, FR-2a · D-4, D-19, D-29, D-30, D-31
 
-### S2 — Join, participants, capacity & host · `TODO`
+### S2 — Join, participants, capacity & host · `DONE`
 
 **Goal:** people can be in a room, and it has a host.
 
-- `Participant` entity (internal ID, display name; names non-unique).
-- Join by code → participant added; creator resolves to **host** (D-13).
-- Capacity cap **30**; joins beyond are rejected with a clear message.
-- Tests: join adds participant, duplicate names coexist, 31st join rejected,
-  first/creator is host.
+**Built**
+- `app/rooms/models.py` — `Participant` (uuid `id` + display `name`); `Room` gains
+  `participants` + `host_id` and `add_participant(name)`: first joiner becomes
+  host (D-32), raises `RoomFull` at capacity (D-6).
+- `app/rooms/errors.py` — `RoomError` base + `RoomFull` (carries the capacity),
+  transport-free so the domain stays testable.
+- `app/rooms/router.py` — `POST /rooms/{code}/participants` `{name}` → `201`
+  `{participant_id, room{code, host_id, participants[]}}`; `JoinRequest` trims +
+  bounds the name (D-34). `404` unknown room, `409` full, `422` invalid name.
+- `app/config.py` — `ROOM_CAPACITY` (30), `MAX_DISPLAY_NAME_LENGTH` (40).
 
-**Validate:** join a room via API and read back the participant list; capacity
-rejection returns a clear error. **Refs:** FR-3, FR-4, FR-5, FR-1 · D-6, D-9, D-10, D-13
+**Tests (28 total; +15 for S2)** — domain: host = first joiner, later joiners
+aren't, duplicate names coexist, fill-to-30-then-`RoomFull`; API: `201` + roster,
+host_id, second-joiner-not-host, `404`, duplicate names, blank/whitespace/overlong
+→ `422`, name trimmed, capacity → `409` with the cap in the message.
+
+**Verified**
+1. `pytest -q` → 28 passed; ruff check + format clean.
+2. Live curl: Alice joins → host (name trimmed); Bob → non-host, roster 2;
+   unknown room → `404`; blank name → `422`.
+
+**Refs:** FR-1, FR-3, FR-4, FR-5 · D-6, D-9, D-10, D-13, D-32, D-33, D-34
 
 ### S3 — Voting round · `TODO`
 
