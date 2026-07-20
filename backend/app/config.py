@@ -33,6 +33,11 @@ FIBONACCI_DECK: tuple[str, ...] = ("0", "1", "2", "3", "5", "8", "13", "21")
 # bounded display name and keeps the in-memory room from growing unbounded.
 MAX_TOPIC_LENGTH = 200
 
+# Grace period before an empty room is discarded (D-18/FR-6). Kept short: an
+# empty room holds nothing worth preserving, and a reconnect is a fresh join
+# (D-15), so this only needs to survive a brief network blip / page reload.
+EMPTY_ROOM_TTL_SECONDS = 60
+
 
 def room_link(code: str) -> str:
     """Build the shareable link for a room code (see D-30 for the path convention)."""

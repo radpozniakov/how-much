@@ -146,16 +146,40 @@ but no numbers. **Refs:** FR-8–FR-11, FR-14 · D-7, D-8, D-11, D-14
 **Validate:** run a full round via API — reveal shows all cards + correct
 average/consensus; reset returns a clean round. **Refs:** FR-12, FR-13, FR-15, FR-16 · D-12, D-16
 
-### S5 — Room lifecycle: leave, host transfer & cleanup · `TODO`
+### S5 — Room lifecycle: leave, host transfer & cleanup · `DONE`
 
 **Goal:** rooms stay controllable and don't leak memory.
 
-- Participant leave as a domain operation.
-- Host **auto-transfer** to another participant when the host leaves.
-- Empty room discarded **1 minute** after the last participant leaves
-  (tested with an injectable clock, not a real wait).
-- Tests: leave removes participant, host leaving promotes another, empty-room
-  timer fires and frees the room, re-occupancy cancels cleanup.
+**Built**
+- `app/rooms/models.py` — `Room.remove_participant` (drops the participant and
+  their vote; on a host leave the role **auto-transfers** to the oldest remaining
+  participant with `host_voting` reset to on — D-13/FR-7; raises
+  `UnknownParticipant` if absent). Deliberately bypasses the `RoundRevealed` guard
+  — a leave is not a re-estimate, so it may recompute revealed stats. New
+  `empty_since` marker: store-managed, the domain only *clears* it (in
+  `add_participant`, so re-occupancy cancels a pending cleanup) and never reads or
+  stamps it, keeping the domain clock-free.
+- `app/rooms/store.py` — an **injectable clock** (`time.monotonic` default) so the
+  cleanup timer is tested without a real wait; `leave()` stamps `empty_since` only
+  when the room empties; public `sweep()` discards rooms empty ≥ TTL (inclusive),
+  called lazily on `get()`/`create()` — no asyncio task while HTTP-only (S6).
+- `app/config.py` — `EMPTY_ROOM_TTL_SECONDS` (60, D-18/FR-6).
+- `app/rooms/router.py` — `DELETE /rooms/{code}/participants/{participant_id}`
+  (participant id as a path segment) → `200 + RoomView`. `errors.py`/`main.py`
+  untouched: unknown room and unknown participant both reuse the existing
+  `UnknownParticipant`/`_require_room` → 404.
+
+**Verified** — `pytest -q` → **119 passed** (93 prior + 26 new); `ruff check` +
+`ruff format --check` clean. Domain tests use an injected `FakeClock` (no real
+sleep): leave drops participant+vote, host leaving promotes the oldest remaining,
+the empty-room timer fires at the inclusive TTL boundary and frees the room,
+re-occupancy cancels cleanup, and a mid-reveal leave recomputes stats (asserted to
+flip consensus False→True and to yield a revealed-but-empty round). API tests cover
+the DELETE roster/transfer/empty paths, 404s (unknown room, unknown participant,
+double-leave), and rejoin within grace.
+
+**Out of scope (deferred):** real disconnect detection wired to this leave/transfer
+path, and broadcasting the updated room → S6.
 
 **Validate:** simulate leaves in tests; host transfer and timed cleanup both fire.
 **Refs:** FR-6, FR-7 · D-13, D-18

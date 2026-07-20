@@ -81,6 +81,13 @@ class Room:
     # Whether the host has revealed the round. Card values and results are only
     # ever exposed once this is True (the FR-10 gate lives in `results()`).
     revealed: bool = False
+    # Marker of when the room last became empty, in the store's clock units.
+    # Store-managed: the domain only CLEARS it (in add_participant, on re-occupancy)
+    # and never reads or stamps it — every timestamp write and the TTL comparison
+    # live in the store (RoomStore.leave / sweep). None while occupied (and freshly
+    # created). Keeping all reads/writes in the store preserves domain purity
+    # (Principle 1): Room stays clock-free.
+    empty_since: float | None = None
 
     def add_participant(self, name: str) -> Participant:
         """Add a participant and return them.
@@ -96,9 +103,42 @@ class Room:
             raise RoomFull(config.ROOM_CAPACITY)
         participant = Participant(name=name)
         self.participants[participant.id] = participant
+        self.empty_since = None  # re-occupancy cancels a pending cleanup (D-18)
         if self.host_id is None:
             self.host_id = participant.id
         return participant
+
+    def remove_participant(self, participant_id: str) -> None:
+        """Remove a participant and drop their vote (FR-6/FR-7 leave path).
+
+        If the leaver is the host, the role auto-transfers to the oldest
+        remaining participant — deterministic by insertion order (D-13/FR-7) —
+        and host voting resets to on, since a fresh host votes by default (D-14)
+        and must not silently inherit the previous host's opt-out. When the last
+        participant leaves, ``host_id`` becomes None; the store then starts the
+        empty-room grace timer.
+
+        Dropping the vote is unconditional, including after reveal: a departed
+        participant can't be held in the room to freeze the stats, so results
+        recompute over whoever is still present (consistent with `results()`,
+        which is defined over cast votes only).
+
+        DELIBERATE: this method BYPASSES the ``RoundRevealed`` guard that
+        ``cast_vote``/``set_item``/``set_host_voting`` enforce. Those reject
+        post-reveal *mutations of the estimate*; a leave is not a re-estimate — you
+        cannot force presence, so a leave is always allowed and may recompute (even
+        flip) revealed stats. Do not "fix" this by adding a revealed check here.
+
+        Raises:
+            UnknownParticipant: if ``participant_id`` is not in the room.
+        """
+        if participant_id not in self.participants:
+            raise UnknownParticipant()
+        del self.participants[participant_id]
+        self.votes.pop(participant_id, None)
+        if participant_id == self.host_id:
+            self.host_id = next(iter(self.participants), None)
+            self.host_voting = True
 
     def _require_host(self, participant_id: str) -> None:
         """Guard a host-only action (D-12).

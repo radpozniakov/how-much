@@ -237,3 +237,17 @@ async def reset_round(code: str, body: HostActionRequest) -> RoomView:
     room = _require_room(code)
     room.reset_round(body.participant_id)
     return _room_view(room)
+
+
+@router.delete("/{code}/participants/{participant_id}", response_model=RoomView)
+async def leave_room(code: str, participant_id: str) -> RoomView:
+    """Leave a room (FR-6/FR-7).
+
+    If the host leaves, the role auto-transfers (D-13); when the last
+    participant leaves, the room enters a grace period before it is discarded
+    (D-18). Explicit here — real disconnect detection wires onto the socket in
+    S6. Returns the updated room so remaining clients (and, in S6, the
+    broadcast) see the new roster/host."""
+    room = _require_room(code)
+    store.leave(room, participant_id)
+    return _room_view(room)
