@@ -79,18 +79,24 @@ initial requirements interview.
 
 ## S1 — Room domain
 
-- **D-29 Room has two identifiers.** `id` = uuid4 hex — the canonical, opaque,
-  non-guessable identity (D-19), used internally and later for WS routing. `code`
-  = short join token users type and the token in the shareable link (D-17).
-  Codes are 6 chars from an unambiguous alphabet (`A–Z`+digits minus `0/O/1/I/L`),
-  drawn with `secrets` (unpredictable — the code is the only barrier to a room),
-  and collision-retried against the store. The in-memory store is keyed by code.
-- **D-30 Shareable link built from a configurable base URL.** The create response
-  must contain a link (FR-2a), so the backend composes it as
-  `{HOWMUCH_PUBLIC_BASE_URL}/room/{code}`, default `http://localhost:5173` (the
-  frontend origin, since the link opens in a browser). The `/room/{code}` path is
-  a frontend-route convention, firmed up in S7. Config is plain `os.getenv` in
-  `app/config.py` — no settings library for a handful of knobs.
+- **D-29 A room is identified by its `code`.** The `code` is a short,
+  human-typeable join token (D-17) that also serves as the room's
+  system-generated unique ID (D-19); the store is keyed by it. Codes are 6 chars
+  from an unambiguous alphabet (`A–Z`+digits minus `0/O/1/I/L`), drawn with
+  `secrets` (unpredictable — the code is the only barrier to a room), and
+  collision-retried on creation. Join lookup is case-insensitive (input upper-cased)
+  so a code typed in any casing resolves. _Revised after code review: an earlier
+  design carried a separate uuid `id` alongside the code; it was unused (the code
+  is already unique and unguessable), so it was dropped. A WebSocket-routing id, if
+  needed, arrives in S6._
+- **D-30 One env knob; the rest are constants.** Only `HOWMUCH_PUBLIC_BASE_URL`
+  genuinely varies per deployment, so it is the single environment-read value; the
+  create response embeds `{PUBLIC_BASE_URL}/room/{code}` (FR-2a), default
+  `http://localhost:5173` (the frontend origin, since the link opens in a browser;
+  `/room/{code}` firmed up in S7). Code length, capacity, and name length are plain
+  module constants in `app/config.py` — _revised after code review: they were env
+  vars parsed with `int()` at import, which a bad value could crash on; nobody needs
+  to tune them, so they became constants._
 - **D-31 Test stack: pytest + FastAPI `TestClient`.** Dev-only (pinned in
   `requirements-dev.txt`, not in the runtime image). Tests in `backend/tests/`;
   `pyproject` sets `pythonpath=["."]` + `testpaths=["tests"]`. Domain logic is
@@ -99,15 +105,21 @@ initial requirements interview.
 
 ## S2 — Join, participants & host
 
-- **D-32 Host = first participant to join.** Operationalizes D-13 ("creator is
-  host") given create and join are separate anonymous calls: the creator holds the
-  code and joins first, so the first join claims the host role. No host token to
-  carry. Host *auto-transfer* when the host leaves is S5, not here.
-- **D-33 Join contract: `POST /rooms/{code}/participants`.** Body `{name}` → `201`
-  `{participant_id, room{code, host_id, participants[]}}`. `RoomView` is the shape
-  clients read (and what S6 broadcasts over the socket). Errors: `404` unknown
-  room, `409` room full (message includes the cap, FR-5), `422` invalid name.
-  Joining is HTTP now for BE-first validation; it moves onto the WebSocket in S6.
+- **D-32 Creator becomes host at creation.** Creating a room and the creator's own
+  join are a single step: `POST /rooms {name}` allocates the room and adds the
+  creator as its first participant, and the first participant added is the host.
+  So the creator is unambiguously the host (D-13) — there is no participant-less
+  room for someone else to join first and steal host. _Revised after code review:
+  an earlier design (create empty room, "first to join is host") let whoever
+  opened the shared link before the creator become host._ Host *auto-transfer* when
+  the host leaves is S5, not here.
+- **D-33 Create + join contract.** `POST /rooms {name}` → `201`
+  `{participant_id, room{code, host_id, participants[]}, link}` (creator as host).
+  `POST /rooms/{code}/participants {name}` → `201`
+  `{participant_id, room{...}}` for everyone else. `RoomView` is the shape clients
+  read (and what S6 broadcasts over the socket). Errors: `404` unknown room, `409`
+  room full (message includes the cap, FR-5), `422` invalid/missing name. Both are
+  HTTP now for BE-first validation; join moves onto the WebSocket in S6.
 - **D-34 Display name: trimmed, non-blank, ≤ 40 chars, non-unique.** Validated in
   `JoinRequest`; leading/trailing whitespace stripped, blank rejected, length
   bounded (`MAX_DISPLAY_NAME_LENGTH`) to keep the roster legible. Duplicates are

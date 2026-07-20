@@ -1,7 +1,8 @@
-"""Runtime configuration, read from the environment.
+"""Runtime configuration.
 
-Kept deliberately tiny — plain ``os.getenv`` rather than a settings library —
-because the MVP has only a handful of knobs. See D-30.
+Only the public base URL genuinely varies per deployment, so it is the one knob
+read from the environment (D-30). The rest are fixed product constants — plain
+values, so a bad env override can't crash startup or break room creation.
 """
 
 import os
@@ -15,13 +16,13 @@ PUBLIC_BASE_URL: str = os.getenv(
 
 # Length of the human-typeable join code. 6 chars over a 31-symbol alphabet is
 # ~887M combinations — ample headroom against collisions for an in-memory MVP.
-ROOM_CODE_LENGTH: int = int(os.getenv("HOWMUCH_ROOM_CODE_LENGTH", "6"))
+ROOM_CODE_LENGTH = 6
 
 # Maximum participants per room (D-6). Bounds memory and keeps the UI legible.
-ROOM_CAPACITY: int = int(os.getenv("HOWMUCH_ROOM_CAPACITY", "30"))
+ROOM_CAPACITY = 30
 
 # Upper bound on a display name's length, applied after trimming (D-34).
-MAX_DISPLAY_NAME_LENGTH: int = int(os.getenv("HOWMUCH_MAX_DISPLAY_NAME_LENGTH", "40"))
+MAX_DISPLAY_NAME_LENGTH = 40
 
 
 def room_link(code: str) -> str:

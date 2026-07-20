@@ -1,10 +1,9 @@
 """The room domain model and its identifier generation.
 
-A room has two identifiers (D-29):
-  * ``id``   — an opaque uuid4 hex string; the canonical, non-guessable identity
-               used internally and, later, for WebSocket routing (D-19).
-  * ``code`` — a short, human-typeable token users enter to join, and the token
-               embedded in the shareable link (D-17).
+A room is identified by its ``code`` (D-29): a short, human-typeable token that
+users enter to join and that is embedded in the shareable link (D-17). It doubles
+as the room's system-generated unique ID (D-19); a separate WebSocket-routing id
+is deferred to S6, when something actually needs it.
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 
 
 def generate_id() -> str:
-    """Canonical room identity — a uuid4 as a 32-char hex string."""
+    """A participant identifier — a uuid4 as a 32-char hex string."""
     return uuid4().hex
 
 
@@ -46,19 +45,19 @@ class Participant:
 
 @dataclass
 class Room:
-    """An estimation room. Holds its identity plus the people in it; later slices
-    add the current item and the round to this same object."""
+    """An estimation room. Holds its code plus the people in it; later slices add
+    the current item and the round to this same object."""
 
     code: str
-    id: str = field(default_factory=generate_id)
     participants: dict[str, Participant] = field(default_factory=dict)
     host_id: str | None = None
 
     def add_participant(self, name: str) -> Participant:
         """Add a participant and return them.
 
-        The first participant to join becomes the host (D-32). Rejects the join
-        once the room is at capacity (D-6).
+        The first participant added becomes the host — which is the creator,
+        since room creation adds them first (D-32). Rejects the join once the
+        room is at capacity (D-6).
 
         Raises:
             RoomFull: if the room already holds ``config.ROOM_CAPACITY`` people.

@@ -52,25 +52,18 @@ Vite (React 19 + TS) in `frontend/`, `Dockerfile`, `frontend` compose service
 **Goal:** create a room and get back a way to share it.
 
 **Built**
-- `app/rooms/models.py` — `Room` dataclass with `id` (uuid4 hex, D-19) + `code`
-  (6-char unambiguous alphabet, `secrets`-generated); `generate_id`/`generate_code`.
+- `app/rooms/models.py` — `Room` dataclass keyed by `code` (6-char unambiguous
+  alphabet, `secrets`-generated; also the unique ID per D-19); `generate_code`.
 - `app/rooms/store.py` — `RoomStore` in-memory registry keyed by code, with
-  collision-retried `create()`, `get()`, `__contains__`, `__len__`, `clear()`;
-  exposed as a module-level `store` singleton (D-4). The seam S2–S5 extend.
-- `app/rooms/router.py` — `POST /rooms` → `201 {"id","code","link"}`
-  (`CreateRoomResponse`); link built from configurable base (D-30).
-- `app/config.py` — `PUBLIC_BASE_URL`, `ROOM_CODE_LENGTH`, `room_link()`.
+  collision-retried `create()`, `get()`, `clear()`; exposed as a module-level
+  `store` singleton (D-4). The seam S2–S5 extend.
+- `app/rooms/router.py` — `POST /rooms` (see S2 for the merged create+join shape);
+  link built from the configurable base (D-30).
+- `app/config.py` — `PUBLIC_BASE_URL` (env), `ROOM_CODE_LENGTH`, `room_link()`.
 - Wired into `app/main.py`; echo `/ws` untouched.
 
-**Tests (pytest + `TestClient`, 13 total)** — code length/alphabet (ambiguous
-chars excluded), id hex/uniqueness (1000×), store create/get/miss/clear, unique
-codes across 1000 creates; API: `201` + response shape, code length/alphabet,
-`link == base + /room/{code}`, distinct rooms, round-trips into the store.
-
-**Verified**
-1. `pytest -q` → 13 passed; `ruff check` + `ruff format --check` clean.
-2. `curl -X POST :8000/rooms` → `201` with `id`/`code`/`link`.
-3. `HOWMUCH_PUBLIC_BASE_URL` override reflected in `link` (trailing slash stripped).
+**Verified** — `pytest -q` green + ruff clean; `curl -X POST /rooms` → `201`;
+`HOWMUCH_PUBLIC_BASE_URL` override reflected in `link` (trailing slash stripped).
 
 **Refs:** FR-1, FR-2, FR-2a · D-4, D-19, D-29, D-30, D-31
 
@@ -80,24 +73,27 @@ codes across 1000 creates; API: `201` + response shape, code length/alphabet,
 
 **Built**
 - `app/rooms/models.py` — `Participant` (uuid `id` + display `name`); `Room` gains
-  `participants` + `host_id` and `add_participant(name)`: first joiner becomes
-  host (D-32), raises `RoomFull` at capacity (D-6).
+  `participants` + `host_id` and `add_participant(name)`: the first participant
+  added is host (D-32), raises `RoomFull` at capacity (D-6).
 - `app/rooms/errors.py` — `RoomError` base + `RoomFull` (carries the capacity),
   transport-free so the domain stays testable.
-- `app/rooms/router.py` — `POST /rooms/{code}/participants` `{name}` → `201`
-  `{participant_id, room{code, host_id, participants[]}}`; `JoinRequest` trims +
-  bounds the name (D-34). `404` unknown room, `409` full, `422` invalid name.
+- `app/rooms/router.py` — **merged create+join**: `POST /rooms {name}` creates the
+  room and adds the creator as host → `201 {participant_id, room{code, host_id,
+  participants[]}, link}`; `POST /rooms/{code}/participants {name}` for everyone
+  else. `JoinRequest` trims + bounds the name (D-34); code lookup is
+  case-insensitive. `404` unknown room, `409` full, `422` invalid/missing name.
 - `app/config.py` — `ROOM_CAPACITY` (30), `MAX_DISPLAY_NAME_LENGTH` (40).
 
-**Tests (28 total; +15 for S2)** — domain: host = first joiner, later joiners
-aren't, duplicate names coexist, fill-to-30-then-`RoomFull`; API: `201` + roster,
-host_id, second-joiner-not-host, `404`, duplicate names, blank/whitespace/overlong
-→ `422`, name trimmed, capacity → `409` with the cap in the message.
+**Revised after code review** — `POST /rooms` now creates *and* joins the creator
+so the creator is provably host (was: empty room + "first to join is host", which
+a non-creator could win); join codes accepted case-insensitively; config knobs
+demoted from unsafe `int(env)` to plain constants; the unused separate room `id`
+was dropped (the `code` is the unique ID). DTO/domain split, `RoomError` base, and
+bounded code-retry were reviewed and **kept on purpose** (see notes in chat).
 
-**Verified**
-1. `pytest -q` → 28 passed; ruff check + format clean.
-2. Live curl: Alice joins → host (name trimmed); Bob → non-host, roster 2;
-   unknown room → `404`; blank name → `422`.
+**Verified** — `pytest -q` → **30 passed**; ruff check + format clean. Live curl:
+create as Alice → Alice is host + link; Bob joins via lowercase code → `201`, host
+stays Alice; create with no name → `422`.
 
 **Refs:** FR-1, FR-3, FR-4, FR-5 · D-6, D-9, D-10, D-13, D-32, D-33, D-34
 

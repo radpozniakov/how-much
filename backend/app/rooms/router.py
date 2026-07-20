@@ -18,17 +18,8 @@ from app.rooms.store import store
 router = APIRouter(prefix="/rooms", tags=["rooms"])
 
 
-class CreateRoomResponse(BaseModel):
-    """Everything a creator needs to share a room: its identity, the code others
-    type to join, and the ready-to-share link."""
-
-    id: str
-    code: str
-    link: str
-
-
 class JoinRequest(BaseModel):
-    """A join carries only a display name — no auth (D-9)."""
+    """Creating or joining a room carries only a display name — no auth (D-9)."""
 
     name: str
 
@@ -60,8 +51,17 @@ class RoomView(BaseModel):
 
 
 class JoinResponse(BaseModel):
+    """Returned from both create and join: the caller's own participant id plus
+    the room they're now in."""
+
     participant_id: str
     room: RoomView
+
+
+class CreateRoomResponse(JoinResponse):
+    """A join that also hands back the shareable link for the new room."""
+
+    link: str
 
 
 def _room_view(room: Room) -> RoomView:
@@ -75,20 +75,26 @@ def _room_view(room: Room) -> RoomView:
 
 
 @router.post("", status_code=201, response_model=CreateRoomResponse)
-async def create_room() -> CreateRoomResponse:
-    """Create a fresh room and return its code + shareable link (FR-1, FR-2a)."""
+async def create_room(body: JoinRequest) -> CreateRoomResponse:
+    """Create a room and join it as the host (FR-1, FR-2a).
+
+    Creation and the creator's join are one step, so the creator is
+    unambiguously the host (D-32) — no participant-less room to race over.
+    """
     room = store.create()
+    host = room.add_participant(body.name)
     return CreateRoomResponse(
-        id=room.id,
-        code=room.code,
+        participant_id=host.id,
+        room=_room_view(room),
         link=config.room_link(room.code),
     )
 
 
 @router.post("/{code}/participants", status_code=201, response_model=JoinResponse)
 async def join_room(code: str, body: JoinRequest) -> JoinResponse:
-    """Join a room by code with a display name (FR-3). First joiner is host (D-32)."""
-    room = store.get(code)
+    """Join an existing room by code with a display name (FR-3)."""
+    # Codes are generated uppercase; accept any casing the user types (D-17).
+    room = store.get(code.strip().upper())
     if room is None:
         raise HTTPException(status_code=404, detail="Room not found")
     try:
