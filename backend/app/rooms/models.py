@@ -53,11 +53,9 @@ class Participant:
 @dataclass(frozen=True)
 class RoundResults:
     """A revealed round's outcome (FR-15, FR-16): every cast card, the average of
-    the numeric votes, and whether they reached consensus (all equal). Plain data
-    — the domain hands this back and the router shapes it into a response DTO."""
+    the numeric votes, and whether they reached consensus (all equal)."""
 
-    # participant_id -> card. Only ever built for a revealed round.
-    votes: dict[str, str]
+    votes: dict[str, str]  # participant_id -> card, only built for a revealed round
     average: float | None
     consensus: bool
 
@@ -78,15 +76,11 @@ class Room:
     # Whether the host votes this round. Others always vote; only the host may
     # opt out (D-14).
     host_voting: bool = True
-    # Whether the host has revealed the round. Card values and results are only
-    # ever exposed once this is True (the FR-10 gate lives in `results()`).
+    # Whether the host has revealed the round; the FR-10 gate lives in `results()`.
     revealed: bool = False
-    # Marker of when the room last became empty, in the store's clock units.
-    # Store-managed: the domain only CLEARS it (in add_participant, on re-occupancy)
-    # and never reads or stamps it — every timestamp write and the TTL comparison
-    # live in the store (RoomStore.leave / sweep). None while occupied (and freshly
-    # created). Keeping all reads/writes in the store preserves domain purity
-    # (Principle 1): Room stays clock-free.
+    # When the room last became empty, in the store's clock units. Store-managed:
+    # the store stamps/compares it (leave/sweep); the domain only clears it on
+    # re-occupancy. None while occupied.
     empty_since: float | None = None
 
     def add_participant(self, name: str) -> Participant:
@@ -112,22 +106,13 @@ class Room:
         """Remove a participant and drop their vote (FR-6/FR-7 leave path).
 
         If the leaver is the host, the role auto-transfers to the oldest
-        remaining participant — deterministic by insertion order (D-13/FR-7) —
-        and host voting resets to on, since a fresh host votes by default (D-14)
-        and must not silently inherit the previous host's opt-out. When the last
-        participant leaves, ``host_id`` becomes None; the store then starts the
-        empty-room grace timer.
+        remaining participant (insertion order, D-13/FR-7) and host voting resets
+        to on (a fresh host votes by default, D-14). The last leaver sets
+        ``host_id`` to None; the store then starts the grace timer.
 
-        Dropping the vote is unconditional, including after reveal: a departed
-        participant can't be held in the room to freeze the stats, so results
-        recompute over whoever is still present (consistent with `results()`,
-        which is defined over cast votes only).
-
-        DELIBERATE: this method BYPASSES the ``RoundRevealed`` guard that
-        ``cast_vote``/``set_item``/``set_host_voting`` enforce. Those reject
-        post-reveal *mutations of the estimate*; a leave is not a re-estimate — you
-        cannot force presence, so a leave is always allowed and may recompute (even
-        flip) revealed stats. Do not "fix" this by adding a revealed check here.
+        The vote is dropped unconditionally, even after reveal — a leave is not a
+        re-estimate, so it is allowed post-reveal and results recompute over
+        whoever remains (`results()` is defined over cast votes only).
 
         Raises:
             UnknownParticipant: if ``participant_id`` is not in the room.
@@ -155,12 +140,9 @@ class Room:
     def set_item(self, participant_id: str, topic: str | None) -> None:
         """Set or clear the current item's topic (host-only, FR-8).
 
-        The topic is trimmed; a blank or ``None`` value clears it back to
-        ``None``. There is no backlog — a room has a single current item (D-11).
-
-        Locked once the round is revealed: changing the topic would leave the
-        revealed cards labelled against an item nobody voted on. The host resets
-        the round to start a fresh estimate.
+        The topic is trimmed; blank or ``None`` clears it. A room has a single
+        current item, no backlog (D-11). Locked once revealed — the host resets
+        the round to re-estimate.
 
         Raises:
             NotHost: if the caller is not the host.
@@ -175,21 +157,15 @@ class Room:
     def cast_vote(self, participant_id: str, card: str) -> None:
         """Record ``participant_id``'s vote, overwriting any prior one (FR-11).
 
-        Guards run in order: the round must not be revealed; the participant must
-        be in the room; the host must not have opted out of voting; and the card
-        must be in the deck (D-8). The value is stored privately — it is never
-        surfaced pre-reveal (FR-10).
-
-        The revealed check runs first, ahead of the per-caller guards, because it
-        is a room-level state: once cards are shown, no one may vote regardless of
-        who they are (so a post-reveal vote from a non-member reports the round
-        state, not the missing membership).
+        The value is stored privately and never surfaced pre-reveal (FR-10). The
+        revealed check comes first: once cards are shown no one may vote,
+        regardless of membership.
 
         Raises:
             RoundRevealed: if the round has already been revealed (FR-11).
             UnknownParticipant: if the participant is not in the room.
             HostNotVoting: if the host casts a vote while opted out (D-14).
-            InvalidCard: if the card is not a Fibonacci deck value.
+            InvalidCard: if the card is not a Fibonacci deck value (D-8).
         """
         if self.revealed:
             raise RoundRevealed()
@@ -204,12 +180,8 @@ class Room:
     def set_host_voting(self, participant_id: str, voting: bool) -> None:
         """Toggle whether the host votes this round (host-only, FR-14/D-14).
 
-        Opting out drops any vote the host has already cast, so an opted-out
-        host never lingers in the voted set.
-
-        Locked once the round is revealed: dropping the host's revealed card
-        would silently recompute the already-shown average/consensus. The host
-        resets the round to change this.
+        Opting out drops any vote the host has already cast. Locked once revealed
+        — the host resets the round to change this.
 
         Raises:
             NotHost: if the caller is not the host.
@@ -221,18 +193,6 @@ class Room:
         self.host_voting = voting
         if not voting and self.host_id is not None:
             self.votes.pop(self.host_id, None)
-
-    def expected_voter_ids(self) -> set[str]:
-        """Participant ids expected to vote: everyone, minus the host when the
-        host has opted out (D-14).
-
-        Reveal is deliberately *unconditional* (the host may reveal at any point),
-        so this is not a reveal gate — it is here for a "who's still out" presence
-        indicator on the frontend / over the socket (S6)."""
-        ids = set(self.participants)
-        if not self.host_voting and self.host_id is not None:
-            ids.discard(self.host_id)
-        return ids
 
     def reveal(self, participant_id: str) -> None:
         """Reveal the round so every vote becomes visible (host-only, FR-12).
@@ -264,15 +224,10 @@ class Room:
     def results(self) -> RoundResults | None:
         """The revealed round's outcome, or ``None`` until the host reveals.
 
-        This single domain-side gate is what keeps card values from leaking
-        pre-reveal (FR-10): no transport can assemble results while ``revealed``
-        is False. Returns a snapshot of the votes plus the average and consensus
-        (FR-15, FR-16).
-
-        Stats are over cast votes only — reveal is unconditional (D), so a partial
-        round legitimately reports the average/consensus of those who did vote.
-        Every deck card is numeric (D-8); the average is unrounded, as display
-        formatting is the frontend's concern."""
+        This single domain-side gate keeps card values from leaking pre-reveal
+        (FR-10). Stats are over cast votes only (reveal is unconditional, so a
+        partial round reports the average/consensus of those who did vote). The
+        average is unrounded — display formatting is the frontend's concern."""
         if not self.revealed:
             return None
         values = [int(card) for card in self.votes.values()]

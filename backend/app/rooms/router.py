@@ -46,31 +46,22 @@ class SetItemRequest(BaseModel):
 
     @field_validator("topic")
     @classmethod
-    def _clean_topic(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        value = value.strip()
-        if len(value) > config.MAX_TOPIC_LENGTH:
+    def _check_topic_length(cls, value: str | None) -> str | None:
+        # Length is the boundary's concern; trimming and blank-clearing are the
+        # domain's (Room.set_item).
+        if value is not None and len(value.strip()) > config.MAX_TOPIC_LENGTH:
             raise ValueError(
                 f"topic must be at most {config.MAX_TOPIC_LENGTH} characters"
             )
-        # Blank collapses to None so the domain clears the item.
-        return value or None
+        return value
 
 
 class CastVoteRequest(BaseModel):
     """Cast or change the caller's vote. The card is validated against the deck
-    here (fast 422 at the boundary); the domain re-checks as defense in depth."""
+    in the domain (Room.cast_vote), which raises InvalidCard -> 422."""
 
     participant_id: str
     card: str
-
-    @field_validator("card")
-    @classmethod
-    def _known_card(cls, value: str) -> str:
-        if value not in config.FIBONACCI_DECK:
-            raise ValueError(f"{value!r} is not a valid card")
-        return value
 
 
 class HostVotingRequest(BaseModel):

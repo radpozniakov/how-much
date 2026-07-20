@@ -14,9 +14,8 @@ from collections.abc import Callable
 from app import config
 from app.rooms.models import Room, generate_code
 
-# Bound on collision retries when allocating a code. With ~887M possible codes a
-# single retry is already astronomically unlikely; this is a safety valve, not a
-# hot path.
+# Bound on collision retries when allocating a code — a safety valve, given
+# collisions over the ~887M code space are already astronomically unlikely.
 _MAX_CODE_ATTEMPTS = 10
 
 
@@ -59,18 +58,11 @@ class RoomStore:
     def sweep(self) -> None:
         """Discard rooms empty for at least ``EMPTY_ROOM_TTL_SECONDS`` (D-18/FR-6).
 
-        Lazy, not scheduled: we're HTTP-only until S6, so cleanup piggybacks on
-        the next store access (`get`/`create`) rather than a background task.
-        A rejoin clears `empty_since` (see `Room.add_participant`), so a
-        re-occupied room is never swept.
-
-        Total-quiescence retention is by design and does not violate FR-6: an
-        abandoned room's memory is reclaimed on the NEXT store access after the
-        TTL, not at exactly the TTL. This defers *reclamation* only, never
-        *liveness* — `get()` sweeps before returning, so the instant grace
-        passes the room is unreachable (a lookup 404s and drops it). A process
-        with zero traffic holds one dead room until the next request; that is the
-        explicit FR-6 reading, not a leak."""
+        Lazy, not scheduled: cleanup piggybacks on store access (`get`/`create`)
+        rather than a background task while we're HTTP-only (until S6). `get()`
+        sweeps before returning, so an expired room is unreachable the instant
+        grace passes; its memory is reclaimed on that next access, not at exactly
+        the TTL. A rejoin clears `empty_since`, so a re-occupied room is spared."""
         now = self._clock()
         expired = [
             code

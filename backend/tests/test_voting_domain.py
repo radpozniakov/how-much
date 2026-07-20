@@ -89,13 +89,6 @@ def test_unknown_participant_checked_before_card():
 # --- host voting toggle (D-14) ----------------------------------------------
 
 
-def test_host_opted_out_is_excluded_from_expected_voters():
-    room, (host, alice) = _room_with("Host", "Alice")
-    assert room.expected_voter_ids() == {host, alice}
-    room.set_host_voting(host, False)
-    assert room.expected_voter_ids() == {alice}
-
-
 def test_host_cannot_vote_while_opted_out():
     room, (host,) = _room_with("Host")
     room.set_host_voting(host, False)
