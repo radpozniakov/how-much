@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 
 from app import config
-from app.rooms.models import Room, generate_code
+from app.rooms.models import Participant, Room, generate_code
 
 # Bound on collision retries when allocating a code — a safety valve, given
 # collisions over the ~887M code space are already astronomically unlikely.
@@ -46,6 +46,24 @@ class RoomStore:
         """Return the room for ``code``, or ``None`` if there is no such room."""
         self.sweep()
         return self._rooms.get(code)
+
+    def join(self, code: str, name: str) -> tuple[Room, Participant] | None:
+        """Resolve a room and add a participant in one synchronous step.
+
+        Returns the room plus the new participant, or ``None`` if there is no such
+        room (including one just discarded by the ``get`` sweep). Propagates
+        ``RoomFull`` from :meth:`Room.add_participant` at capacity (D-6).
+
+        This is the single resolve-then-mutate seam shared by the HTTP join route
+        and the WebSocket ``join`` handshake. It is deliberately synchronous with
+        no ``await`` between the lookup and the mutation, so a concurrent
+        background sweep (S6) — which can only run at an ``await`` point on the
+        same event loop — cannot discard the room mid-join."""
+        room = self.get(code)
+        if room is None:
+            return None
+        participant = room.add_participant(name)
+        return room, participant
 
     def leave(self, room: Room, participant_id: str) -> None:
         """Remove a participant and, if it was the last one, start the empty-room

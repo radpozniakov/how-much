@@ -38,6 +38,12 @@ MAX_TOPIC_LENGTH = 200
 # (D-15), so this only needs to survive a brief network blip / page reload.
 EMPTY_ROOM_TTL_SECONDS = 60
 
+# How often the background sweeper reclaims empty rooms (S6a). Once clients hold
+# long-lived sockets they stop hitting store.get()/create(), so the lazy sweep no
+# longer fires on its own; this task drives it. Reclaim latency is therefore up to
+# EMPTY_ROOM_TTL_SECONDS + one interval — fine for a short-lived in-memory MVP.
+SWEEP_INTERVAL_SECONDS = 15
+
 
 def room_link(code: str) -> str:
     """Build the shareable link for a room code (see D-30 for the path convention)."""

@@ -133,15 +133,31 @@ host vote (409); non-host set-item/toggle → 403.
 **Validate:** cast/change votes via API; the pre-reveal view shows voter presence
 but no numbers. **Refs:** FR-8–FR-11, FR-14 · D-7, D-8, D-11, D-14
 
-### S4 — Reveal, reset & results · `TODO`
+### S4 — Reveal, reset & results · `DONE`
 
 **Goal:** the payoff — reveal all cards with stats, then start fresh.
 
-- Host-only reveal → all votes visible; host-only reset → new round.
-- Results: every participant's card + **average** of numeric votes + **consensus**
-  flag (all equal).
-- Tests: non-host reveal/reset rejected, average math, consensus true/false,
-  reset clears votes and topic.
+**Built**
+- `app/rooms/models.py` — `Room.reveal` (host-only; unconditional, no all-voted
+  gate; idempotent), `reset_round` (host-only; clears votes, item, and the
+  revealed flag — but leaves `host_voting`, a facilitator preference that persists
+  across rounds), and `results()`: the single FR-10 gate, returning `None` until
+  revealed and otherwise a `RoundResults` with every cast card, the **average** of
+  the numeric votes, and a **consensus** flag (all equal). Stats are over cast
+  votes only (reveal is unconditional), average unrounded (display is the
+  frontend's job). New `RoundResults` dataclass.
+- `app/rooms/errors.py` — `RoundRevealed`, which locks `set_item`/`cast_vote`/
+  `set_host_voting` once cards are shown (the host resets to re-estimate).
+- `app/rooms/router.py` — `POST /rooms/{code}/reveal` and `/reset` (host-only via
+  `HostActionRequest.participant_id`); `RoomView` gains `revealed` + a `results`
+  (`ResultsView`) populated **only** once revealed, so no card value is reachable
+  pre-reveal.
+- `app/main.py` — `RoundRevealed` mapped to 409.
+
+**Verified** — `pytest -q` green; reveal/reset covered by `test_reveal_domain.py`
++ `test_reveal_api.py` (32 tests): non-host reveal/reset → 403, average math,
+consensus true/false, reset clears votes + topic and re-hides results, and the
+pre-reveal view carries no card value.
 
 **Validate:** run a full round via API — reveal shows all cards + correct
 average/consensus; reset returns a clean round. **Refs:** FR-12, FR-13, FR-15, FR-16 · D-12, D-16
@@ -188,20 +204,96 @@ path, and broadcasting the updated room → S6.
 
 ## Phase B — Real-time transport
 
-### S6 — WebSocket transport & live state · `TODO`
+> Wrap the working domain in WebSocket delivery. The domain stays the single
+> source of truth: every mutation goes through the same `Room`/`store` methods the
+> HTTP layer already calls, and the state broadcast hangs off the **mutation**, not
+> the transport — so an action driven over HTTP (`curl`) and one driven over the
+> socket both reach every connected client identically (D-36). The S3/S4 HTTP round
+> routes are **kept alongside** the socket through Phase B for `curl`-testable
+> reliability, then dropped once the frontend exercises the socket path (D-35).
+> Delivered as two thin slices: S6a re-does presence/lifecycle (S2 + S5) over the
+> socket, S6b re-does the round (S3 + S4).
 
-**Goal:** wrap the working domain in real-time delivery.
+### S6a — Connection lifecycle, presence & room channel · `DONE`
 
-- Replace the T1 echo `/ws` with a real message **envelope/protocol** (typed
-  client→server and server→client messages).
-- Connection open/close lifecycle; disconnect wired to the S5 leave/transfer path.
-- **Broadcast** presence and round state to everyone in a room (FR-17).
-- Room creation stays HTTP (D-5); joins and round actions move onto the socket.
-- Tests: two WS clients see live presence, who-voted, and reveal in sync;
-  disconnect triggers host transfer.
+**Goal:** be present in a room in real time — connect, appear to everyone else,
+and disappear (with host transfer / cleanup) the moment the socket drops.
 
-**Validate:** two `wscat`/pytest clients in one room see presence + a full round
-update in real time. **Refs:** NFR-1, FR-17 · D-5
+**Built**
+- `app/rooms/views.py` (new) — the `RoomView`/`ParticipantView`/`ResultsView` DTOs
+  and a public `room_view(room)` builder, extracted from `router.py` so both
+  transports build the *same* snapshot without the socket importing a router
+  private. Behaviour-neutral move.
+- `app/rooms/messages.py` (new) — the typed envelope: outbound `room_state_frame`
+  (a full `RoomView`, D-36) and `error_frame(reason, message)`; inbound `JoinFrame`
+  / `AttachFrame` (Pydantic; `join` reuses the HTTP name trim/bound rules) and
+  `parse_client_frame`, which raises `BadFrame` on malformed/unknown input.
+- `app/rooms/connection.py` (new) — `ConnectionManager` (`code → {pid → socket}`)
+  with singleton `manager`: `register` (writes the new socket **before** closing a
+  superseded one — ordering is load-bearing), an **identity-checked `unregister`
+  that returns whether it removed *this* socket**, and a `broadcast` that skips a
+  failing socket without aborting the fan-out (removal stays the handler's job, so
+  the leave still fires). Plus `broadcast_room_state(room)`.
+- `app/rooms/store.py` — `join(code, name)`: a single synchronous `get`-then-
+  `add_participant` (returns `None` if absent, propagates `RoomFull`). No `await`
+  between lookup and mutation, so the background sweeper can't discard the room
+  mid-handshake.
+- `app/rooms/ws.py` (new) — `ws_router` with `/ws/rooms/{code}`: `accept` → await
+  the first frame (`join` new / `attach` existing; the creator attaches with its
+  HTTP-issued id, D-5) → resolve+mutate synchronously → `register` before the join
+  `room_state` fan-out (FR-17). The receive loop detects disconnect (an extra frame
+  → `error(unsupported)`, stays connected). On drop, the `finally` runs `store.leave`
+  (host auto-transfer D-13, empty-room grace D-18) and rebroadcasts **only when it
+  owned the registration** — a superseded socket does nothing (guards a
+  self-kick). A reconnect is a fresh join (D-15).
+- `app/rooms/router.py` — `join_room`/`leave_room` route through `store.join`/
+  `store.leave` and `await broadcast_room_state`, so an HTTP-driven presence change
+  reflects to connected sockets (D-36); `join` maps `None → 404`.
+- `app/main.py` — a `lifespan` runs a background sweeper task that calls
+  `store.sweep()` **by attribute each iteration** (no import-time capture) and is
+  cancelled cleanly on shutdown; `ws_router` wired in. The placeholder `/ws` echo
+  stays for now (retired in S10).
+- `app/config.py` — `SWEEP_INTERVAL_SECONDS` (15).
+
+**Verified** — `pytest -q` → **139 passed** (118 prior + 21 new); `ruff check` +
+`ruff format --check` clean. New coverage: `test_connection.py` (fan-out isolation,
+identity-checked unregister, replace-and-close, dead-socket skip); `test_ws_presence.py`
+(creator attach, join fan-out, unknown/full-room + bad-attach + malformed rejects,
+host-drop transfer, non-host drop, **D-36 cross-transport** via HTTP POST/DELETE,
+**duplicate-attach keeps the live participant**, HTTP-DELETE-while-connected,
+second-frame `unsupported`, and a structural FR-10 no-card-pre-reveal assertion);
+`test_sweeper.py` (the lifespan task fires `store.sweep` and cancels cleanly, no
+real TTL wait).
+
+**Out of scope (deferred):** round actions over the socket + their error frames →
+**S6b**; dropping the S3/S4 HTTP round routes and the `/ws` echo → **S10** (D-35);
+heartbeat/handshake-timeout (accepted MVP risk).
+
+**Validate:** two `wscat`/pytest clients in one room see each other appear and
+disappear live; dropping the host promotes the oldest remaining participant; an
+emptied room is reclaimed after the grace period. **Refs:** NFR-1, FR-17, FR-6,
+FR-7 · D-5, D-13, D-15, D-18, D-35, D-36
+
+### S6b — Round actions over the socket · `TODO`
+
+**Goal:** run a full estimation round in real time.
+
+- **Client→server round messages** — `set_item`, `cast_vote`, `set_host_voting`,
+  `reveal`, `reset`, each dispatching to the matching domain method and
+  broadcasting the new `room_state` (D-36). The broadcast is the same `RoomView`
+  the HTTP layer emits, so the FR-10 pre-reveal gate holds for free — card values
+  stay private until the host reveals.
+- **Error frames** — a domain error (not-host, invalid-card, host-not-voting,
+  round-revealed) returns to the *offending* client as an `error` frame instead of
+  an HTTP status; other clients are unaffected.
+- **HTTP round routes retained** (D-35) — the S3/S4 `PUT`/`POST` endpoints stay for
+  `curl`-driven logic testing; because both transports mutate the domain and fire
+  the same broadcast (D-36), a `curl` action reflects to connected sockets. Removed
+  after the frontend lands (folded into S10).
+
+**Validate:** two clients run item → private votes → reveal → reset entirely over
+the socket, in sync; a rejected action (non-host reveal, bad card) errors only the
+sender. **Refs:** NFR-1, FR-8–FR-17 · D-5, D-8, D-12, D-14, D-35, D-36
 
 ---
 

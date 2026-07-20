@@ -124,3 +124,23 @@ initial requirements interview.
   `JoinRequest`; leading/trailing whitespace stripped, blank rejected, length
   bounded (`MAX_DISPLAY_NAME_LENGTH`) to keep the roster legible. Duplicates are
   allowed (D-10) — the internal uuid distinguishes participants (D-4/D-9).
+
+## S6 — Real-time transport
+
+- **D-35 Dual transport through Phase B, then WS-only.** Round actions are added to
+  the WebSocket in S6, but the S3/S4 HTTP routes are *kept alongside* them until the
+  frontend exercises the socket path, so the domain stays `curl`-testable while the
+  real-time layer is built and each action stays independently reproducible — more
+  surface, bought for reliability. Room creation is HTTP throughout (D-5). The HTTP
+  round routes are dropped once the frontend is live (folded into S10). _Chosen over
+  a hard cutover to WS-only in S6, which would have left the round logic reachable
+  only through the harder-to-drive socket while that socket was still unproven._
+- **D-36 WebSocket delivery: full-snapshot broadcast driven by the domain.**
+  Server→client state is the whole `RoomView` (a snapshot, not deltas — cheap for
+  ≤ 30 participants (D-6), and it reuses the exact shape the HTTP layer already
+  emits). Crucially the broadcast hangs off the **domain mutation**, not the
+  transport handler, so an action arriving over HTTP and one over WS converge on the
+  same broadcast and no connected client diverges — which is what makes the dual
+  transport (D-35) safe rather than a source of drift. The FR-10 pre-reveal gate is
+  inherited for free: the snapshot is the same guarded `RoomView`, so card values
+  are absent until reveal regardless of transport.

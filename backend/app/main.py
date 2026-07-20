@@ -1,13 +1,19 @@
 """how-much backend.
 
-Transport plumbing (health + a placeholder echo WebSocket) plus the room HTTP
-API. The real message protocol replaces the echo socket in S6.
+Transport plumbing (health + the room WebSocket + a placeholder echo socket) plus
+the room HTTP API. Real-time presence lands in S6a via ``ws_router``; the round
+message protocol follows in S6b. The placeholder ``/ws`` echo stays until S10.
 """
+
+import asyncio
+import contextlib
+from collections.abc import AsyncIterator
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app import config
 from app.rooms.errors import (
     HostNotVoting,
     InvalidCard,
@@ -18,8 +24,34 @@ from app.rooms.errors import (
     UnknownParticipant,
 )
 from app.rooms.router import router as rooms_router
+from app.rooms.store import store
+from app.rooms.ws import ws_router
 
-app = FastAPI(title="how-much", version="0.1.0")
+
+async def _sweeper(interval: float) -> None:
+    """Periodically reclaim empty rooms past their grace period (S6a).
+
+    Calls ``store.sweep`` **by attribute each iteration** — not via a captured
+    default argument — so it always uses the live ``store.sweep`` (and any test
+    monkeypatch of it) rather than a reference frozen at import time."""
+    while True:
+        await asyncio.sleep(interval)
+        store.sweep()
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Run the background room sweeper for the app's lifetime (S6a)."""
+    task = asyncio.create_task(_sweeper(config.SWEEP_INTERVAL_SECONDS))
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+app = FastAPI(title="how-much", version="0.1.0", lifespan=lifespan)
 
 # How each domain error maps to an HTTP status. 409 is a state conflict (the room
 # won't accept the action as things stand), 422 an invalid value, 404 a missing
@@ -53,6 +85,7 @@ app.add_middleware(
 )
 
 app.include_router(rooms_router)
+app.include_router(ws_router)
 
 
 @app.get("/health")

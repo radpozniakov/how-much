@@ -13,8 +13,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
 
 from app import config
+from app.rooms.connection import broadcast_room_state
 from app.rooms.models import Room
 from app.rooms.store import store
+from app.rooms.views import RoomView, room_view
 
 router = APIRouter(prefix="/rooms", tags=["rooms"])
 
@@ -78,43 +80,6 @@ class HostActionRequest(BaseModel):
     participant_id: str
 
 
-class ParticipantView(BaseModel):
-    id: str
-    name: str
-    # Whether this participant has a vote in the current round. Presence only —
-    # the card value is never exposed before reveal (FR-10).
-    has_voted: bool
-
-
-class ResultsView(BaseModel):
-    """A revealed round's payload (FR-15, FR-16): every card plus the stats. Only
-    present once the host has revealed — absent (``None``) otherwise, so no card
-    value is reachable pre-reveal.
-
-    ``votes`` maps participant_id -> card; names are not duplicated here — the
-    roster in ``participants`` carries them, and the frontend joins by id."""
-
-    votes: dict[str, str]
-    average: float | None
-    consensus: bool
-
-
-class RoomView(BaseModel):
-    """The shape every client sees: who's here, who's the host, the current item,
-    who has voted, and whether the round is revealed — but never the vote values
-    until reveal (FR-10), which arrive in ``results``. Over the socket (S6) this
-    is what gets broadcast."""
-
-    code: str
-    host_id: str | None
-    participants: list[ParticipantView]
-    current_item: str | None
-    host_voting: bool
-    revealed: bool
-    # Populated only for a revealed round; None hides all card values pre-reveal.
-    results: ResultsView | None
-
-
 class JoinResponse(BaseModel):
     """Returned from both create and join: the caller's own participant id plus
     the room they're now in."""
@@ -127,34 +92,6 @@ class CreateRoomResponse(JoinResponse):
     """A join that also hands back the shareable link for the new room."""
 
     link: str
-
-
-def _results_view(room: Room) -> ResultsView | None:
-    """Map the domain's results to the DTO. The reveal gate lives in the domain
-    (`Room.results()` returns None pre-reveal), so this simply reflects it."""
-    results = room.results()
-    if results is None:
-        return None
-    return ResultsView(
-        votes=results.votes,
-        average=results.average,
-        consensus=results.consensus,
-    )
-
-
-def _room_view(room: Room) -> RoomView:
-    return RoomView(
-        code=room.code,
-        host_id=room.host_id,
-        participants=[
-            ParticipantView(id=p.id, name=p.name, has_voted=p.id in room.votes)
-            for p in room.participants.values()
-        ],
-        current_item=room.current_item,
-        host_voting=room.host_voting,
-        revealed=room.revealed,
-        results=_results_view(room),
-    )
 
 
 def _require_room(code: str) -> Room:
@@ -177,17 +114,24 @@ async def create_room(body: JoinRequest) -> CreateRoomResponse:
     host = room.add_participant(body.name)
     return CreateRoomResponse(
         participant_id=host.id,
-        room=_room_view(room),
+        room=room_view(room),
         link=config.room_link(room.code),
     )
 
 
 @router.post("/{code}/participants", status_code=201, response_model=JoinResponse)
 async def join_room(code: str, body: JoinRequest) -> JoinResponse:
-    """Join an existing room by code with a display name (FR-3)."""
-    room = _require_room(code)
-    participant = room.add_participant(body.name)
-    return JoinResponse(participant_id=participant.id, room=_room_view(room))
+    """Join an existing room by code with a display name (FR-3).
+
+    Goes through the atomic ``store.join`` (the same seam the WebSocket join uses);
+    a ``None`` return means no such room -> 404. The updated roster is broadcast so
+    any connected sockets reflect the join over either transport (D-36)."""
+    result = store.join(code.strip().upper(), body.name)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Room not found")
+    room, participant = result
+    await broadcast_room_state(room)
+    return JoinResponse(participant_id=participant.id, room=room_view(room))
 
 
 @router.put("/{code}/item", response_model=RoomView)
@@ -195,7 +139,7 @@ async def set_item(code: str, body: SetItemRequest) -> RoomView:
     """Set or clear the current item's topic (host-only, FR-8)."""
     room = _require_room(code)
     room.set_item(body.participant_id, body.topic)
-    return _room_view(room)
+    return room_view(room)
 
 
 @router.put("/{code}/vote", response_model=RoomView)
@@ -203,7 +147,7 @@ async def cast_vote(code: str, body: CastVoteRequest) -> RoomView:
     """Cast or change the caller's vote (FR-9, FR-11)."""
     room = _require_room(code)
     room.cast_vote(body.participant_id, body.card)
-    return _room_view(room)
+    return room_view(room)
 
 
 @router.put("/{code}/host-voting", response_model=RoomView)
@@ -211,7 +155,7 @@ async def set_host_voting(code: str, body: HostVotingRequest) -> RoomView:
     """Toggle whether the host votes this round (host-only, FR-14)."""
     room = _require_room(code)
     room.set_host_voting(body.participant_id, body.voting)
-    return _room_view(room)
+    return room_view(room)
 
 
 @router.post("/{code}/reveal", response_model=RoomView)
@@ -219,7 +163,7 @@ async def reveal_round(code: str, body: HostActionRequest) -> RoomView:
     """Reveal the round: all cards + stats become visible (host-only, FR-12)."""
     room = _require_room(code)
     room.reveal(body.participant_id)
-    return _room_view(room)
+    return room_view(room)
 
 
 @router.post("/{code}/reset", response_model=RoomView)
@@ -227,7 +171,7 @@ async def reset_round(code: str, body: HostActionRequest) -> RoomView:
     """Reset for a fresh round: clears votes, topic, and results (host-only, FR-13)."""
     room = _require_room(code)
     room.reset_round(body.participant_id)
-    return _room_view(room)
+    return room_view(room)
 
 
 @router.delete("/{code}/participants/{participant_id}", response_model=RoomView)
@@ -237,8 +181,9 @@ async def leave_room(code: str, participant_id: str) -> RoomView:
     If the host leaves, the role auto-transfers (D-13); when the last
     participant leaves, the room enters a grace period before it is discarded
     (D-18). Explicit here — real disconnect detection wires onto the socket in
-    S6. Returns the updated room so remaining clients (and, in S6, the
-    broadcast) see the new roster/host."""
+    S6. Returns the updated room and broadcasts it so connected sockets see the
+    new roster/host over either transport (D-36)."""
     room = _require_room(code)
     store.leave(room, participant_id)
-    return _room_view(room)
+    await broadcast_room_state(room)
+    return room_view(room)
