@@ -26,3 +26,9 @@
   background: var(--code-bg);
   color: var(--text);
 }
+
+.voted {
+  margin-left: auto;
+  background: var(--ok-bg, var(--accent-bg));
+  color: var(--ok, var(--accent));
+}

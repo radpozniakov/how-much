@@ -1,0 +1,29 @@
+.deck {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.card {
+  min-width: 3rem;
+  padding: 0.75rem 1rem;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--code-bg);
+  color: var(--text);
+}
+
+.card:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.selected {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 700;
+}

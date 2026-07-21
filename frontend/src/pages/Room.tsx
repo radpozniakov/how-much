@@ -7,6 +7,8 @@ import { JoinPrompt } from '../components/JoinPrompt/JoinPrompt'
 import { Roster } from '../components/Roster/Roster'
 import { ShareLink } from '../components/ShareLink/ShareLink'
 import { StatusIndicator } from '../components/StatusIndicator/StatusIndicator'
+import { Topic } from '../components/Topic/Topic'
+import { VoteDeck } from '../components/VoteDeck/VoteDeck'
 
 interface ConnectedRoomProps {
   code: string
@@ -21,7 +23,7 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
   participantId,
   onIdentityLost,
 }) => {
-  const { room, status, error } = useRoom(code, participantId)
+  const { room, status, error, castVote } = useRoom(code, participantId)
 
   // A stale-identity rejection: the hook has cleared the session; drop back to
   // the name prompt so the user rejoins fresh (D-39).
@@ -61,7 +63,23 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
         </p>
       )}
 
-      {room ? <Roster room={room} me={participantId} /> : <p>Connecting…</p>}
+      {room ? (
+        <>
+          <Topic currentItem={room.current_item} />
+          <Roster room={room} me={participantId} />
+          <VoteDeck
+            hasVoted={
+              room.participants.find((p) => p.id === participantId)
+                ?.has_voted ?? false
+            }
+            revealed={room.revealed}
+            onVote={castVote}
+            disabled={status !== 'live'}
+          />
+        </>
+      ) : (
+        <p>Connecting…</p>
+      )}
     </main>
   )
 }

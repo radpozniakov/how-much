@@ -441,14 +441,17 @@ tab promotes the oldest remaining participant in the other browser's roster.
 **Refs:** FR-1–FR-7, FR-17, FR-18, NFR-1 · D-5, D-9, D-10, D-13, D-15, D-17, D-18,
 D-30, D-36, D-37, D-38, D-39
 
-### S8 — Voting UI · `TODO`
+### S8 — Voting UI · `DONE`
 
 **Goal:** cast and change a private vote; see *who* has voted, never the values.
 
-> **Plan status:** `pending approval` (ralplan consensus: Planner → Architect
-> (SOUND) → Critic (APPROVE), 2 iterations). Detailed below; scope is S8 only
-> (voting — no reveal/results/host controls, which are S9), extending the S7
-> foundation. Not yet executed.
+> **Built via ralph** from the ralplan-consensus plan below (Planner → Architect
+> SOUND → Critic APPROVE, 2 iterations). Scope was S8 only (voting — no
+> reveal/results/host controls, which are S9), extending the S7 foundation.
+> **Verified:** 51 frontend tests green (36 → 51), `npm run build`/`lint`/
+> `format:check` clean, reviewer (architect) APPROVED against all acceptance
+> criteria, FR-10 no-value-leak confirmed by inspection. The plan below is an
+> accurate record of what shipped.
 
 **Constraint (UI):** unchanged from S7 — no new **UI/runtime** packages (native
 `<button>` grid + React built-ins; CSS modules; component-per-folder with colocated
@@ -503,8 +506,9 @@ tests). Vitest + Testing Library (dev-only, already installed) is the test stack
   `{p.has_voted && <span className={styles.voted}>voted</span>}` (presence only —
   FR-10; no value).
 - `pages/Room.tsx` (edit) — `ConnectedRoom` destructures `castVote`; computes
-  `me = room.participants.find(p => p.id === participantId)`; renders (only when
-  `room` present) `<Topic current_item={room.current_item} />` and
+  the caller's `has_voted` via `room.participants.find(p => p.id ===
+  participantId)`; renders (only when `room` present) `<Topic
+  currentItem={room.current_item} />` and
   `<VoteDeck hasVoted={me?.has_voted ?? false} revealed={room.revealed}
   onVote={castVote} disabled={status !== 'live'} />` below `<Roster>`. The existing
   `role="alert"` banner already surfaces a rejected action's `error` message
@@ -559,6 +563,9 @@ tests). Vitest + Testing Library (dev-only, already installed) is the test stack
   shows the `voted` badge, a `false` one does not, and no card value is rendered.
 - `components/Topic/Topic.test.tsx` — renders `current_item`; shows the
   placeholder when `null`.
+- `test/mockWebSocket.ts` (new, deslop pass) — the controllable `MockWebSocket`
+  + `lastSocket`/`deliver` helpers, extracted from `roomSocket.test.ts` and shared
+  with the new `useRoom.test.ts` so the mock isn't duplicated across both.
 - **AC #3** (disabled on `revealed`) and **AC #9** (`invalid_card` surfaces, socket
   stays live) are **unit-test-only** — not exercisable by the S8 two-browser manual
   validate (no reveal UI until S9; the fixed deck can't emit an invalid card).

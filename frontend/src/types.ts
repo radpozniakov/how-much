@@ -34,10 +34,21 @@ export type ServerFrame =
   | { type: 'room_state'; room: RoomView }
   | { type: 'error'; reason: string; message: string }
 
+// A round action sent over an established socket. Round frames carry NO
+// participant_id: the socket fixed the caller's identity at handshake (backend
+// messages.py), so the server attributes the action to the connection.
+export interface CastVoteFrame {
+  type: 'cast_vote'
+  // A Fibonacci card as a string (e.g. '5'), matching the backend frame. The
+  // deck is FIBONACCI_DECK (lib/deck.ts); validated server-side (InvalidCard).
+  card: string
+}
+
 // Client -> server frames. The frontend only ever attaches (D-38): it learns its
 // own participant_id over HTTP, so it never uses the socket-native `join`.
-export type ClientFrame = { type: 'attach'; participant_id: string }
-// S8: | SetItemFrame | CastVoteFrame | SetHostVotingFrame | RevealFrame | ResetFrame
+export type ClientFrame =
+  { type: 'attach'; participant_id: string } | CastVoteFrame
+// S9 will add: SetItemFrame | SetHostVotingFrame | RevealFrame | ResetFrame
 
 // A normalized HTTP error. `detail` is always a rendered string (the backend
 // sends either a string or a validation-error list — api.ts flattens both).

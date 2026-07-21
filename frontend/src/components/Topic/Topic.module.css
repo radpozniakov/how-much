@@ -1,0 +1,10 @@
+.topic {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.placeholder {
+  margin: 0;
+  opacity: 0.6;
+  font-style: italic;
+}

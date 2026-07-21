@@ -55,6 +55,18 @@ export class RoomSocket {
 
   getSnapshot = (): RoomState => this.state
 
+  /**
+   * Send a client frame over the socket. A no-op (no throw, no queue) unless the
+   * socket is `live` — a frame produced during handshake or a reconnect is
+   * dropped, because the deck that produces it is disabled off-`live` anyway and
+   * the user's next click is the resend. `this.state.status` is the atomically-
+   * updated instance field (never React-stale in a class method).
+   */
+  send = (frame: ClientFrame): void => {
+    if (this.ws === null || this.state.status !== 'live') return
+    this.ws.send(JSON.stringify(frame))
+  }
+
   private setState(next: Partial<RoomState>): void {
     this.state = { ...this.state, ...next }
     for (const listener of this.listeners) listener()

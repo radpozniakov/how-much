@@ -21,6 +21,10 @@ export const Roster: FC<RosterProps> = ({ room, me }) => (
           {p.id === me && (
             <span className={`${styles.badge} ${styles.you}`}>you</span>
           )}
+          {/* Presence only — the card value is never shown pre-reveal (FR-10). */}
+          {p.has_voted && (
+            <span className={`${styles.badge} ${styles.voted}`}>voted</span>
+          )}
         </li>
       ))}
     </ul>
