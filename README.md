@@ -4,7 +4,8 @@ A lightweight, self-hostable **Planning-Poker-style estimation tool**. A team jo
 a room, votes privately on the current item, and the host reveals all cards at once —
 removing anchoring bias. No accounts, no database.
 
-> **Status:** MVP — initial specification. See [`doc/`](doc/) for the full spec.
+> **Status:** MVP complete and working. Now in the **UX/UI phase** — polishing
+> look and feel while preserving behavior. See [`doc/`](doc/) for the full spec.
 
 ## How it works
 
@@ -31,7 +32,8 @@ Limits: up to **30 participants** per room.
 |-----|----------|
 | [doc/00-context.md](doc/00-context.md) | Problem, goals, non-goals, architecture |
 | [doc/01-requirements.md](doc/01-requirements.md) | Functional & non-functional requirements |
-| [doc/02-current-scope.md](doc/02-current-scope.md) | MVP scope: in / out / definition of done |
+| [doc/02-current-scope.md](doc/02-current-scope.md) | Current scope: in / out / acceptance criteria |
 | [doc/03-decisions.md](doc/03-decisions.md) | Decision log with rationale |
 | [doc/04-glossary.md](doc/04-glossary.md) | Terminology |
-| [doc/05-backlog.md](doc/05-backlog.md) | Sequenced build tasks (T1…T9) |
+| [doc/05-ux-phase.md](doc/05-ux-phase.md) | Current phase: UX/UI goals, scope, carried items |
+| [doc/archive/phase1-mvp-backlog.md](doc/archive/phase1-mvp-backlog.md) | Archived Phase 1 build log (T1…S10) |

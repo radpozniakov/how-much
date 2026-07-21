@@ -1,11 +1,20 @@
-# 02 — Current Scope (MVP)
+# 02 — Current Scope
+
+> **Living doc — what the app does today.** The MVP is complete and working
+> end-to-end (build history: `archive/phase1-mvp-backlog.md`; rationale:
+> [03-decisions.md](03-decisions.md)). Keep this updated as scope changes. The
+> current [UX/UI phase](05-ux-phase.md) polishes look and feel without changing
+> the behavior below.
+>
+> Known gap not yet done: **deployment polish (S10)** — tighten CORS, finalize
+> Docker/compose, run docs — tracked in [05-ux-phase.md](05-ux-phase.md).
 
 The smallest set that makes a real estimation session usable.
 
 ## In scope
 
-| Area | MVP behavior |
-|------|--------------|
+| Area | Behavior |
+|------|----------|
 | Room creation | Create room → become host; get short code + shareable link |
 | Joining | Join via link or code; enter display name only (no auth) |
 | Identity | Name only, non-unique, internal ID distinguishes participants |
@@ -22,7 +31,7 @@ The smallest set that makes a real estimation session usable.
 | Room cleanup | In-memory; discarded after grace period when empty |
 | Reconnection | Rejoin as a new participant; in-round vote is lost |
 
-## Out of scope (MVP)
+## Out of scope
 
 - Accounts / authentication / authorization
 - Persistent storage, history, or result export
@@ -33,7 +42,10 @@ The smallest set that makes a real estimation session usable.
 - Reconnection state restore, timers, per-round history
 - Mobile-native apps; i18n
 
-## Definition of done (MVP)
+## MVP acceptance criteria · met ✅
+
+The bar Phase 1 had to clear — all verified working end-to-end. Kept as the
+baseline the current phase must not regress.
 
 1. Two+ browsers can create/join a room via a shared link.
 2. Participants vote privately; nobody sees values pre-reveal.

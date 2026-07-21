@@ -1,6 +1,11 @@
-# 05 — Backlog
+# Phase 1 (MVP) — Backlog · `CLOSED`
 
-Sequenced work to build the MVP defined in [02-current-scope.md](02-current-scope.md).
+> **Archived build log.** Phase 1 (MVP) is complete and verified working
+> end-to-end. Every slice below is `DONE` except **S10 (deployment polish)**,
+> which is carried forward into the UX phase — see
+> [../05-ux-phase.md](../05-ux-phase.md). Kept for history; not a live task list.
+
+Sequenced work to build the MVP defined in [../02-current-scope.md](../02-current-scope.md).
 
 ## Approach — vertical slices, backend-first
 
@@ -941,15 +946,18 @@ controls. **Refs:** FR-12–FR-16, FR-17 · D-12, D-14, D-16.
 
 ## Phase D — Deployment
 
-### S10 — Deployment polish · `TODO`
+### S10 — Deployment polish · `CARRIED → UX phase`
 
 Tighten dev CORS to explicit origins (D-28), finalize Docker/compose for a
 deployable setup, config, and run docs. **Refs:** NFR-3
+
+> Not completed in Phase 1. Carried forward — now tracked in
+> [../05-ux-phase.md](../05-ux-phase.md).
 
 ---
 
 ## Out of backlog (MVP)
 
 Everything in the "Out of scope" list of
-[02-current-scope.md](02-current-scope.md) — accounts, persistence, backlog/tickets,
+[../02-current-scope.md](../02-current-scope.md) — accounts, persistence, backlog/tickets,
 multiple decks, distribution charts, reconnection restore, timers, i18n.
