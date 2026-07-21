@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import type { FC, SyntheticEvent } from 'react'
+import { useNavigate } from 'react-router'
 import { joinRoom, requestErrorMessage } from '../../lib/api'
-import { navigate } from '../../lib/router'
 import { saveSession } from '../../lib/session'
 import styles from './JoinRoomForm.module.css'
 
 export const JoinRoomForm: FC = () => {
+  const navigate = useNavigate()
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)

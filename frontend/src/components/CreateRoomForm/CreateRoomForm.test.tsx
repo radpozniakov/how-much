@@ -2,15 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { CreateRoomForm } from './CreateRoomForm'
 import * as api from '../../lib/api'
-import * as router from '../../lib/router'
 import * as session from '../../lib/session'
 import { makeRoom } from '../../test/fixtures'
+
+const navigate = vi.fn()
 
 vi.mock('../../lib/api', async (importActual) => {
   const actual = await importActual<typeof import('../../lib/api')>()
   return { ...actual, createRoom: vi.fn() }
 })
-vi.mock('../../lib/router', () => ({ navigate: vi.fn() }))
+vi.mock('react-router', async (importActual) => ({
+  ...(await importActual<typeof import('react-router')>()),
+  useNavigate: () => navigate,
+}))
 vi.mock('../../lib/session', () => ({ saveSession: vi.fn() }))
 
 beforeEach(() => {
@@ -31,7 +35,7 @@ describe('CreateRoomForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /create/i }))
 
     await waitFor(() =>
-      expect(router.navigate).toHaveBeenCalledWith('/room/ABCDEF'),
+      expect(navigate).toHaveBeenCalledWith('/room/ABCDEF'),
     )
     expect(api.createRoom).toHaveBeenCalledWith('Alice')
     expect(session.saveSession).toHaveBeenCalledWith('ABCDEF', 'p1')
@@ -42,6 +46,6 @@ describe('CreateRoomForm', () => {
     render(<CreateRoomForm />)
     fireEvent.click(screen.getByRole('button', { name: /create/i }))
     expect(await screen.findByRole('alert')).toHaveTextContent('bad')
-    expect(router.navigate).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
   })
 })
