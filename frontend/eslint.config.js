@@ -22,4 +22,22 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  // Type-aware rules for our source (needs a TS program). Scoped to src/ because
+  // these files are the ones covered by tsconfig.app.json. `no-deprecated`
+  // surfaces uses of @deprecated APIs (e.g. React's FormEvent) as lint errors so
+  // they're caught in CI, not just in the editor.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    plugins: { '@typescript-eslint': tseslint.plugin },
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-deprecated': 'error',
+    },
+  },
 ])

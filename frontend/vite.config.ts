@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 
@@ -17,5 +17,11 @@ export default defineConfig({
     watch: {
       usePolling: process.env.VITE_USE_POLLING === 'true',
     },
+  },
+  test: {
+    // jsdom gives the lib tests a DOM (sessionStorage, history, renderHook).
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['src/test/setup.ts'],
   },
 })

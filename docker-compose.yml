@@ -31,8 +31,10 @@ services:
       - VITE_USE_POLLING=true
       # Backend endpoints. Point at the host-published ports (not the compose
       # service name) — these run in the user's browser, not the container.
+      # VITE_WS_BASE_URL is a base (scheme+host, no path); the client appends
+      # /ws/rooms/{code}.
       - VITE_API_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000/ws
+      - VITE_WS_BASE_URL=ws://localhost:8000
     depends_on:
       - backend
     restart: unless-stopped

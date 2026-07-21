@@ -1,0 +1,5 @@
+/* The shared form/label/input/button styles live in App.css; this only
+   constrains the create form's width so inputs don't stretch the whole card. */
+.form {
+  max-width: 22rem;
+}

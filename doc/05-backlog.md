@@ -371,30 +371,103 @@ sender. **Refs:** NFR-1, FR-8–FR-17 · D-5, D-8, D-12, D-14, D-35, D-36
 
 **Goal:** be in a room in a browser — create or join by link/code, land in the
 room, and see everyone appear and disappear live. The foundation slice (largest),
-mirroring S6a.
+mirroring S6a. Replaces the T1b scaffold probe page.
+
+> **Plan status:** `pending approval` (ralplan consensus: Planner → Architect →
+> Critic → APPROVE). Detailed below; scope is S7 only (no voting/reveal/host
+> controls — S8/S9), but the foundation is shaped so those extend cleanly.
+
+**Constraint (UI):** no new **UI/runtime** packages — routing, state, and the WS
+client are hand-rolled on native platform primitives (History API, `WebSocket`,
+`fetch`, `sessionStorage`) + React built-ins; the UI uses native HTML elements
+only, polished in later phases. **Dev-only test tooling** (Vitest + Testing
+Library) is the one sanctioned dependency addition — it never ships in the bundle.
+
+**Module layout** (`frontend/src/`)
+- `config.ts` (edit) — `API_URL` + `WS_BASE_URL` + `roomSocketUrl(code)`.
+- `types.ts` (new) — `RoomView` / `Participant` / `ServerFrame` / `ClientFrame` /
+  `ApiError`, mirroring the backend contract.
+- `lib/router.tsx` (new) — `useRoute()`, `navigate()`, `matchRoom()`, `<Link>` on
+  the History API + `popstate`.
+- `lib/session.ts` (new) — `load/save/clearSession()` over `sessionStorage`
+  (`{code, participantId}`), try/caught.
+- `lib/api.ts` (new) — `createRoom` / `joinRoom`; normalizes both error `detail`
+  shapes into a rendered string.
+- `lib/roomSocket.ts` (new) — `RoomSocket` class: connect / `attach` / phase-scoped
+  reconnect + a cached-snapshot external store.
+- `lib/useRoom.ts` (new) — hook owning a `RoomSocket`, exposed via
+  `useSyncExternalStore`.
+- `App.tsx` (rewrite) — route switch `/` → `Landing`, `/room/:code` → `Room`.
+- `pages/Landing.tsx`, `pages/Room.tsx` (new); `components/` splits optional.
 
 **Scope**
-- The routing, WS-client, room-store, and identity/reconnect foundation above.
-- **Create** via HTTP `POST /rooms {name}` → show the code + copyable shareable
-  link, then navigate into `/room/:code` and `attach` the socket with the
-  returned `participant_id`.
+- **Foundation** — the routing, typed WS client, room store, and identity/reconnect
+  described in the Phase C intro. The **last `room_state` snapshot is the single
+  source of truth** (D-36): the UI renders it verbatim and keeps no authoritative
+  copy of its own — so there is **no optimistic UI** (a deliberate constraint S9
+  inherits). The socket lives **outside React** in a plain class subscribed via
+  `useSyncExternalStore`, so StrictMode double-effects can't spawn duplicate
+  connections.
+- **Create** via HTTP `POST /rooms {name}` → show the code + a copyable shareable
+  link, then `navigate` into `/room/:code` (using the canonical `room.code`, D-17)
+  and `attach` the socket with the returned `participant_id`.
 - **Join** via HTTP `POST /rooms/{code}/participants {name}` (by link or typed
-  code) → then `attach`. HTTP-then-`attach` (not a socket `join`) is deliberate:
-  the joiner must learn its **own** `participant_id`, and a `room_state` snapshot
-  can't reveal it — names are non-unique (D-10), so a client can't pick itself
-  out of the roster. The id is also what detects "am I host?" and enables
-  reconnect. Map `404` (unknown room) / `409` (full, show the cap) / `422`
-  (bad name) to inline errors.
-- Room roster with a live participant list + host badge, and a connection-status
-  indicator (connecting / live / reconnecting).
+  code) → then `attach`. HTTP-then-`attach` (not a socket `join`) is deliberate
+  (D-38): the joiner must learn its **own** `participant_id`, and a `room_state`
+  snapshot can't reveal it — names are non-unique (D-10), so a client can't pick
+  itself out of the roster. The id is also what detects "am I host?" and enables
+  reconnect. Create/join POSTs fire from **event handlers, never a bare
+  `useEffect`**, so StrictMode's dev double-invoke can't mint two participants.
+  Map `404` (unknown room) / `409` (full, show the cap) / `422` (bad name) to
+  inline errors.
+- **Room** — a live participant list with a host badge (guarding `host_id === null`
+  during the transient transfer/empty window) and a connection-status indicator
+  (connecting / live / reconnecting); a stale-identity `not_in_room` rejection
+  falls back to an inline name-prompt. The share link is an always-selectable
+  readonly input (so copy works even where `navigator.clipboard` is undefined over
+  a non-secure LAN origin), with a `clipboard`→`execCommand` copy button.
+
+**Key decisions & findings** (to promote to `03-decisions.md` when built)
+- **Reconnect terminality is phase-scoped, not slug-scoped.** A socket close is
+  terminal (→ `rejected`, no reconnect) **iff no `room_state` has arrived yet**
+  (handshake phase); once a snapshot lands, closes retry and mid-session `error`
+  frames are non-fatal. Backend sends handshake errors *then* closes, but S8/S9
+  mid-session errors don't close — so a reason-slug whitelist would misclassify.
+- **`getSnapshot` returns a cached reference**, rebuilt only inside mutations —
+  otherwise `useSyncExternalStore` infinite-loops (a runtime crash `tsc` can't
+  catch; covered by a dedicated regression test).
+- **Rename `VITE_WS_URL` → `VITE_WS_BASE_URL`** (a base, not the retired `/ws`
+  echo endpoint); the client builds `${WS_BASE_URL}/ws/rooms/{code}`. Renaming
+  fails safe — a stale `.env` with the old full value would otherwise silently
+  double-path. Update `config.ts` + `docker-compose.yml` + `.env.example` together.
+- **`api.ts` normalizes both `detail` shapes** — a domain error is `{detail:"…"}`
+  (404/409) but a name-validation 422 is `{detail:[{…,msg}]}`; render a string.
 
 **Notes:** host auto-transfer (D-13/FR-7) and empty-room cleanup (D-18/FR-6) are
 backend behaviors here — the UI only reflects them as roster / host-badge changes
 via the broadcast. No voting yet.
 
+**Testing** — introduce **Vitest + Testing Library** (dev deps; jsdom env, with
+happy-dom as the fallback if the bleeding-edge Vite 8 / rolldown toolchain forces
+it — verify at install). Add a `test` block to `vite.config.ts` and `test` scripts.
+Unit-cover the `lib/` seams: `api` detail-normalization, `router` `matchRoom` +
+`navigate`, `session` round-trip + throwing-storage fallback, and `roomSocket`
+(mock `WebSocket` + fake timers) — `attach` on open, `room_state` → live,
+handshake-close → `rejected`/no-retry, live-close → reconnecting/retry, live
+`error` non-fatal, `closedByClient` suppression, and the **cached-`getSnapshot`
+stable-reference** regression guard. Page-level RTL smoke tests are optional.
+
 **Validate:** two browsers create/join one room via the shared link and see each
-other live; reloading re-`attach`es as the *same* participant; closing the host's
-tab promotes the oldest remaining participant in the other browser's roster.
+other live; **reloading rejoins the room gracefully** — the client re-`attach`es,
+and because the backend removes a participant the instant its socket drops (no
+per-participant grace — only the empty-*room* grace of D-18), a plain reload is
+rejected `not_in_room`, clears the session, and rejoins as a **fresh** participant
+(name continuity is not guaranteed; any in-round vote is lost, FR-18/D-15 — this is
+the expected, correct behavior, not a defect; the earlier "re-attaches as the same
+participant" wording overstated what the current backend can do); closing the
+host's tab promotes the oldest remaining participant in the other browser's roster.
+Automated gates: `npm run test` (Vitest) + `npm run build` (`tsc -b`) + lint +
+format + a grep asserting no `/ws` echo literal / `VITE_WS_URL` remains.
 **Refs:** FR-1–FR-7, FR-17, FR-18, NFR-1 · D-5, D-9, D-10, D-13, D-15, D-17, D-18,
 D-30, D-36, D-37, D-38, D-39
 
