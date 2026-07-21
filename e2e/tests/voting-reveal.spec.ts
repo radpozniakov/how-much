@@ -3,9 +3,11 @@ import {
   card,
   createRoom,
   joinViaCode,
+  participantCards,
   resultEntry,
   rosterEntry,
   setHostVoting,
+  showStats,
   voteCard,
 } from './helpers'
 
@@ -30,7 +32,7 @@ async function setupRoom(browser: Parameters<Parameters<typeof test>[2]>[0]['bro
   await joinViaCode(b, code, 'Ben')
 
   // Everyone sees all three before we start.
-  await expect(card(host, /Participants \(3\)/)).toBeVisible()
+  await expect(participantCards(host)).toHaveCount(3)
 
   const cleanup = async () => {
     await aCtx.close()
@@ -49,12 +51,16 @@ test.describe('Voting & reveal', () => {
     await voteCard(a, '5').click()
 
     // The host (and Ben) see that Ann has voted, but no value is shown anywhere
-    // pre-reveal: the Results card does not exist yet.
-    await expect(rosterEntry(host, 'Ann')).toContainText('voted')
-    await expect(rosterEntry(b, 'Ann')).toContainText('voted')
+    // pre-reveal: her card is in the voted state, not revealed, and the Results
+    // card does not exist yet.
+    await expect(rosterEntry(host, 'Ann')).toHaveAttribute('data-state', 'voted')
+    await expect(rosterEntry(b, 'Ann')).toHaveAttribute('data-state', 'voted')
     await expect(card(host, 'Results')).toHaveCount(0)
-    // Ben has not voted — no "voted" badge on his entry.
-    await expect(rosterEntry(host, 'Ben')).not.toContainText('voted')
+    // Ben has not voted — his card stays in the not-voted state.
+    await expect(rosterEntry(host, 'Ben')).toHaveAttribute(
+      'data-state',
+      'not-voted',
+    )
 
     await cleanup()
   })
@@ -72,7 +78,7 @@ test.describe('Voting & reveal', () => {
     await expect(voteCard(a, '3')).toHaveAttribute('aria-pressed', 'false')
 
     // Still just "voted" to the host — the change never leaks a value (FR-10).
-    await expect(rosterEntry(host, 'Ann')).toContainText('voted')
+    await expect(rosterEntry(host, 'Ann')).toHaveAttribute('data-state', 'voted')
     await cleanup()
   })
 
@@ -85,8 +91,10 @@ test.describe('Voting & reveal', () => {
     await voteCard(b, '5').click()
     await card(host, 'Host controls').getByRole('button', { name: 'Reveal' }).click()
 
-    // All three clients now see the Results card with both cards revealed.
+    // All three clients now see the Results card with both cards revealed —
+    // the dashboard lives in the stats view (S18), so switch there first.
     for (const p of [host, a, b] as Page[]) {
+      await showStats(p)
       await expect(card(p, 'Results')).toBeVisible()
       await expect(resultEntry(p, 'Ann')).toContainText('5')
       await expect(resultEntry(p, 'Ben')).toContainText('5')
@@ -106,6 +114,7 @@ test.describe('Voting & reveal', () => {
     await voteCard(b, '8').click()
     await card(host, 'Host controls').getByRole('button', { name: 'Reveal' }).click()
 
+    await showStats(host)
     await expect(card(host, 'Results')).toBeVisible()
     await expect(resultEntry(host, 'Ann')).toContainText('3')
     await expect(resultEntry(host, 'Ben')).toContainText('8')

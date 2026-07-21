@@ -4,17 +4,15 @@ import { MAX_TOPIC_LENGTH } from '../../lib/limits'
 export interface TopicProps {
   // The round's current_item from the snapshot; null when unset.
   currentItem: string | null
-  isHost?: boolean
   disabled?: boolean
   onSetTopic?: (topic: string | null) => void
 }
 
-// Read-only for everyone except the host. The host gets an inline editor
-// (S9); non-hosts still just see the topic the host set (S8 behavior,
-// unchanged).
+// The host's inline topic editor (S9). Mounted only for the host — non-hosts
+// read the current topic from the Stage (S14), so this component no longer has
+// a read-only variant.
 export const Topic: FC<TopicProps> = ({
   currentItem,
-  isHost,
   disabled,
   onSetTopic,
 }) => {
@@ -29,21 +27,6 @@ export const Topic: FC<TopicProps> = ({
   if (currentItem !== prevItem) {
     setPrevItem(currentItem)
     setDraft(currentItem ?? '')
-  }
-
-  if (!isHost) {
-    return (
-      <section className="card">
-        <h2>Topic</h2>
-        {currentItem ? (
-          <p className="topic">{currentItem}</p>
-        ) : (
-          <p className="topic__placeholder">
-            Waiting for the host to set a topic…
-          </p>
-        )}
-      </section>
-    )
   }
 
   const handleSubmit = (e: SyntheticEvent) => {

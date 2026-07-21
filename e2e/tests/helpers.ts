@@ -21,7 +21,7 @@ export async function createRoom(page: Page, name: string): Promise<string> {
   await page.goto('/')
   const create = card(page, 'Create a room')
   await create.getByLabel('Your name').fill(name)
-  await create.getByRole('button', { name: 'Create room' }).click()
+  await create.getByRole('button', { name: 'Create', exact: true }).click()
   await page.waitForURL(/\/room\/[A-Z0-9]{6}$/)
   await waitForLive(page)
   const match = /\/room\/([A-Z0-9]{6})$/.exec(page.url())
@@ -75,12 +75,43 @@ export function voteCard(page: Page, value: string): Locator {
   })
 }
 
-/** A roster <li> identified by the participant's display name. */
-export function rosterEntry(page: Page, name: string): Locator {
-  return card(page, /Participants/).locator('li').filter({ hasText: name })
+/** The task stage section (redesign §Stage) — shows the topic title, status,
+ * and vote-progress counter. */
+export function stage(page: Page): Locator {
+  return page.locator('section.stage')
 }
 
-/** A results <li> identified by the participant's display name. */
+/** All participant cards in the responsive grid (redesign §Participant cards
+ * grid). One card per participant; used for presence counts. */
+export function participantCards(page: Page): Locator {
+  return page.locator('.participant-card')
+}
+
+/** A participant card identified by the participant's display name. Replaces the
+ * old roster <li>. Voted state is read via the card's `data-state` attribute
+ * ('not-voted' | 'voted' | 'revealed') — the redesign shows state by glyph, not
+ * text, so `toContainText('voted')` no longer applies. */
+export function rosterEntry(page: Page, name: string): Locator {
+  return participantCards(page).filter({ hasText: name })
+}
+
+/** Switch to the stats view via the header segment control (redesign §Segment
+ * control). The redesign moves the results dashboard out of the cards view and
+ * into "View 2 (stats)", so tests must toggle here before asserting on Results
+ * (S18). */
+export async function showStats(page: Page): Promise<void> {
+  await page.getByRole('tab', { name: 'View 2 (stats)' }).click()
+}
+
+/** Switch back to the cards view (the participant grid) via the segment control.
+ * The inverse of showStats — needed when a test asserts on Results and then on
+ * the grid (only one is mounted at a time, S18). */
+export async function showCards(page: Page): Promise<void> {
+  await page.getByRole('tab', { name: 'View 1 (cards)' }).click()
+}
+
+/** A results <li> identified by the participant's display name. Only present
+ * once the stats view is active on a revealed round (see showStats). */
 export function resultEntry(page: Page, name: string): Locator {
   return card(page, 'Results').locator('li').filter({ hasText: name })
 }

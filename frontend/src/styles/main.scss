@@ -304,39 +304,266 @@ form button {
   }
 }
 
-// Participant roster.
-.roster {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+// ---------------------------------------------------------------------------
+// Room page redesign (spec §Room page) — header / stage / participant grid.
+// ---------------------------------------------------------------------------
 
-  &__item {
+// Room screen shell: centered column, wide enough for the stage footprint.
+.room {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-5) var(--space-8);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+// Header band: room code + icon buttons (left), segment control (center),
+// participant name + status (right). 24px edge offset comes from .room padding.
+.room-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--space-4);
+
+  &__lead {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--border);
+    gap: var(--space-2);
+    justify-self: start;
   }
 
-  &__badge {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 0.1rem 0.4rem;
-    border-radius: 4px;
-    background: var(--accent-bg);
-    color: var(--accent);
+  // Room code, bold Inter — overrides the global mono h1 (spec §Header).
+  &__code {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 24px;
+    letter-spacing: -0.4px;
+    margin: 0;
 
-    &--you {
-      background: var(--code-bg);
-      color: var(--text);
+    @media (max-width: 1024px) {
+      font-size: 20px;
+    }
+  }
+
+  &__copied {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+
+  &__trail {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    justify-self: end;
+  }
+
+  &__name {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 16px;
+  }
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+    justify-items: start;
+
+    &__lead,
+    &__trail {
+      justify-self: start;
+    }
+  }
+}
+
+// Minimal outline/ghost icon buttons (spec §Icon buttons).
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1);
+  width: 32px;
+  height: 32px;
+  border: var(--hairline);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 1px;
+  }
+}
+
+// Two-item segment control (spec §Segment control): active bold, inactive muted.
+.segment {
+  display: inline-flex;
+  gap: var(--space-4);
+  justify-self: center;
+
+  &__item {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 400;
+    padding: var(--space-1) var(--space-2);
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: var(--ink-muted);
+
+    &:hover:not(:disabled) {
+      background: transparent;
+      color: var(--ink);
     }
 
-    &--voted {
-      margin-left: auto;
-      background: var(--ok-bg, var(--accent-bg));
-      color: var(--ok, var(--accent));
+    &--active {
+      font-weight: 700;
+      color: var(--ink);
     }
+  }
+}
+
+// Task stage (spec §Stage): centered white card, max 900px, JetBrains Mono title.
+.stage {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: var(--hairline);
+  border-radius: var(--radius-container);
+  padding: var(--space-6);
+  text-align: center;
+
+  &__title {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 24px;
+    line-height: 1.3;
+    letter-spacing: -0.3px;
+    margin: 0;
+    overflow-wrap: anywhere;
+
+    @media (max-width: 1024px) {
+      font-size: 20px;
+    }
+
+    &--empty {
+      font-weight: 400;
+      color: var(--ink-muted);
+    }
+  }
+
+  &__meta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+  }
+
+  &__status {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--ink-muted);
+  }
+
+  &__counter {
+    font-size: 14px;
+    padding: 2px 8px;
+    border: var(--hairline);
+    border-radius: 999px;
+  }
+}
+
+// Participant grid (spec §Participant cards grid): auto-responsive columns,
+// matching the stage width. Column count adapts to the available width via
+// auto-fill — no explicit density control (S19, DN-C). The per-breakpoint min
+// track width tunes how small a card may get before another column drops, so
+// the grid stays legible from wide desktops down to narrow phones without ever
+// forcing horizontal page scroll (NFR-4).
+.participant-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 900px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: var(--space-4);
+
+  @media (max-width: 1024px) {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: var(--space-3);
+  }
+
+  @media (max-width: 400px) {
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  }
+}
+
+// Portrait participant card (spec §Participant card): border + inner content
+// only, no color coding.
+.participant-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+
+  &__face {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    background: var(--surface);
+    border: var(--hairline);
+    border-radius: var(--radius-card);
+    color: var(--ink);
+  }
+
+  // Not voted: dashed border + `?` glyph.
+  &--not-voted &__face {
+    border-style: dashed;
+  }
+
+  &__mark,
+  &__value {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 28px;
+    line-height: 1;
+  }
+
+  &__name {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 14px;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+}
+
+// Stats view empty state (S18): shown when the stats segment is active but the
+// round is not yet revealed, so there are no values to present (FR-10).
+.stats-empty {
+  text-align: center;
+  color: var(--ink-muted);
+
+  &__hint {
+    font-family: var(--font-sans);
+    font-size: 14px;
   }
 }
 
@@ -356,42 +583,36 @@ form button {
   }
 }
 
-// Connection status pill.
+// Connection status pill. Monochrome (spec §Notes for regeneration): states are
+// distinguished by border style + weight + emphasis, never by color.
 .status {
-  font-size: 0.8rem;
-  padding: 0.15rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: var(--hairline);
   white-space: nowrap;
+  color: var(--ink);
 
   &--live {
-    color: #2e7d32;
-    border-color: #2e7d32;
+    font-weight: 600;
   }
 
   &--connecting,
   &--reconnecting {
-    color: #b26a00;
-    border-color: #b26a00;
+    color: var(--ink-muted);
+    border-style: dashed;
   }
 
   &--rejected {
-    color: #dc3545;
-    border-color: #dc3545;
+    font-weight: 600;
+    text-decoration: line-through;
   }
 }
 
 // Topic display + host editor.
+// Host topic editor (the read-only variant moved to the Stage, S14).
 .topic {
-  margin: 0;
-  font-size: 1.1rem;
-
-  &__placeholder {
-    margin: 0;
-    opacity: 0.6;
-    font-style: italic;
-  }
-
   &__form {
     flex-direction: row;
   }
@@ -401,44 +622,40 @@ form button {
   }
 }
 
-// Share-link row.
-.share {
-  display: flex;
-  gap: 0.5rem;
-  margin: 0.5rem 0 1rem;
-
-  &__link {
-    flex: 1;
-  }
-}
-
-// Fibonacci vote deck.
+// Fibonacci vote deck (spec §Voting cards): a horizontal row of rounded-square
+// cards. Selected card is filled black with a white number; the rest are
+// outlined black-on-white. State is border + fill only — no color coding.
 .vote-deck {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  justify-content: center;
+  gap: var(--space-3);
 
   &__card {
-    min-width: 3rem;
-    padding: 0.75rem 1rem;
-    font-size: 1.1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 22px;
     font-variant-numeric: tabular-nums;
-    cursor: pointer;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--code-bg);
-    color: var(--text);
+    border-radius: var(--radius-card);
 
-    &:disabled {
-      cursor: default;
-      opacity: 0.55;
+    // Selected: filled ink with a white number. Kept on hover too, so hovering
+    // the active card does not read as a state change.
+    &--selected,
+    &--selected:hover:not(:disabled) {
+      background: var(--ink);
+      color: var(--surface);
+      font-weight: 700;
     }
 
-    &--selected {
-      border-color: var(--accent);
-      background: var(--accent-bg);
-      color: var(--accent);
-      font-weight: 700;
+    @media (max-width: 640px) {
+      width: 52px;
+      height: 52px;
+      font-size: 18px;
     }
   }
 }

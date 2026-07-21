@@ -84,7 +84,8 @@ describe('Room (S9 wiring)', () => {
     expect(screen.getByRole('button', { name: 'Reveal' })).toBeInTheDocument()
   })
 
-  it('renders Results and no deck once revealed', () => {
+  it('keeps the deck locked and moves results to the stats view once revealed', async () => {
+    const user = userEvent.setup()
     renderRoomAs('pid-2')
     connect(
       makeRoom({
@@ -101,10 +102,23 @@ describe('Room (S9 wiring)', () => {
         ],
       }),
     )
-    expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument()
+
+    // Cards view (default): the deck stays as the permanent bottom row (spec
+    // §Voting cards) but is locked — every card disabled post-reveal. Results
+    // are NOT rendered here; they live in the stats view now (S18).
     expect(
-      screen.queryByRole('heading', { name: 'Your vote' }),
+      screen.getByRole('heading', { name: 'Your vote' }),
+    ).toBeInTheDocument()
+    for (const card of FIBONACCI_DECK) {
+      expect(screen.getByRole('button', { name: card })).toBeDisabled()
+    }
+    expect(
+      screen.queryByRole('heading', { name: 'Results' }),
     ).not.toBeInTheDocument()
+
+    // Switching to the stats view surfaces the Results dashboard (S18).
+    await user.click(screen.getByRole('tab', { name: 'View 2 (stats)' }))
+    expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument()
   })
 
   // The S8 tripwire, automated at the Room level: a PRE-REVEAL reset

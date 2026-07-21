@@ -5,10 +5,10 @@ import { clearSession, loadSession } from '../lib/session'
 import { useRoom } from '../lib/useRoom'
 import { HostControls } from '../components/HostControls/HostControls'
 import { JoinPrompt } from '../components/JoinPrompt/JoinPrompt'
-import { Results } from '../components/Results/Results'
-import { Roster } from '../components/Roster/Roster'
-import { ShareLink } from '../components/ShareLink/ShareLink'
-import { StatusIndicator } from '../components/StatusIndicator/StatusIndicator'
+import { ParticipantGrid } from '../components/ParticipantGrid/ParticipantGrid'
+import { RoomHeader, type RoomView } from '../components/RoomHeader/RoomHeader'
+import { Stage } from '../components/Stage/Stage'
+import { StatsView } from '../components/StatsView/StatsView'
 import { Topic } from '../components/Topic/Topic'
 import { VoteDeck } from '../components/VoteDeck/VoteDeck'
 
@@ -37,6 +37,17 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
     reset,
   } = useRoom(code, participantId)
 
+  // Which participant view the header segment control shows: the cards grid or
+  // the stats view (S18). The two are swapped in the area under the stage.
+  const [view, setView] = useState<RoomView>('cards')
+
+  // Leaving the room: drop the per-tab identity and navigate home. Unmounting
+  // ConnectedRoom closes the socket, which broadcasts the leave (FR-17).
+  const exitRoom = () => {
+    clearSession()
+    navigate('/')
+  }
+
   // A stale-identity rejection: the hook has cleared the session; drop back to
   // the name prompt so the user rejoins fresh (D-39).
   useEffect(() => {
@@ -60,14 +71,30 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
     )
   }
 
-  return (
-    <main className="page">
-      <header className="room-head">
-        <h1>Room {code}</h1>
-        <StatusIndicator status={status} />
-      </header>
+  const me = room?.participants.find((p) => p.id === participantId)
+  // host_id can be null during a transfer/empty window — never match null.
+  const isHost = !!room && room.host_id !== null && room.host_id === participantId
+  // An opted-out host is a facilitator, not a voter (D-14): no deck, and they
+  // are excluded from the vote-progress denominator (FR-17).
+  const canVote = !isHost || (room?.host_voting ?? false)
+  const notLive = status !== 'live'
 
-      <ShareLink code={code} />
+  const voters =
+    room?.participants.filter(
+      (p) => room.host_voting || p.id !== room.host_id,
+    ) ?? []
+  const votesCast = voters.filter((p) => p.has_voted).length
+
+  return (
+    <main className="room">
+      <RoomHeader
+        code={code}
+        participantName={me?.name ?? ''}
+        view={view}
+        onViewChange={setView}
+        onExit={exitRoom}
+        status={status}
+      />
 
       {error && (
         <p className="error" role="alert">
@@ -76,51 +103,61 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
       )}
 
       {room ? (
-        (() => {
-          const me = room.participants.find((p) => p.id === participantId)
-          // host_id can be null during a transfer/empty window — never match null.
-          const isHost = room.host_id !== null && room.host_id === participantId
-          // An opted-out host is a facilitator, not a voter (D-14): no deck.
-          const canVote = !isHost || room.host_voting
-          const notLive = status !== 'live'
-          return (
-            <>
-              <Topic
-                currentItem={room.current_item}
-                isHost={isHost}
-                disabled={notLive || room.revealed}
-                onSetTopic={setItem}
-              />
-              <Roster room={room} me={participantId} />
-              {isHost && (
-                <HostControls
-                  revealed={room.revealed}
-                  hostVoting={room.host_voting}
-                  disabled={notLive}
-                  onReveal={reveal}
-                  onReset={reset}
-                  onSetHostVoting={setHostVoting}
-                />
-              )}
-              {room.revealed && room.results ? (
-                <Results
-                  results={room.results}
-                  participants={room.participants}
-                  hostId={room.host_id}
-                />
-              ) : (
-                canVote && (
-                  <VoteDeck
-                    hasVoted={me?.has_voted ?? false}
-                    revealed={room.revealed}
-                    onVote={castVote}
-                    disabled={notLive}
-                  />
-                )
-              )}
-            </>
-          )
-        })()
+        <>
+          <Stage
+            currentItem={room.current_item}
+            revealed={room.revealed}
+            votesCast={votesCast}
+            totalVoters={voters.length}
+            isHost={isHost}
+          />
+
+          {view === 'cards' ? (
+            <ParticipantGrid
+              participants={room.participants}
+              revealed={room.revealed}
+              results={room.results}
+            />
+          ) : (
+            <StatsView
+              participants={room.participants}
+              results={room.results}
+              revealed={room.revealed}
+              hostId={room.host_id}
+            />
+          )}
+
+          {isHost && (
+            <Topic
+              currentItem={room.current_item}
+              disabled={notLive || room.revealed}
+              onSetTopic={setItem}
+            />
+          )}
+
+          {isHost && (
+            <HostControls
+              revealed={room.revealed}
+              hostVoting={room.host_voting}
+              disabled={notLive}
+              onReveal={reveal}
+              onReset={reset}
+              onSetHostVoting={setHostVoting}
+            />
+          )}
+
+          {/* The voting cards row is a permanent bottom fixture (spec §Voting
+              cards). After reveal the deck stays visible but locked; the round's
+              values move to the stats view (S18), not a separate bottom panel. */}
+          {canVote && (
+            <VoteDeck
+              hasVoted={me?.has_voted ?? false}
+              revealed={room.revealed}
+              onVote={castVote}
+              disabled={notLive}
+            />
+          )}
+        </>
       ) : (
         <p>Connecting…</p>
       )}

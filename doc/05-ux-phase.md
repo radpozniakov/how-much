@@ -96,43 +96,43 @@ Restyle the create/join landing: intro section (title + description) above a
 horizontal pair of white bordered cards — **Create a room** and **Join a room**.
 **Refs:** FR-1, FR-3; spec §Main page.
 
-### S13 — Room header · `TODO`
+### S13 — Room header · `DONE`
 Header band: Room ID (bold Inter, 24px edge offset) with copy-code and
 exit-room icon buttons top-left (DN-D); centered segment control (S18); current
 participant name bold top-right. **Refs:** FR-2a (copy code/link), room leave;
 spec §Room page/Header, §Icon buttons.
 
-### S14 — Stage / task section · `TODO`
+### S14 — Stage / task section · `DONE`
 Centered white card, max-width 900px, solid border, rounded: task title
 (JetBrains Mono, multi-line), status text ("Voting in progress" / revealed), and
 vote-progress counter `votes/total`. **Refs:** FR-8, FR-10, FR-17; spec §Stage.
 
-### S15 — Participant cards grid · `TODO`
+### S15 — Participant cards grid · `DONE`
 Responsive grid directly under the stage, matching its width footprint, showing
 one card per participant; hidden when the stats view (S18) is active. **Refs:**
 FR-17; spec §Participant cards grid. Depends on S16.
 
-### S16 — Participant card states · `TODO`
+### S16 — Participant card states · `DONE`
 The portrait card component with three color-free states distinguished by border
 + inner content only: **not voted** (dashed border, `?`), **voted/hidden**
 (solid border, checkmark), **voted/revealed** (solid border, numeric value;
 also the self-view of one's own vote). Name label bold below. **Refs:** FR-10,
 FR-12, FR-15; spec §Participant card, §Notes for regeneration.
 
-### S17 — Voting cards row · `TODO`
+### S17 — Voting cards row · `DONE`
 Bottom horizontal row of rounded-square deck cards; click casts/updates the
 current user's vote; selected card filled black with white number, others
 outlined. **Deck stays Fibonacci** (DN-A). **Refs:** FR-9, FR-10, FR-11; spec
 §Voting cards.
 
-### S18 — Segment control + stats view · `TODO`
+### S18 — Segment control + stats view · `DONE`
 Two-item toggle swapping the area under the stage between the cards grid (S15)
 and a stats view. The stats view re-presents **existing** results only — each
 vote, average, consensus — no new distribution analytics (DN-B). Finalize the
 "View 1 / View 2" placeholder labels as real copy (S22). **Refs:** FR-16, D-16;
 spec §Segment control, §Room page.
 
-### S19 — Grid responsiveness · `TODO`
+### S19 — Grid responsiveness · `DONE`
 Auto-responsive column behavior for the participant grid across viewport sizes
 and small screens (column count adapts to available width; no explicit density
 control, DN-C). **Refs:** NFR-4; spec §Participant cards grid.

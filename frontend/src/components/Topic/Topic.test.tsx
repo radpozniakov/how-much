@@ -3,19 +3,11 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Topic } from './Topic'
 
+// Topic is the host-only inline editor (S9); non-hosts read the topic from the
+// Stage (S14), so this component no longer has a read-only variant to test.
 describe('Topic', () => {
-  it('renders the current item when set', () => {
-    render(<Topic currentItem="Login page redesign" />)
-    expect(screen.getByText('Login page redesign')).toBeInTheDocument()
-  })
-
-  it('shows a placeholder when there is no topic', () => {
-    render(<Topic currentItem={null} />)
-    expect(screen.getByText(/waiting for the host/i)).toBeInTheDocument()
-  })
-
   it('seeds the host input from the current item', () => {
-    render(<Topic currentItem="Login page" isHost />)
+    render(<Topic currentItem="Login page" />)
     expect(screen.getByRole('textbox', { name: /topic/i })).toHaveValue(
       'Login page',
     )
@@ -24,7 +16,7 @@ describe('Topic', () => {
   it('submits the typed topic when the "Set topic" button is clicked', async () => {
     const user = userEvent.setup()
     const onSetTopic = vi.fn()
-    render(<Topic currentItem={null} isHost onSetTopic={onSetTopic} />)
+    render(<Topic currentItem={null} onSetTopic={onSetTopic} />)
 
     const input = screen.getByRole('textbox', { name: /topic/i })
     await user.type(input, 'New topic')
@@ -36,7 +28,7 @@ describe('Topic', () => {
   it('submits the typed topic when Enter is pressed in the input', async () => {
     const user = userEvent.setup()
     const onSetTopic = vi.fn()
-    render(<Topic currentItem={null} isHost onSetTopic={onSetTopic} />)
+    render(<Topic currentItem={null} onSetTopic={onSetTopic} />)
 
     const input = screen.getByRole('textbox', { name: /topic/i })
     await user.type(input, 'New topic{Enter}')
@@ -49,7 +41,7 @@ describe('Topic', () => {
     const onSetTopic = vi.fn()
     render(
       <>
-        <Topic currentItem={null} isHost onSetTopic={onSetTopic} />
+        <Topic currentItem={null} onSetTopic={onSetTopic} />
         <button type="button">elsewhere</button>
       </>,
     )
@@ -64,7 +56,7 @@ describe('Topic', () => {
   it('submits null on an empty or blank topic', async () => {
     const user = userEvent.setup()
     const onSetTopic = vi.fn()
-    render(<Topic currentItem={null} isHost onSetTopic={onSetTopic} />)
+    render(<Topic currentItem={null} onSetTopic={onSetTopic} />)
 
     const input = screen.getByRole('textbox', { name: /topic/i })
     expect(input).not.toBeRequired()
@@ -76,7 +68,7 @@ describe('Topic', () => {
   })
 
   it('caps the input at MAX_TOPIC_LENGTH', () => {
-    render(<Topic currentItem={null} isHost />)
+    render(<Topic currentItem={null} />)
     expect(screen.getByRole('textbox', { name: /topic/i })).toHaveAttribute(
       'maxLength',
       '200',
@@ -84,18 +76,18 @@ describe('Topic', () => {
   })
 
   it('disables the input and button when disabled', () => {
-    render(<Topic currentItem={null} isHost disabled />)
+    render(<Topic currentItem={null} disabled />)
     expect(screen.getByRole('textbox', { name: /topic/i })).toBeDisabled()
     expect(screen.getByRole('button', { name: /set topic/i })).toBeDisabled()
   })
 
   it('resyncs the field when currentItem changes', () => {
-    const { rerender } = render(<Topic currentItem="Old topic" isHost />)
+    const { rerender } = render(<Topic currentItem="Old topic" />)
     expect(screen.getByRole('textbox', { name: /topic/i })).toHaveValue(
       'Old topic',
     )
 
-    rerender(<Topic currentItem="New topic" isHost />)
+    rerender(<Topic currentItem="New topic" />)
     expect(screen.getByRole('textbox', { name: /topic/i })).toHaveValue(
       'New topic',
     )
@@ -105,7 +97,7 @@ describe('Topic', () => {
     const user = userEvent.setup()
     const onSetTopic = vi.fn()
     const { rerender } = render(
-      <Topic currentItem={null} isHost onSetTopic={onSetTopic} />,
+      <Topic currentItem={null} onSetTopic={onSetTopic} />,
     )
 
     const input = screen.getByRole('textbox', { name: /topic/i })
@@ -114,7 +106,7 @@ describe('Topic', () => {
     expect(onSetTopic).toHaveBeenCalledWith('abc')
 
     // The server echoes the submitted topic back as the new currentItem.
-    rerender(<Topic currentItem="abc" isHost onSetTopic={onSetTopic} />)
+    rerender(<Topic currentItem="abc" onSetTopic={onSetTopic} />)
 
     await user.type(input, 'def')
     expect(input).toHaveValue('abcdef')

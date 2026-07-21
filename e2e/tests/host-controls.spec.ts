@@ -5,6 +5,9 @@ import {
   joinViaCode,
   rosterEntry,
   setHostVoting,
+  showCards,
+  showStats,
+  stage,
   voteCard,
 } from './helpers'
 
@@ -25,8 +28,8 @@ test.describe('Host controls', () => {
     await topic.fill('Estimate the login page')
     await card(host, 'Topic').getByRole('button', { name: 'Set topic' }).click()
 
-    // The non-host sees the topic text (read-only for them).
-    await expect(card(guest, 'Topic')).toContainText('Estimate the login page')
+    // The non-host sees the topic title on the stage (read-only for them).
+    await expect(stage(guest)).toContainText('Estimate the login page')
 
     await hostCtx.close()
     await gCtx.close()
@@ -70,15 +73,22 @@ test.describe('Host controls', () => {
     await card(host, 'Topic').getByRole('button', { name: 'Set topic' }).click()
     await voteCard(guest, '8').click()
     await card(host, 'Host controls').getByRole('button', { name: 'Reveal' }).click()
+    // Results now live in the stats view (S18) — switch there to assert them,
+    // then back to the cards view so the grid assertions below have a grid.
+    await showStats(host)
     await expect(card(host, 'Results')).toBeVisible()
+    await showCards(host)
 
     // Reset → results gone, topic cleared, deck back, no lingering "voted" badge.
     await card(host, 'Host controls').getByRole('button', { name: 'Reset' }).click()
     await expect(card(host, 'Results')).toHaveCount(0)
     await expect(card(guest, 'Results')).toHaveCount(0)
-    await expect(card(guest, 'Topic')).toContainText(/Waiting for the host/i)
+    await expect(stage(guest)).toContainText(/Waiting for the host/i)
     await expect(card(guest, 'Your vote')).toBeVisible()
-    await expect(rosterEntry(host, 'Guest')).not.toContainText('voted')
+    await expect(rosterEntry(host, 'Guest')).toHaveAttribute(
+      'data-state',
+      'not-voted',
+    )
 
     await hostCtx.close()
     await gCtx.close()
