@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react'
 import type { FC } from 'react'
-import styles from './ShareLink.module.css'
 
 export interface ShareLinkProps {
   code: string
@@ -30,10 +29,10 @@ export const ShareLink: FC<ShareLinkProps> = ({ code }) => {
   }
 
   return (
-    <div className={styles.share}>
+    <div className="share">
       <input
         ref={inputRef}
-        className={styles.link}
+        className="share__link"
         value={url}
         readOnly
         onFocus={(e) => e.target.select()}

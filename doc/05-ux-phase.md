@@ -84,14 +84,14 @@ Digested from the spec into thin, demoable UX slices. Sequenced foundation-first
 (shared tokens and fonts) so later screen work composes cleanly. Each slice
 restyles/relays-out only — no functional outcome changes (see guiding principle).
 
-### S11 — Design foundation · `TODO`
+### S11 — Design foundation · `DONE`
 Shared visual tokens and self-hosted fonts before any screen work. Color tokens
 (`#F7F5F3`/`#000`/`#FFF`), type scale (Inter + JetBrains Mono), border and
 radius conventions, spacing scale. Prefer bundled/self-hosted fonts (e.g.
 `@fontsource`) over a CDN to honor the self-hostable, dependency-light stance
 (NFR-6). **Refs:** spec §Colors, §Fonts, §Global styling.
 
-### S12 — Main page ("/") · `TODO`
+### S12 — Main page ("/") · `DONE`
 Restyle the create/join landing: intro section (title + description) above a
 horizontal pair of white bordered cards — **Create a room** and **Join a room**.
 **Refs:** FR-1, FR-3; spec §Main page.

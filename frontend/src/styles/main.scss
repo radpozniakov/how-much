@@ -1,0 +1,490 @@
+:root {
+  // Color — monochrome (spec §Colors). Do not introduce color.
+  --bg: #f7f5f3; // page background
+  --surface: #ffffff; // cards, stage
+  --ink: #000000; // all text + borders
+  --ink-muted: #4c4c4c; // secondary text (labels)
+
+  // Type (spec §Fonts): Inter for text, JetBrains Mono for titles + numbers.
+  --font-sans: 'Inter Variable', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, Consolas, monospace;
+
+  // Borders + radii (spec §Global styling).
+  --hairline: 1px solid var(--ink);
+  --radius-container: 14px; // containers ~12–16px
+  --radius-card: 10px; // cards ~8–12px
+
+  // Spacing scale.
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+
+  --border: var(--ink);
+  --text: var(--ink);
+  --text-h: var(--ink);
+  --code-bg: var(--surface);
+  --accent: var(--surface);
+  --accent-bg: var(--ink);
+  --accent-border: var(--ink);
+  --sans: var(--font-sans);
+  --heading: var(--font-mono);
+  --mono: var(--font-mono);
+
+  font: 18px/1.45 var(--font-sans);
+  color-scheme: light;
+  color: var(--ink);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  @media (max-width: 1024px) {
+    font-size: 16px;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+#root {
+  min-height: 100svh;
+  box-sizing: border-box;
+}
+
+h1,
+h2 {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+h1 {
+  font-size: 44px;
+  letter-spacing: -1.2px;
+  margin: 0 0 var(--space-4);
+
+  @media (max-width: 1024px) {
+    font-size: 32px;
+  }
+}
+
+h2 {
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+  margin: 0 0 var(--space-2);
+
+  @media (max-width: 1024px) {
+    font-size: 20px;
+  }
+}
+
+p {
+  margin: 0;
+}
+
+code,
+.counter {
+  font-family: var(--font-mono);
+  display: inline-flex;
+  border-radius: 4px;
+  color: var(--ink);
+}
+
+code {
+  font-size: 15px;
+  line-height: 1.35;
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface);
+  border: var(--hairline);
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+input {
+  font: inherit;
+  font-weight: 600;
+  padding: var(--space-2) var(--space-3);
+  border: var(--hairline);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+
+  &:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 1px;
+  }
+}
+
+button {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  padding: var(--space-2) var(--space-4);
+  border: var(--hairline);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 1px;
+  }
+
+  &.primary {
+    background: var(--ink);
+    color: var(--surface);
+
+    &:hover:not(:disabled) {
+      background: var(--ink);
+      color: var(--surface);
+    }
+  }
+}
+
+form button {
+  margin-top: var(--space-3);
+}
+
+// ---------------------------------------------------------------------------
+// 2. BEM component blocks
+// ---------------------------------------------------------------------------
+
+// Layout wrapper for the single-column room screens.
+.page {
+  max-width: 560px;
+  margin: var(--space-8) auto;
+  padding: 0 var(--space-5);
+  text-align: left;
+}
+
+// Room header row (title + status).
+.room-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+// Monochrome error emphasis — no color coding (spec §Notes for regeneration).
+.error {
+  color: var(--ink);
+  font-weight: 400;
+  font-size: 14px;
+  font-family: var(--font-mono);
+  margin: 0;
+  padding-top: 10px;
+}
+
+// Card surface — used across pages and components.
+.card {
+  background: var(--surface);
+  border: var(--hairline);
+  border-radius: var(--radius-card);
+  padding: var(--space-5);
+
+  h2 {
+    margin-top: 0;
+  }
+
+  &__title {
+    font-size: 16px;
+    margin-bottom: 16px;
+    font-weight: 600;
+  }
+}
+
+// Form field — a label wrapping its caption + control.
+.field {
+  &__label {
+    // marker target
+  }
+
+  &--required &__label::after {
+    content: ' *';
+    color: var(--ink);
+    position: relative;
+    top: -6px;
+    left: 0px;
+    font-size: 10px;
+  }
+}
+
+// Main page ("/") — intro above a horizontal pair of cards (spec §Main page).
+.landing {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-5);
+  box-sizing: border-box;
+  text-align: center;
+
+  &__intro {
+    max-width: 640px;
+  }
+
+  &__title {
+    font-family: var(--font-mono);
+    font-weight: 400;
+    font-size: 28px;
+    letter-spacing: 0;
+    margin: 0 0 var(--space-3);
+  }
+
+  &__description {
+    font-family: var(--font-mono);
+    font-weight: 400;
+    font-size: 16px;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+
+  // Cards positioned horizontally (spec §Main page); stack on small screens.
+  &__cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5);
+    width: 100%;
+    max-width: 760px;
+    align-items: start;
+    text-align: left;
+
+    // Neutralize any global vertical margin inside the grid layout.
+    > * {
+      margin: 0;
+    }
+
+    @media (max-width: 640px) {
+      grid-template-columns: 1fr;
+    }
+  }
+}
+
+// Room-code input on the join form.
+.join-form {
+  &__code {
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+}
+
+// Participant roster.
+.roster {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  &__badge {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    background: var(--accent-bg);
+    color: var(--accent);
+
+    &--you {
+      background: var(--code-bg);
+      color: var(--text);
+    }
+
+    &--voted {
+      margin-left: auto;
+      background: var(--ok-bg, var(--accent-bg));
+      color: var(--ok, var(--accent));
+    }
+  }
+}
+
+// Host controls.
+.host-controls {
+  &__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  &__checkbox {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+  }
+}
+
+// Connection status pill.
+.status {
+  font-size: 0.8rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+
+  &--live {
+    color: #2e7d32;
+    border-color: #2e7d32;
+  }
+
+  &--connecting,
+  &--reconnecting {
+    color: #b26a00;
+    border-color: #b26a00;
+  }
+
+  &--rejected {
+    color: #dc3545;
+    border-color: #dc3545;
+  }
+}
+
+// Topic display + host editor.
+.topic {
+  margin: 0;
+  font-size: 1.1rem;
+
+  &__placeholder {
+    margin: 0;
+    opacity: 0.6;
+    font-style: italic;
+  }
+
+  &__form {
+    flex-direction: row;
+  }
+
+  &__input {
+    flex: 1;
+  }
+}
+
+// Share-link row.
+.share {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.5rem 0 1rem;
+
+  &__link {
+    flex: 1;
+  }
+}
+
+// Fibonacci vote deck.
+.vote-deck {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+
+  &__card {
+    min-width: 3rem;
+    padding: 0.75rem 1rem;
+    font-size: 1.1rem;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--code-bg);
+    color: var(--text);
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.55;
+    }
+
+    &--selected {
+      border-color: var(--accent);
+      background: var(--accent-bg);
+      color: var(--accent);
+      font-weight: 700;
+    }
+  }
+}
+
+// Revealed results.
+.results {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  &__value {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--text-h);
+  }
+
+  &__badge {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    background: var(--accent-bg);
+    color: var(--accent);
+
+    &--consensus {
+      background: var(--ok-bg, var(--accent-bg));
+      color: var(--ok, var(--accent));
+    }
+  }
+
+  &__stats {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+}

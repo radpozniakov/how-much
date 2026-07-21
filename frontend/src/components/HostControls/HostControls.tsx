@@ -1,5 +1,4 @@
 import type { FC } from 'react'
-import styles from './HostControls.module.css'
 
 export interface HostControlsProps {
   revealed: boolean
@@ -21,14 +20,14 @@ export const HostControls: FC<HostControlsProps> = ({
 }) => (
   <section className="card">
     <h2>Host controls</h2>
-    <div className={styles.row}>
+    <div className="host-controls__row">
       <button type="button" disabled={revealed || disabled} onClick={onReveal}>
         Reveal
       </button>
       <button type="button" disabled={disabled} onClick={onReset}>
         Reset
       </button>
-      <label className={styles.checkbox}>
+      <label className="host-controls__checkbox">
         <input
           type="checkbox"
           checked={hostVoting}

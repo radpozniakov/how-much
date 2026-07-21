@@ -2,7 +2,6 @@ import { useState } from 'react'
 import type { FC, SyntheticEvent } from 'react'
 import { joinRoom, requestErrorMessage } from '../../lib/api'
 import { saveSession } from '../../lib/session'
-import styles from './JoinPrompt.module.css'
 
 export interface JoinPromptProps {
   code: string
@@ -34,7 +33,7 @@ export const JoinPrompt: FC<JoinPromptProps> = ({ code, onJoined }) => {
     <main className="page">
       <h1>Join room {code}</h1>
       <section className="card">
-        <form className={styles.form} onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit}>
           <label>
             Your name
             <input

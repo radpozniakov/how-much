@@ -1,6 +1,5 @@
 import { useState, type FC, type SyntheticEvent } from 'react'
 import { MAX_TOPIC_LENGTH } from '../../lib/limits'
-import styles from './Topic.module.css'
 
 export interface TopicProps {
   // The round's current_item from the snapshot; null when unset.
@@ -37,9 +36,9 @@ export const Topic: FC<TopicProps> = ({
       <section className="card">
         <h2>Topic</h2>
         {currentItem ? (
-          <p className={styles.topic}>{currentItem}</p>
+          <p className="topic">{currentItem}</p>
         ) : (
-          <p className={styles.placeholder}>
+          <p className="topic__placeholder">
             Waiting for the host to set a topic…
           </p>
         )}
@@ -56,9 +55,9 @@ export const Topic: FC<TopicProps> = ({
   return (
     <section className="card">
       <h2>Topic</h2>
-      <form className={styles.form} onSubmit={handleSubmit}>
+      <form className="topic__form" onSubmit={handleSubmit}>
         <input
-          className={styles.input}
+          className="topic__input"
           type="text"
           aria-label="Topic"
           placeholder="Set a topic…"

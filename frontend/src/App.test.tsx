@@ -37,21 +37,29 @@ describe('App routing', () => {
 
   it('renders Landing at the root', () => {
     renderAt('/')
-    expect(screen.getByText('Planning-poker estimation')).toBeInTheDocument()
+    expect(
+      screen.getByText('A safe space to shock the manager with estimates'),
+    ).toBeInTheDocument()
   })
 
   it('falls back to Landing for an empty room code', () => {
     renderAt('/room/')
-    expect(screen.getByText('Planning-poker estimation')).toBeInTheDocument()
+    expect(
+      screen.getByText('A safe space to shock the manager with estimates'),
+    ).toBeInTheDocument()
   })
 
   it('falls back to Landing for an all-whitespace code (trim parity)', () => {
     renderAt('/room/%20%20')
-    expect(screen.getByText('Planning-poker estimation')).toBeInTheDocument()
+    expect(
+      screen.getByText('A safe space to shock the manager with estimates'),
+    ).toBeInTheDocument()
   })
 
   it('falls back to Landing for an unrelated path', () => {
     renderAt('/foo/bar')
-    expect(screen.getByText('Planning-poker estimation')).toBeInTheDocument()
+    expect(
+      screen.getByText('A safe space to shock the manager with estimates'),
+    ).toBeInTheDocument()
   })
 })
