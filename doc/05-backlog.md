@@ -367,107 +367,77 @@ sender. **Refs:** NFR-1, FR-8–FR-17 · D-5, D-8, D-12, D-14, D-35, D-36
 > The UI drives the **socket** path, not the S3/S4 HTTP round routes — those
 > routes and the `/ws` echo are retired once these slices are live (S10, D-35).
 
-### S7 — Room shell: connect, create, join & live presence · `TODO`
+### S7 — Room shell: connect, create, join & live presence · `DONE`
 
 **Goal:** be in a room in a browser — create or join by link/code, land in the
 room, and see everyone appear and disappear live. The foundation slice (largest),
 mirroring S6a. Replaces the T1b scaffold probe page.
 
-> **Plan status:** `pending approval` (ralplan consensus: Planner → Architect →
-> Critic → APPROVE). Detailed below; scope is S7 only (no voting/reveal/host
-> controls — S8/S9), but the foundation is shaped so those extend cleanly.
+**Built** (no new **UI/runtime** packages — routing, state, and the WS client are
+hand-rolled on native primitives: History API, `WebSocket`, `fetch`,
+`sessionStorage` + React built-ins; native HTML elements only, polished later)
+- `frontend/src/lib/router.ts` — History-API routing: `useRoute()` + `navigate()` +
+  `matchRoom()` over `popstate`, serving `/` (Landing) and `/room/:code` (Room)
+  matching the D-30 link shape (D-37).
+- `frontend/src/lib/roomSocket.ts` — the typed `RoomSocket`: an external store
+  consumed via `useSyncExternalStore` with a **cached snapshot** (`getSnapshot`
+  returns a stable reference rebuilt only inside mutations, or
+  `useSyncExternalStore` infinite-loops — guarded by a regression test).
+  **Phase-scoped reconnect:** a close is terminal (→ `rejected`) **iff no
+  `room_state` arrived yet** (handshake); once a snapshot lands, closes retry and
+  mid-session `error` frames are non-fatal (a reason-slug whitelist would
+  misclassify, since S8/S9 mid-session errors don't close). Attach-only handshake
+  (D-38).
+- `frontend/src/lib/useRoom.ts` — hook owning one stable `RoomSocket`,
+  StrictMode-safe (socket lives outside React, so double-effects can't spawn
+  duplicate connections); clears stale identity on `not_in_room`.
+- `frontend/src/lib/session.ts` — per-tab `{code, participantId}` in
+  `sessionStorage`, try/caught throwing-storage fallback (D-39).
+- `frontend/src/lib/api.ts` — `createRoom` / `joinRoom` over HTTP; normalizes
+  **both** error `detail` shapes (`{detail:"…"}` 404/409 vs `{detail:[{…,msg}]}`
+  422) into a rendered string.
+- `frontend/src/types.ts`, `config.ts` — backend-mirroring DTOs; `API_URL` +
+  `WS_BASE_URL` + `roomSocketUrl(code)`. **Renamed `VITE_WS_URL` →
+  `VITE_WS_BASE_URL`** (a base — client builds `${WS_BASE_URL}/ws/rooms/{code}`;
+  fails safe vs a stale full-value `.env`) across `config.ts`, `docker-compose.yml`,
+  `.env.example`, `vite-env.d.ts`.
+- `frontend/src/App.tsx` (rewrite) + `pages/Landing.tsx` + `pages/Room.tsx` — route
+  switch; pages stay thin. Components in `components/<Name>/` (tsx + test + CSS
+  module), typed `FC<Props>`: `CreateRoomForm`, `JoinRoomForm`, `JoinPrompt`,
+  `Roster` (host badge guarding `host_id === null` during transfer/empty),
+  `StatusIndicator` (connecting / live / reconnecting), `ShareLink` (always-
+  selectable readonly input + `clipboard`→`execCommand` copy fallback for
+  non-secure LAN origins).
+- **Create** (`POST /rooms {name}` → code + link, `navigate` into `/room/:code` via
+  canonical `room.code` D-17, `attach` with the returned id) and **Join**
+  (`POST /rooms/{code}/participants {name}` → `attach`). HTTP-then-`attach` (not a
+  socket `join`) is deliberate (D-38): the joiner must learn its **own**
+  `participant_id`, which a snapshot can't reveal (names non-unique, D-10). POSTs
+  fire from event handlers, never a bare `useEffect`, so StrictMode can't mint two
+  participants. `404`/`409`(cap)/`422` → inline errors.
+- Lint: enabled type-aware `@typescript-eslint/no-deprecated`; migrated deprecated
+  React `FormEvent` → `SyntheticEvent`.
 
-**Constraint (UI):** no new **UI/runtime** packages — routing, state, and the WS
-client are hand-rolled on native platform primitives (History API, `WebSocket`,
-`fetch`, `sessionStorage`) + React built-ins; the UI uses native HTML elements
-only, polished in later phases. **Dev-only test tooling** (Vitest + Testing
-Library) is the one sanctioned dependency addition — it never ships in the bundle.
-
-**Module layout** (`frontend/src/`)
-- `config.ts` (edit) — `API_URL` + `WS_BASE_URL` + `roomSocketUrl(code)`.
-- `types.ts` (new) — `RoomView` / `Participant` / `ServerFrame` / `ClientFrame` /
-  `ApiError`, mirroring the backend contract.
-- `lib/router.tsx` (new) — `useRoute()`, `navigate()`, `matchRoom()`, `<Link>` on
-  the History API + `popstate`.
-- `lib/session.ts` (new) — `load/save/clearSession()` over `sessionStorage`
-  (`{code, participantId}`), try/caught.
-- `lib/api.ts` (new) — `createRoom` / `joinRoom`; normalizes both error `detail`
-  shapes into a rendered string.
-- `lib/roomSocket.ts` (new) — `RoomSocket` class: connect / `attach` / phase-scoped
-  reconnect + a cached-snapshot external store.
-- `lib/useRoom.ts` (new) — hook owning a `RoomSocket`, exposed via
-  `useSyncExternalStore`.
-- `App.tsx` (rewrite) — route switch `/` → `Landing`, `/room/:code` → `Room`.
-- `pages/Landing.tsx`, `pages/Room.tsx` (new); `components/` splits optional.
-
-**Scope**
-- **Foundation** — the routing, typed WS client, room store, and identity/reconnect
-  described in the Phase C intro. The **last `room_state` snapshot is the single
-  source of truth** (D-36): the UI renders it verbatim and keeps no authoritative
-  copy of its own — so there is **no optimistic UI** (a deliberate constraint S9
-  inherits). The socket lives **outside React** in a plain class subscribed via
-  `useSyncExternalStore`, so StrictMode double-effects can't spawn duplicate
-  connections.
-- **Create** via HTTP `POST /rooms {name}` → show the code + a copyable shareable
-  link, then `navigate` into `/room/:code` (using the canonical `room.code`, D-17)
-  and `attach` the socket with the returned `participant_id`.
-- **Join** via HTTP `POST /rooms/{code}/participants {name}` (by link or typed
-  code) → then `attach`. HTTP-then-`attach` (not a socket `join`) is deliberate
-  (D-38): the joiner must learn its **own** `participant_id`, and a `room_state`
-  snapshot can't reveal it — names are non-unique (D-10), so a client can't pick
-  itself out of the roster. The id is also what detects "am I host?" and enables
-  reconnect. Create/join POSTs fire from **event handlers, never a bare
-  `useEffect`**, so StrictMode's dev double-invoke can't mint two participants.
-  Map `404` (unknown room) / `409` (full, show the cap) / `422` (bad name) to
-  inline errors.
-- **Room** — a live participant list with a host badge (guarding `host_id === null`
-  during the transient transfer/empty window) and a connection-status indicator
-  (connecting / live / reconnecting); a stale-identity `not_in_room` rejection
-  falls back to an inline name-prompt. The share link is an always-selectable
-  readonly input (so copy works even where `navigator.clipboard` is undefined over
-  a non-secure LAN origin), with a `clipboard`→`execCommand` copy button.
-
-**Key decisions & findings** (to promote to `03-decisions.md` when built)
-- **Reconnect terminality is phase-scoped, not slug-scoped.** A socket close is
-  terminal (→ `rejected`, no reconnect) **iff no `room_state` has arrived yet**
-  (handshake phase); once a snapshot lands, closes retry and mid-session `error`
-  frames are non-fatal. Backend sends handshake errors *then* closes, but S8/S9
-  mid-session errors don't close — so a reason-slug whitelist would misclassify.
-- **`getSnapshot` returns a cached reference**, rebuilt only inside mutations —
-  otherwise `useSyncExternalStore` infinite-loops (a runtime crash `tsc` can't
-  catch; covered by a dedicated regression test).
-- **Rename `VITE_WS_URL` → `VITE_WS_BASE_URL`** (a base, not the retired `/ws`
-  echo endpoint); the client builds `${WS_BASE_URL}/ws/rooms/{code}`. Renaming
-  fails safe — a stale `.env` with the old full value would otherwise silently
-  double-path. Update `config.ts` + `docker-compose.yml` + `.env.example` together.
-- **`api.ts` normalizes both `detail` shapes** — a domain error is `{detail:"…"}`
-  (404/409) but a name-validation 422 is `{detail:[{…,msg}]}`; render a string.
+**Verified** — **Vitest + Testing Library** added (dev-only, never bundled);
+`npm run test` → **36 unit tests** across `lib/` and components; `npm run build`
+(`tsc -b`) + lint + format clean. Coverage includes `api` detail-normalization,
+`router` `matchRoom`/`navigate`, `session` round-trip + throwing-storage fallback,
+and `roomSocket` (mock `WebSocket` + fake timers): `attach` on open, `room_state`
+→ live, handshake-close → `rejected`/no-retry, live-close → reconnecting/retry,
+live `error` non-fatal, `closedByClient` suppression, and the cached-`getSnapshot`
+stable-reference regression guard.
 
 **Notes:** host auto-transfer (D-13/FR-7) and empty-room cleanup (D-18/FR-6) are
-backend behaviors here — the UI only reflects them as roster / host-badge changes
-via the broadcast. No voting yet.
-
-**Testing** — introduce **Vitest + Testing Library** (dev deps; jsdom env, with
-happy-dom as the fallback if the bleeding-edge Vite 8 / rolldown toolchain forces
-it — verify at install). Add a `test` block to `vite.config.ts` and `test` scripts.
-Unit-cover the `lib/` seams: `api` detail-normalization, `router` `matchRoom` +
-`navigate`, `session` round-trip + throwing-storage fallback, and `roomSocket`
-(mock `WebSocket` + fake timers) — `attach` on open, `room_state` → live,
-handshake-close → `rejected`/no-retry, live-close → reconnecting/retry, live
-`error` non-fatal, `closedByClient` suppression, and the **cached-`getSnapshot`
-stable-reference** regression guard. Page-level RTL smoke tests are optional.
+backend behaviors — the UI reflects them only as roster / host-badge changes via
+the broadcast. A plain reload is rejected `not_in_room` (backend drops a
+participant the instant its socket closes — only the empty-*room* grace of D-18
+exists), clears the session, and rejoins as a **fresh** participant (name
+continuity not guaranteed, in-round vote lost — FR-18/D-15, expected behavior). No
+voting yet. Key findings above are promoted to `03-decisions.md` as D-37–D-39.
 
 **Validate:** two browsers create/join one room via the shared link and see each
-other live; **reloading rejoins the room gracefully** — the client re-`attach`es,
-and because the backend removes a participant the instant its socket drops (no
-per-participant grace — only the empty-*room* grace of D-18), a plain reload is
-rejected `not_in_room`, clears the session, and rejoins as a **fresh** participant
-(name continuity is not guaranteed; any in-round vote is lost, FR-18/D-15 — this is
-the expected, correct behavior, not a defect; the earlier "re-attaches as the same
-participant" wording overstated what the current backend can do); closing the
-host's tab promotes the oldest remaining participant in the other browser's roster.
-Automated gates: `npm run test` (Vitest) + `npm run build` (`tsc -b`) + lint +
-format + a grep asserting no `/ws` echo literal / `VITE_WS_URL` remains.
+other live; reloading rejoins gracefully as a fresh participant; closing the host's
+tab promotes the oldest remaining participant in the other browser's roster.
 **Refs:** FR-1–FR-7, FR-17, FR-18, NFR-1 · D-5, D-9, D-10, D-13, D-15, D-17, D-18,
 D-30, D-36, D-37, D-38, D-39
 
@@ -475,16 +445,150 @@ D-30, D-36, D-37, D-38, D-39
 
 **Goal:** cast and change a private vote; see *who* has voted, never the values.
 
-**Scope**
-- The Fibonacci deck (`0,1,2,3,5,8,13,21`, D-8/FR-9) as selectable cards; picking
-  a card sends `cast_vote`, re-picking changes it (FR-11), the own selection is
-  highlighted locally and disabled once the snapshot is `revealed`.
-- Who-voted indicators driven purely by `has_voted` in the snapshot — presence
-  only, no card value is ever rendered pre-reveal (FR-10). The current topic
-  (`current_item`) shows read-only (the host sets it in S9).
+> **Plan status:** `pending approval` (ralplan consensus: Planner → Architect
+> (SOUND) → Critic (APPROVE), 2 iterations). Detailed below; scope is S8 only
+> (voting — no reveal/results/host controls, which are S9), extending the S7
+> foundation. Not yet executed.
 
-**Validate:** in two browsers both vote; each sees the other marked *voted* but no
-numbers appear until reveal. **Refs:** FR-9–FR-11, FR-17 · D-8
+**Constraint (UI):** unchanged from S7 — no new **UI/runtime** packages (native
+`<button>` grid + React built-ins; CSS modules; component-per-folder with colocated
+tests). Vitest + Testing Library (dev-only, already installed) is the test stack.
+
+**Principles**
+1. **No optimistic *vote state*** — the last `room_state` snapshot is the single
+   source of truth (D-36). The one piece of local state introduced is the user's
+   own selected-card **highlight**, a UI affordance the pre-reveal snapshot
+   structurally cannot carry (it exposes `has_voted`, never the value — FR-10).
+2. Extend the S7 seams (`RoomSocket`, `useRoom`, `Roster`); don't fork them — keep
+   the single stable socket and StrictMode safety.
+3. Add only the `cast_vote` frame now; defer the other four (`set_item`,
+   `set_host_voting`, `reveal`, `reset`) to S9.
+4. Privacy by construction: never render a card value pre-reveal.
+
+**Module layout** (`frontend/src/`)
+- `types.ts` (edit) — add `CastVoteFrame = { type: 'cast_vote'; card: string }`
+  (card is a **string**, mirroring the authoritative backend frame in
+  `messages.py`); extend `ClientFrame` to `{ type:'attach'; … } | CastVoteFrame`.
+  Narrow the line-40 S8 comment to note the four S9 frames remain. `RoomView`
+  already carries `current_item` / `revealed` / `participants[].has_voted` /
+  `results` — no type change there.
+- `lib/deck.ts` (new) — `export const FIBONACCI_DECK = ['0','1','2','3','5','8',
+  '13','21'] as const` (strings, to match the frame; the single client-side mirror
+  of backend `config.FIBONACCI_DECK`, D-8/FR-9 — drift is the only path to a server
+  `invalid_card`).
+- `lib/roomSocket.ts` (edit) — the receive-only socket gains **guarded outbound
+  send**: `send = (frame: ClientFrame): void => { if (this.ws === null ||
+  this.state.status !== 'live') return; this.ws.send(JSON.stringify(frame)) }`.
+  No queue, no throw — a frame sent while not `live` (handshake / reconnecting)
+  no-ops silently (a resend is the user's next click). `this.state.status` is a
+  plain instance field replaced atomically in `setState`, and `room_state` sets
+  `room` + `status:'live'` in one `setState`, so there is no snapshot/status race.
+  Reconnect model, `hasSnapshot` terminality, and cached `getSnapshot` untouched.
+- `lib/useRoom.ts` (edit) — widen the return from `RoomState` to
+  `RoomController extends RoomState { castVote: (card: string) => void }`;
+  `castVote` is a `useCallback` on the stable socket forwarding
+  `socket.send({ type:'cast_vote', card })`. Non-breaking for the existing
+  `{ room, status, error }` consumer. Single-instance socket + stale-identity
+  `clearSession` effect unchanged.
+- `components/VoteDeck/` (new — `.tsx` + `.module.css` + `.test.tsx`) — props
+  `{ hasVoted: boolean; revealed: boolean; onVote: (card: string) => void;
+  disabled?: boolean }`. Renders `FIBONACCI_DECK` as a `<button>` grid; local
+  `selected: string | null` is the **only** local state. Click → `setSelected` +
+  `onVote` (re-pick overwrites — FR-11). Buttons `disabled` when `revealed`
+  (locked once cards are shown) or when the `disabled` prop is set; the selected
+  button gets `aria-pressed` + a highlight class.
+- `components/Topic/` (new) — read-only display of `current_item`; a placeholder
+  ("Waiting for the host to set a topic…") when `null`. Host input is S9.
+- `components/Roster/Roster.tsx` (edit) — add a **voted** badge:
+  `{p.has_voted && <span className={styles.voted}>voted</span>}` (presence only —
+  FR-10; no value).
+- `pages/Room.tsx` (edit) — `ConnectedRoom` destructures `castVote`; computes
+  `me = room.participants.find(p => p.id === participantId)`; renders (only when
+  `room` present) `<Topic current_item={room.current_item} />` and
+  `<VoteDeck hasVoted={me?.has_voted ?? false} revealed={room.revealed}
+  onVote={castVote} disabled={status !== 'live'} />` below `<Roster>`. The existing
+  `role="alert"` banner already surfaces a rejected action's `error` message
+  (e.g. `invalid_card`) to the acting user — no new wiring.
+
+**Key decisions & findings** (to promote to `03-decisions.md` when built)
+- **The reconciliation crux — Option A (clear on a `has_voted` true→false edge).**
+  The pre-reveal snapshot says *that* I voted, never *which* card (FR-10), so my
+  highlight is irreducibly local and can only be *reconciled* against the
+  snapshot. A `prevHasVoted` ref + an effect on `[hasVoted]` clears `selected` on a
+  **true→false** transition. A fresh pick is `false→true`, so the effect never
+  trips it — **no click→echo deselect race**. On `revealed` the selection stays
+  highlighted but input is locked (S9 renders the actual values from `results`).
+- **Every reachable true→false is a genuine vote-drop, so clearing is correct for
+  all of them.** Today three backend operations drop a participant's vote —
+  `reset_round` (`models.py:220`), `set_host_voting(false)` dropping the host's own
+  vote (`models.py:195`), and `store.leave` on disconnect (`ws.py:169`) — and each
+  is a real vote loss, so clear-on-transition is provably correct for the full set
+  **without any backend change**. Rejected alternatives: *clear on
+  `has_voted === false`* (fatal click→echo race — the current snapshot still shows
+  `false` between click and echo); *derive selection from `results`* (`null` for
+  the entire pre-reveal input phase — that value belongs to the S9 results view);
+  *snapshot round-id + `key={roundId}`* (declaratively pure, but needs a new
+  `RoomView` field — out of scope; deferred to S9, see the tripwire below).
+- **Send is live-gated and double-guarded.** The `send` no-op is mostly
+  unreachable from a click because the deck is also `disabled` whenever
+  `status !== 'live'`; the guard is defensive. Silent no-op (not throw/queue) is
+  the right UX since the deck is already disabled off-live.
+- **`invalid_card` is unreachable from the fixed deck**; if it ever fired
+  (deck/backend drift) it surfaces through the existing S7 error banner with no
+  special selection handling. If a cross-client S9/HTTP call sets
+  `host_voting=false` mid-round, the host's deck stays enabled and a click surfaces
+  `host_not_voting` in the banner — acceptable degradation, out of S8 scope.
+
+**Testing** (Vitest + Testing Library)
+- `lib/roomSocket.test.ts` (extend) — `send` no-ops before `room_state`
+  (`connecting`) and after a live-drop (`reconnecting`); once `live`, a
+  `cast_vote` send appends exactly `{"type":"cast_vote","card":"5"}` to the mock
+  socket's sent frames.
+- `useRoom` — `castVote('8')` forwards to `socket.send` with the right frame; the
+  `castVote` reference is stable across renders.
+- `components/VoteDeck/VoteDeck.test.tsx` — renders all 8 deck cards; click calls
+  `onVote` with the card string and highlights it; re-pick moves the highlight
+  (FR-11); `revealed` disables every button; the `disabled` prop disables every
+  button; **reset reconciliation** — rerender `hasVoted` true→false clears the
+  highlight (pins the *observable* behavior only — a frontend test cannot assert
+  which backend op caused the transition, so the "which cause" assumption is
+  documented in a load-bearing code comment, not tested here); **race guard** —
+  selecting a card then rerendering with `hasVoted` still `false` keeps the
+  highlight (no premature clear).
+- `components/Roster/Roster.test.tsx` (extend) — a `has_voted: true` participant
+  shows the `voted` badge, a `false` one does not, and no card value is rendered.
+- `components/Topic/Topic.test.tsx` — renders `current_item`; shows the
+  placeholder when `null`.
+- **AC #3** (disabled on `revealed`) and **AC #9** (`invalid_card` surfaces, socket
+  stays live) are **unit-test-only** — not exercisable by the S8 two-browser manual
+  validate (no reveal UI until S9; the fixed deck can't emit an invalid card).
+  AC #9 rides on existing S7 coverage (`roomSocket.test.ts` live-error-keeps-socket
+  + the `Room.tsx` `role="alert"` banner, reason-agnostic) — no new test needed.
+
+**Acceptance criteria** — (1) picking a card sends `{type:'cast_vote', card}`, the
+returning snapshot marks me `has_voted:true`, no value rendered; (2) re-pick sends a
+new frame + moves the highlight, no duplicate/optimistic value; (3) all buttons
+disabled when `revealed`; (4) all disabled when `status !== 'live'` and `send`
+no-ops (no throw/queue); (5) local selection clears on host reset (`has_voted`
+true→false); (6) a fresh pick stays highlighted across a snapshot still showing
+`has_voted:false` (no race); (7) who-voted is presence only — a `voted` badge, no
+card value in the DOM pre-reveal (FR-10); (8) `current_item` renders read-only +
+placeholder when `null`; (9) a server `error` frame (`invalid_card`) surfaces in
+the acting user's banner and the socket stays live.
+
+**Follow-ups (S9)** — the four remaining `ClientFrame` variants, host controls, and
+the reveal-time results view (actual card values by participant id). **S9
+tripwire:** if S9+ introduces a `has_voted` true→false path that should *not* clear
+the local selection (e.g. a vote retraction that isn't a round reset), `VoteDeck`
+must move from edge-detection to a snapshot round-id `key` — **no frontend test can
+catch this**, so it is gated here by review.
+
+**Verification (automated gates):** `cd frontend && npm run test` (Vitest) +
+`npm run build` (`tsc -b`) + `npm run lint` + `npm run format:check`.
+
+**Validate:** in two browsers (`compose up`, backend unchanged) both cast votes;
+each sees the other marked *voted* with no numbers shown; re-picking changes the
+vote silently. **Refs:** FR-9–FR-11, FR-17 · D-8, D-36
 
 ### S9 — Reveal, results & host controls · `TODO`
 
