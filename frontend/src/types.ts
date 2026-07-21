@@ -44,11 +44,38 @@ export interface CastVoteFrame {
   card: string
 }
 
+// The four host/round frames (S9). Like CastVoteFrame they carry NO
+// participant_id — the socket fixed the caller's identity at handshake. Each
+// mirrors the authoritative backend frame in messages.py.
+export interface SetItemFrame {
+  type: 'set_item'
+  // The topic, or null/blank to clear it. Bounded to MAX_TOPIC_LENGTH
+  // (lib/limits.ts) client-side so an over-long set_item can't be produced.
+  topic: string | null
+}
+
+export interface SetHostVotingFrame {
+  type: 'set_host_voting'
+  voting: boolean
+}
+
+export interface RevealFrame {
+  type: 'reveal'
+}
+
+export interface ResetFrame {
+  type: 'reset'
+}
+
 // Client -> server frames. The frontend only ever attaches (D-38): it learns its
 // own participant_id over HTTP, so it never uses the socket-native `join`.
 export type ClientFrame =
-  { type: 'attach'; participant_id: string } | CastVoteFrame
-// S9 will add: SetItemFrame | SetHostVotingFrame | RevealFrame | ResetFrame
+  | { type: 'attach'; participant_id: string }
+  | CastVoteFrame
+  | SetItemFrame
+  | SetHostVotingFrame
+  | RevealFrame
+  | ResetFrame
 
 // A normalized HTTP error. `detail` is always a rendered string (the backend
 // sends either a string or a validation-error list — api.ts flattens both).

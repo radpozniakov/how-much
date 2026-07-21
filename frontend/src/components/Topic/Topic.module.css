@@ -8,3 +8,11 @@
   opacity: 0.6;
   font-style: italic;
 }
+
+.form {
+  flex-direction: row;
+}
+
+.input {
+  flex: 1;
+}

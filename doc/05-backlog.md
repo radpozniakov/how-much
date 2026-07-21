@@ -597,14 +597,22 @@ catch this**, so it is gated here by review.
 each sees the other marked *voted* with no numbers shown; re-picking changes the
 vote silently. **Refs:** FR-9–FR-11, FR-17 · D-8, D-36
 
-### S9 — Reveal, results & host controls · `TODO` — plan `pending approval`
+### S9 — Reveal, results & host controls · `DONE`
 
-> **Plan reached ralplan consensus** (Planner → Architect `SOUND` → Critic
-> `APPROVE`, 2 iterations) and is **pending execution approval** — not yet built.
-> Scope is S9 only (host controls + reveal/results), extending the S7/S8
-> foundation; the **backend is unchanged** (every frame, error slug, and snapshot
-> field shipped in S6b). Once approved and built, this section is rewritten as an
-> accurate record of what shipped (as S8 was).
+> **Built via ralph** from the ralplan-consensus plan below (Planner → Architect
+> `SOUND` → Critic `APPROVE`, 2 iterations). Scope was S9 only (host controls +
+> reveal/results), extending the S7/S8 foundation; the **backend is unchanged**
+> (every frame, error slug, and snapshot field shipped in S6b — `git` confirms no
+> `backend/` or `roomSocket.ts` change). **Verified:** 93 frontend tests green
+> (51 → 93), `npm run build`/`lint`/`format:check` clean, reviewer (code-reviewer)
+> APPROVED against all acceptance criteria with 0 Critical/High/Medium findings,
+> FR-10 no-value-leak confirmed by inspection (`results.votes` has a single reader,
+> mounted only behind `revealed && results`). One deviation from the plan: the
+> topic-draft resync uses React's **adjust-state-during-render** pattern
+> (`prevItem` tracking) instead of the named effect, because the effect trips the
+> `react-hooks/set-state-in-effect` lint rule — same observable behavior, and the
+> pre-reveal-reset tripwire is pinned by an automated Room-level test. The plan
+> below is an accurate record of what shipped.
 
 **Goal:** the host runs the round — set a topic, opt in/out of voting, reveal, then
 reset to a clean round; everyone sees the payoff (all cards by name, the average,

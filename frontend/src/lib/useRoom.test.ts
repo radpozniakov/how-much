@@ -45,4 +45,104 @@ describe('useRoom', () => {
     rerender()
     expect(result.current.castVote).toBe(first)
   })
+
+  it('setItem sends a set_item frame once live', () => {
+    const { result } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    act(() => {
+      result.current.setItem('X')
+    })
+    const sent = lastSocket().sent.map((s) => JSON.parse(s))
+    expect(sent).toContainEqual({ type: 'set_item', topic: 'X' })
+  })
+
+  it('setItem(null) sends a set_item frame with a null topic', () => {
+    const { result } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    act(() => {
+      result.current.setItem(null)
+    })
+    const sent = lastSocket().sent.map((s) => JSON.parse(s))
+    expect(sent).toContainEqual({ type: 'set_item', topic: null })
+  })
+
+  it('keeps a stable setItem reference across renders', () => {
+    const { result, rerender } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    const first = result.current.setItem
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    rerender()
+    expect(result.current.setItem).toBe(first)
+  })
+
+  it('setHostVoting sends a set_host_voting frame once live', () => {
+    const { result } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    act(() => {
+      result.current.setHostVoting(false)
+    })
+    const sent = lastSocket().sent.map((s) => JSON.parse(s))
+    expect(sent).toContainEqual({ type: 'set_host_voting', voting: false })
+  })
+
+  it('keeps a stable setHostVoting reference across renders', () => {
+    const { result, rerender } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    const first = result.current.setHostVoting
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    rerender()
+    expect(result.current.setHostVoting).toBe(first)
+  })
+
+  it('reveal sends a reveal frame once live', () => {
+    const { result } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    act(() => {
+      result.current.reveal()
+    })
+    const sent = lastSocket().sent.map((s) => JSON.parse(s))
+    expect(sent).toContainEqual({ type: 'reveal' })
+  })
+
+  it('keeps a stable reveal reference across renders', () => {
+    const { result, rerender } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    const first = result.current.reveal
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    rerender()
+    expect(result.current.reveal).toBe(first)
+  })
+
+  it('reset sends a reset frame once live', () => {
+    const { result } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    act(() => {
+      result.current.reset()
+    })
+    const sent = lastSocket().sent.map((s) => JSON.parse(s))
+    expect(sent).toContainEqual({ type: 'reset' })
+  })
+
+  it('keeps a stable reset reference across renders', () => {
+    const { result, rerender } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    const first = result.current.reset
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    rerender()
+    expect(result.current.reset).toBe(first)
+  })
 })

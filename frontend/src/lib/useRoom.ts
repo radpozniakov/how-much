@@ -8,9 +8,13 @@ import type { RoomState } from './roomSocket'
 import { clearSession } from './session'
 
 // The read-only snapshot (RoomState) plus the actions a page can dispatch. S8
-// adds castVote; S9 will add the host controls (reveal/reset/set_item/...).
+// added castVote; S9 adds the host controls (setItem/setHostVoting/reveal/reset).
 export interface RoomController extends RoomState {
   castVote: (card: string) => void
+  setItem: (topic: string | null) => void
+  setHostVoting: (voting: boolean) => void
+  reveal: () => void
+  reset: () => void
 }
 
 export function useRoom(code: string, participantId: string): RoomController {
@@ -37,6 +41,28 @@ export function useRoom(code: string, participantId: string): RoomController {
     [socket],
   )
 
+  const setItem = useCallback(
+    (topic: string | null) => {
+      socket.send({ type: 'set_item', topic })
+    },
+    [socket],
+  )
+
+  const setHostVoting = useCallback(
+    (voting: boolean) => {
+      socket.send({ type: 'set_host_voting', voting })
+    },
+    [socket],
+  )
+
+  const reveal = useCallback(() => {
+    socket.send({ type: 'reveal' })
+  }, [socket])
+
+  const reset = useCallback(() => {
+    socket.send({ type: 'reset' })
+  }, [socket])
+
   // A terminal rejection for a stale identity means the persisted id is no
   // longer valid — drop it so the caller can fall back to a fresh join (D-39).
   useEffect(() => {
@@ -49,5 +75,5 @@ export function useRoom(code: string, participantId: string): RoomController {
     }
   }, [state.status, state.error])
 
-  return { ...state, castVote }
+  return { ...state, castVote, setItem, setHostVoting, reveal, reset }
 }

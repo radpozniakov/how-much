@@ -3,7 +3,9 @@ import type { FC } from 'react'
 import { navigate } from '../lib/router'
 import { clearSession, loadSession } from '../lib/session'
 import { useRoom } from '../lib/useRoom'
+import { HostControls } from '../components/HostControls/HostControls'
 import { JoinPrompt } from '../components/JoinPrompt/JoinPrompt'
+import { Results } from '../components/Results/Results'
 import { Roster } from '../components/Roster/Roster'
 import { ShareLink } from '../components/ShareLink/ShareLink'
 import { StatusIndicator } from '../components/StatusIndicator/StatusIndicator'
@@ -23,7 +25,16 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
   participantId,
   onIdentityLost,
 }) => {
-  const { room, status, error, castVote } = useRoom(code, participantId)
+  const {
+    room,
+    status,
+    error,
+    castVote,
+    setItem,
+    setHostVoting,
+    reveal,
+    reset,
+  } = useRoom(code, participantId)
 
   // A stale-identity rejection: the hook has cleared the session; drop back to
   // the name prompt so the user rejoins fresh (D-39).
@@ -64,19 +75,51 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
       )}
 
       {room ? (
-        <>
-          <Topic currentItem={room.current_item} />
-          <Roster room={room} me={participantId} />
-          <VoteDeck
-            hasVoted={
-              room.participants.find((p) => p.id === participantId)
-                ?.has_voted ?? false
-            }
-            revealed={room.revealed}
-            onVote={castVote}
-            disabled={status !== 'live'}
-          />
-        </>
+        (() => {
+          const me = room.participants.find((p) => p.id === participantId)
+          // host_id can be null during a transfer/empty window — never match null.
+          const isHost = room.host_id !== null && room.host_id === participantId
+          // An opted-out host is a facilitator, not a voter (D-14): no deck.
+          const canVote = !isHost || room.host_voting
+          const notLive = status !== 'live'
+          return (
+            <>
+              <Topic
+                currentItem={room.current_item}
+                isHost={isHost}
+                disabled={notLive || room.revealed}
+                onSetTopic={setItem}
+              />
+              <Roster room={room} me={participantId} />
+              {isHost && (
+                <HostControls
+                  revealed={room.revealed}
+                  hostVoting={room.host_voting}
+                  disabled={notLive}
+                  onReveal={reveal}
+                  onReset={reset}
+                  onSetHostVoting={setHostVoting}
+                />
+              )}
+              {room.revealed && room.results ? (
+                <Results
+                  results={room.results}
+                  participants={room.participants}
+                  hostId={room.host_id}
+                />
+              ) : (
+                canVote && (
+                  <VoteDeck
+                    hasVoted={me?.has_voted ?? false}
+                    revealed={room.revealed}
+                    onVote={castVote}
+                    disabled={notLive}
+                  />
+                )
+              )}
+            </>
+          )
+        })()
       ) : (
         <p>Connecting…</p>
       )}
