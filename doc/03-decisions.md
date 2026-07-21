@@ -153,6 +153,13 @@ initial requirements interview.
   page is replaced by these. No server-side routing or history API beyond what the
   SPA needs; a bare `/room/:code` with no persisted identity (D-39) prompts for a
   display name and joins fresh (D-38).
+  - **Update — routing now via React Router.** The hand-rolled History-API
+    router (`lib/router.ts`: `useRoute`/`navigate`/`matchRoom`) was replaced by
+    `react-router` (declarative `BrowserRouter`/`Routes`/`Route`). The two-route
+    decision is unchanged; only the implementation moved to the library:
+    `useNavigate()` for programmatic navigation and `:code` path params in place
+    of `matchRoom`. This trades the zero-dependency stance for standard routing
+    primitives as the app grows.
 - **D-38 Join over HTTP, then `attach` the socket — not a socket `join`.** Both
   create (`POST /rooms`) and join (`POST /rooms/{code}/participants`) go over HTTP
   and return the caller's `participant_id`; the socket then sends `attach` with

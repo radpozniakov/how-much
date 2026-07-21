@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FC } from 'react'
-import { navigate } from '../lib/router'
+import { useNavigate } from 'react-router'
 import { clearSession, loadSession } from '../lib/session'
 import { useRoom } from '../lib/useRoom'
 import { HostControls } from '../components/HostControls/HostControls'
@@ -25,6 +25,7 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
   participantId,
   onIdentityLost,
 }) => {
+  const navigate = useNavigate()
   const {
     room,
     status,

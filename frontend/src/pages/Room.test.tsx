@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
 import { Room } from './Room'
 import { clearSession, saveSession } from '../lib/session'
 import { makeParticipant, makeResults, makeRoom } from '../test/fixtures'
@@ -13,7 +14,11 @@ const CODE = 'ABCDEF'
 // Seed the per-tab identity so Room mounts ConnectedRoom (not the JoinPrompt).
 function renderRoomAs(participantId: string) {
   saveSession(CODE, participantId)
-  return render(<Room code={CODE} />)
+  return render(<Room code={CODE} />, {
+    wrapper: ({ children }) => (
+      <MemoryRouter initialEntries={[`/room/${CODE}`]}>{children}</MemoryRouter>
+    ),
+  })
 }
 
 // Push a server snapshot onto the live socket, making the room render.
