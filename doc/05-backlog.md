@@ -597,24 +597,345 @@ catch this**, so it is gated here by review.
 each sees the other marked *voted* with no numbers shown; re-picking changes the
 vote silently. **Refs:** FR-9–FR-11, FR-17 · D-8, D-36
 
-### S9 — Reveal, results & host controls · `TODO`
+### S9 — Reveal, results & host controls · `DONE`
 
-**Goal:** the host runs the round; everyone sees the payoff, then a clean reset.
+> **Built via ralph** from the ralplan-consensus plan below (Planner → Architect
+> `SOUND` → Critic `APPROVE`, 2 iterations). Scope was S9 only (host controls +
+> reveal/results), extending the S7/S8 foundation; the **backend is unchanged**
+> (every frame, error slug, and snapshot field shipped in S6b — `git` confirms no
+> `backend/` or `roomSocket.ts` change). **Verified:** 93 frontend tests green
+> (51 → 93), `npm run build`/`lint`/`format:check` clean, reviewer (code-reviewer)
+> APPROVED against all acceptance criteria with 0 Critical/High/Medium findings,
+> FR-10 no-value-leak confirmed by inspection (`results.votes` has a single reader,
+> mounted only behind `revealed && results`). One deviation from the plan: the
+> topic-draft resync uses React's **adjust-state-during-render** pattern
+> (`prevItem` tracking) instead of the named effect, because the effect trips the
+> `react-hooks/set-state-in-effect` lint rule — same observable behavior, and the
+> pre-reveal-reset tripwire is pinned by an automated Room-level test. The plan
+> below is an accurate record of what shipped.
 
-**Scope**
-- Host-only controls, gated on `host_id === my participant_id`: reveal (`reveal`),
-  reset (`reset`), a set-topic input (`set_item`, bounded to `MAX_TOPIC_LENGTH`
-  like the frame), and the host-voting toggle (`set_host_voting`, D-14/FR-14).
-- Results view built from `results` in the snapshot (present *only* once
-  `revealed`): every participant's card joined to the roster by id, the average,
-  and a consensus flag (FR-15/FR-16/D-16). Reset returns to a clean round.
-- Surface rejected actions from `error` frames to the acting user only
-  (`not_host`, `invalid_card`, `host_not_voting`, `round_revealed`).
+**Goal:** the host runs the round — set a topic, opt in/out of voting, reveal, then
+reset to a clean round; everyone sees the payoff (all cards by name, the average,
+and a consensus flag).
 
-**Validate:** a full round end-to-end across two browsers — host sets a topic,
-both vote privately, host reveals (all cards + correct average + consensus), host
-resets to a fresh round; a non-host sees no host controls. **Refs:** FR-12–FR-16,
-FR-17 · D-12, D-14, D-16
+**Constraint (UI):** unchanged from S7/S8 — no new **UI/runtime** packages (native
+`<button>`/`<input>`/`<form>`/`<label>` + React built-ins; CSS modules;
+component-per-folder with colocated tests). Vitest + Testing Library (dev-only,
+installed) is the test stack. **Backend is UNCHANGED** — every frame, slug, and
+snapshot field S9 uses has shipped since S6b.
+
+**Principles**
+1. **Snapshot is the only truth (D-36).** All revealed values / average /
+   consensus / host identity / `host_voting` render straight from the last
+   `room_state`. S9 adds **no** new client vote state — the only new local state is
+   the host topic editor's controlled buffer (ephemeral edit text the snapshot
+   structurally can't carry mid-keystroke).
+2. Extend the S7/S8 seams, don't fork them: `roomSocket` is **untouched** (the
+   `ClientFrame` union widens under it), `useRoom` gains four sibling `useCallback`s
+   next to `castVote`, and VoteDeck reconciliation is **unchanged** (tripwire
+   discharged below, now automated-tested).
+3. Host power is **UI gating over an authoritative backend.** `host_id ===
+   participantId` gates *rendering* of controls; the server re-checks every action
+   and rejects with a slug that surfaces in the actor's banner. UI gating is
+   convenience, never the security boundary.
+4. Rejections are the actor's alone — each browser owns its socket + `error` state;
+   the existing `role="alert"` banner already scopes `not_host`/`host_not_voting`/
+   `round_revealed`/`invalid_card`/`bad_request` to the acting user (no new wiring).
+5. **`bad_request` unreachable by construction** — the topic input `maxLength`s to
+   the mirrored backend bound, so an over-length `set_item` can't be produced,
+   exactly as the fixed deck makes `invalid_card` unreachable in S8.
+
+**Module layout** (`frontend/src/`)
+
+- **`types.ts` (edit)** — add the four round frames, mirroring `messages.py` exactly:
+  ```ts
+  export interface SetItemFrame { type: 'set_item'; topic: string | null }
+  export interface SetHostVotingFrame { type: 'set_host_voting'; voting: boolean }
+  export interface RevealFrame { type: 'reveal' }
+  export interface ResetFrame { type: 'reset' }
+  ```
+  Widen the union and retire the line-51 comment:
+  ```ts
+  export type ClientFrame =
+    | { type: 'attach'; participant_id: string }
+    | CastVoteFrame
+    | SetItemFrame | SetHostVotingFrame | RevealFrame | ResetFrame
+  ```
+  `RoomView`/`ResultsView` already carry `host_id`/`host_voting`/`revealed`/
+  `current_item`/`results` — **no type change there**.
+
+- **`lib/limits.ts` (new, one line)** — `export const MAX_TOPIC_LENGTH = 200` — the
+  single frontend mirror of backend `config.MAX_TOPIC_LENGTH` (`config.py:34`),
+  documented as such, following the same single-mirror pattern as `lib/deck.ts`
+  mirroring `config.FIBONACCI_DECK`. *Rejected:* `config.ts` (its header declares it
+  "endpoints only" — a contract bound is not an endpoint).
+
+- **`lib/roomSocket.ts` — NO CHANGE.** `send = (frame: ClientFrame) => …` already
+  forwards any `ClientFrame`, live-gated + JSON-serialized (`roomSocket.ts:65-67`);
+  the four new variants ride the widened union. Called out explicitly in the PR
+  description so a reviewer doesn't flag a "missing" socket edit.
+
+- **`lib/useRoom.ts` (edit)** — widen `RoomController`:
+  ```ts
+  export interface RoomController extends RoomState {
+    castVote: (card: string) => void
+    setItem: (topic: string | null) => void
+    setHostVoting: (voting: boolean) => void
+    reveal: () => void
+    reset: () => void
+  }
+  ```
+  Four sibling `useCallback`s on the stable `socket`, each forwarding one frame
+  (`socket.send({ type:'set_item', topic })`, etc.), all `deps:[socket]`, all
+  returned in the final object. Non-breaking for the existing `{ room, status,
+  error, castVote }` consumer.
+
+- **`components/HostControls/` (new — `.tsx` + `.module.css` + `.test.tsx`)** — props:
+  ```ts
+  interface HostControlsProps {
+    revealed: boolean
+    hostVoting: boolean
+    disabled?: boolean          // status !== 'live'
+    onReveal: () => void
+    onReset: () => void
+    onSetHostVoting: (voting: boolean) => void
+  }
+  ```
+  Renders a **Reveal** button (`disabled={revealed || disabled}`), a **Reset**
+  button (`disabled={disabled}` — Reset is legal pre- *and* post-reveal and must
+  survive `revealed` so the host can escape a revealed round), and a **host-voting**
+  checkbox (`<label><input type="checkbox" checked={hostVoting} disabled={revealed
+  || disabled} onChange={() => onSetHostVoting(!hostVoting)} /> I'm voting</label>`).
+  Mounted only for the host (gated in Room).
+
+- **`components/Results/` (new — `.tsx` + `.module.css` + `.test.tsx`)** — props:
+  ```ts
+  interface ResultsProps {
+    results: ResultsView
+    participants: Participant[]
+    hostId: string | null
+  }
+  ```
+  Iterates `participants` (roster order), joins each to `results.votes[p.id]`:
+  - has a card → render the value; missing (`undefined` — didn't vote / opted-out
+    host) → render `—` (a "no vote" cell).
+  - **Average:** `results.average === null ? '—' : results.average.toFixed(1)`
+    (null when zero numeric votes — reachable when nobody voted before reveal).
+  - **Consensus:** when `results.consensus`, render a `Consensus` badge (text, no
+    emoji) per FR-16/D-16.
+  - Reuses the host-badge join (`p.id === hostId`) for parity with Roster. Card
+    values are read **only** from `results.votes`, and the component is mounted only
+    when `revealed && results` — so FR-10 (no pre-reveal leak) holds by construction.
+
+- **`components/Topic/Topic.tsx` (edit)** — add host-only editing; keep the
+  read-only render for everyone else. New props:
+  ```ts
+  interface TopicProps {
+    currentItem: string | null
+    isHost?: boolean
+    disabled?: boolean          // = revealed || status !== 'live'
+    onSetTopic?: (topic: string | null) => void
+  }
+  ```
+  When `isHost`, render a controlled **`<form onSubmit>`** (explicit submit — Enter
+  submits via the form; **not** `onBlur`): `<input maxLength={MAX_TOPIC_LENGTH}
+  value={draft} onChange=… disabled={disabled} />` + a **Set topic** submit button
+  (`disabled={disabled}`). The input is **not** `required` — an empty/blank submit
+  is allowed and sends `onSetTopic(null)` to clear. On submit: `onSetTopic(draft.trim()
+  === '' ? null : draft)`; `preventDefault` on the form.
+  - **Draft resync / echo-safety:** seed `draft` from `currentItem` and resync when
+    the applied topic changes via the **guarded-effect** variant `useEffect(() =>
+    setDraft(currentItem ?? ''), [currentItem])`. Because the host is the sole topic
+    mutator, the effect fires only on the host's own submit-echo (a *canonical*
+    `current_item` change), never per keystroke — so pre-submit typing is never
+    stomped. The one residual (typing again in the submit→echo window is reverted)
+    is narrow, self-correcting, and consciously **accepted for MVP** (closing it
+    needs focus/dirty tracking — over-engineering). *(If a `key`-driven reset were
+    used instead it MUST be `key={currentItem ?? ''}` — React treats `key={null}` as
+    "no key", so an A→null clear wouldn't remount. The guarded effect is the chosen
+    variant.)*
+  - `disabled = revealed || status !== 'live'` (backend locks `set_item` post-reveal
+    via `RoundRevealed`, `models.py:152`, so `round_revealed` stays a cross-client
+    race-only fallback, never a routine path).
+  - Non-host / no `isHost` → the existing read-only `<p>` + placeholder branch,
+    byte-for-byte unchanged.
+
+- **`pages/Room.tsx` (edit)** — in `ConnectedRoom`, destructure the four new
+  actions; compute:
+  ```ts
+  const isHost = room.host_id !== null && room.host_id === participantId
+  const canVote = !isHost || room.host_voting
+  const notLive = status !== 'live'
+  ```
+  Render order inside the `room ?` branch:
+  1. `<Topic currentItem={room.current_item} isHost={isHost} disabled={notLive || room.revealed} onSetTopic={setItem} />`
+  2. `<Roster room={room} me={participantId} />`
+  3. `{isHost && <HostControls revealed={room.revealed} hostVoting={room.host_voting} disabled={notLive} onReveal={reveal} onReset={reset} onSetHostVoting={setHostVoting} />}`
+  4. `{room.revealed && room.results ? <Results results={room.results} participants={room.participants} hostId={room.host_id} /> : (canVote && <VoteDeck hasVoted={me?.has_voted ?? false} revealed={room.revealed} onVote={castVote} disabled={notLive} />)}`
+
+  So: pre-reveal, voters see the deck and the opted-out host sees none; post-reveal,
+  everyone sees Results and no deck. The existing `role="alert"` banner is unchanged
+  and already scopes rejections to the actor.
+
+**Key decisions & findings** (to promote to `03-decisions.md` when built)
+
+- **Post-reveal replaces the deck with Results (A1).** When `revealed`, VoteDeck
+  unmounts and `<Results>` renders in its place; reset (`revealed:true→false`)
+  remounts a fresh deck (`selected:null`). Rejected: keeping the deck mounted+locked
+  beside Results (redundant inert grid duplicating the revealed values).
+- **Opted-out host has no deck (B1).** `canVote = !isHost || host_voting`; the deck
+  renders only when `canVote && !revealed`. An opted-out host is a facilitator, not
+  a voter, and this makes `host_not_voting` unreachable from the host's own UI.
+  Rejected: showing a permanently-`disabled` deck.
+- **Set-topic lives inside `Topic`, host-only (C1).** Keeps display + edit in one
+  cohesive component; the non-host read-only path is unchanged. Rejected: a
+  set-topic field inside `HostControls` (splits topic concerns).
+- **S8 tripwire discharged — VoteDeck reconciliation is UNCHANGED and now
+  automated-tested.** S9 wires exactly two new vote-drop paths: `reset` (drops *all*
+  votes — `models.py:220`) and `set_host_voting(false)` (drops the host's own vote —
+  `models.py:195`). **Both are genuine vote-drops**, so the S8 `has_voted`
+  true→false edge that clears the local highlight remains correct for the full
+  reachable set (reset, host-opt-out, disconnect). No S9 path is a "keep the
+  highlight" retraction, so the deck does **not** need to move to a round-id `key`.
+  Crucially, the **pre-reveal reset** case (`revealed:false` + `has_voted:false`) is
+  the *one* path where the VoteDeck edge effect — not a layout unmount — is the sole
+  thing that clears the highlight (the deck stays mounted because `canVote &&
+  !revealed` still holds), and it is now pinned by an automated Room-level test (see
+  Testing). The review gate remains only as a backstop against a *future* frame
+  introducing a keep-highlight true→false.
+- **Host gating is presentational only.** `isHost`/`canVote` gate rendering; the
+  server authoritatively re-checks (`not_host`, `host_not_voting`, `round_revealed`)
+  and any rejection surfaces in the actor's banner while the socket stays live.
+  **Host-transfer note:** after a mid-round transfer `host_id` is transiently
+  `null`, so `isHost` is false and `HostControls` (plus the topic editor) vanish for
+  a beat until the next snapshot names the new host — accepted MVP behavior,
+  mirroring the Roster host-badge `host_id !== null` handling.
+- **`bad_request` unreachable from the topic input** — `maxLength={MAX_TOPIC_LENGTH}`
+  bounds the raw string and the backend validator bounds the *stripped* length
+  (`len(value.strip()) > MAX_TOPIC_LENGTH`); `strip()` only shortens. Clearing sends
+  `{topic:null}`; blank/whitespace normalizes to `null` client-side before send.
+- **Average/`—` and consensus render straight from `results`** — no client
+  computation (D-16 lives in the backend); the UI only formats (`toFixed(1)`) and
+  shows/hides a badge.
+
+**Testing** (Vitest + Testing Library)
+
+- `useRoom.test.ts` (extend) — `setItem('X')`/`setItem(null)`, `setHostVoting(false)`,
+  `reveal()`, `reset()` each forward the exact frame to `socket.send`; each action
+  reference is **stable** across renders.
+- `lib/roomSocket.test.ts` (extend) — `reveal`/`reset`/`set_item`/`set_host_voting`
+  no-op before `room_state` and after a live-drop; once `live`, `set_item` appends
+  exactly `{"type":"set_item","topic":"X"}` and `{"type":"set_item","topic":null}`
+  (regression that the widened union serializes correctly).
+- `components/HostControls/HostControls.test.tsx` — Reveal fires `onReveal`; Reset
+  fires `onReset`; the checkbox reflects `hostVoting` and fires
+  `onSetHostVoting(!hostVoting)`. **Disabled matrix, per control:** Reveal
+  `disabled={revealed || !live}` (assert disabled when `revealed:true` and when
+  `disabled:true`); host-voting checkbox `disabled={revealed || !live}` (same); Reset
+  `disabled={!live}` only (assert Reset stays **enabled** when `revealed:true` and
+  disabled when `disabled:true`).
+- `components/Results/Results.test.tsx` — a voter's card renders by name; a
+  participant absent from `results.votes` renders `—`; `average` renders
+  `toFixed(1)`, and `—` when `null`; the `Consensus` badge shows iff
+  `results.consensus`; the host badge joins on `hostId`; no card value renders for a
+  participant not in `results.votes`. **Zero-votes boundary:** with `results.votes={}`
+  and `average=null`, every participant renders `—`, the average renders `—`, and no
+  `Consensus` badge appears.
+- `components/Topic/Topic.test.tsx` (extend) — non-host: read-only `<p>` +
+  placeholder (existing, unchanged). Host: renders the input seeded from
+  `currentItem`; **submit fires on the Set-topic button click and on form submit
+  (Enter), NOT on blur** — calls `onSetTopic` with the typed value; **an empty/blank
+  submit calls `onSetTopic(null)`** (input is not `required`); the input carries
+  `maxLength={200}`; input + button are **disabled when `disabled` (revealed or
+  not-live)**; the field **resyncs when `currentItem` changes**, and **typing after a
+  submit is not stomped by the echo** (write it as submit → deliver `currentItem`
+  echo snapshot → type more → assert the new text survives).
+- `pages/Room.test.tsx` (extend/add):
+  - host sees `HostControls`; a non-host does **not**.
+  - opted-out host (`host_voting:false`, self is host) sees **no** `VoteDeck`.
+  - post-reveal (`revealed:true` + `results`) renders `Results` and **no** `VoteDeck`
+    for anyone.
+  - **[tripwire, automated]** mount Room as a *voting* participant (non-host, or host
+    with `host_voting:true`); click a card so it gets `aria-pressed`; then deliver a
+    snapshot with `revealed:false` **and** that participant `has_voted:false` (a
+    pre-reveal reset). Assert **both**: (a) `aria-pressed` is cleared on all cards,
+    **and** (b) the VoteDeck ("Your vote") is **still in the DOM** (not replaced by
+    Results — `revealed:false` keeps `canVote && VoteDeck`). This is the sole path
+    where VoteDeck edge-detection, not a layout unmount, clears the highlight.
+- `test/fixtures.ts` (extend) — add a `makeResults(overrides)` helper (and/or a
+  `results`-populated `makeRoom` override) so Results/Room tests share one revealed
+  fixture.
+
+**Acceptance criteria** — (1) as host, submitting the topic editor (button click or
+Enter — **explicit form submit, not blur**) sends `{type:'set_item',topic}` and the
+returning snapshot updates `current_item` for everyone; an **empty/blank submit**
+sends `{topic:null}` and returns the placeholder (the input is not `required`). (2)
+the topic input `maxLength`s to 200 so no `set_item` can produce `bad_request`. (3)
+host sees Reveal/Reset/host-voting controls; a non-host sees none. (4) toggling
+host-voting off (`{voting:false}`) drops the host's vote server-side and hides the
+host's own deck; toggling on re-shows an empty deck. (5) Reveal (`{type:'reveal'}`)
+flips `revealed` and every client renders `Results`: each participant's card joined
+by id, `—` for non-voters, the average (`toFixed(1)` or `—`), and a `Consensus`
+badge iff `results.consensus`. (6) Reset (`{type:'reset'}`) returns a clean round —
+`revealed:false`, deck back for voters, all highlights cleared. (7) no card value
+appears in the DOM before reveal (FR-10) — `Results` mounts only when `revealed &&
+results`. (8) a rejected action (`not_host`/`host_not_voting`/`round_revealed`)
+surfaces in the **acting** user's `role="alert"` banner and the socket stays live.
+(9) all host actions no-op when `status !== 'live'` (controls `disabled`, `send`
+guarded); the topic editor and Reveal/host-voting toggle are additionally disabled
+when `revealed`, while Reset stays enabled. (10) **VoteDeck reconciliation is
+unchanged and correct** — the pre-reveal reset path (`has_voted` true→false with
+`revealed:false`, deck still mounted) clears the highlight while keeping the deck in
+the DOM, **pinned by an automated Room-level test**; the review gate remains a
+backstop only for a *future* frame introducing a keep-highlight true→false.
+
+**Verification (automated gates):** `cd frontend && npm run test` (Vitest — expect
+~51 → ~75+ green) + `npm run build` (`tsc -b`) + `npm run lint` + `npm run
+format:check`, all clean.
+
+**Validate** (manual, two browsers, `compose up`, backend unchanged): host sets a
+topic (peer sees it; Enter and the button both submit; clearing the field + submit
+returns the placeholder); both vote privately (only *voted* badges, no numbers);
+host toggles voting off (host's deck disappears, peer unaffected) and back on; host
+reveals — **both** browsers show every card by name, the correct average, and the
+`Consensus` badge when all equal; host resets — both drop back to a clean round with
+the deck back and no stale highlight; the non-host browser never shows host
+controls. **Refs:** FR-12–FR-16, FR-17 · D-12, D-14, D-16.
+
+**ADR — S9 reveal/results/host controls**
+- **Decision:** Implement S9 as a frontend-only slice over the unchanged S6b
+  backend: add the four round frames to `ClientFrame`, four sibling actions to
+  `useRoom`, a new host-only `HostControls` component, a new `Results` component
+  (mounted only when `revealed && results`), and a host-only editing branch inside
+  `Topic`; gate all host UI on `host_id === participantId` and gate the deck on
+  `canVote = !isHost || host_voting`; post-reveal replace the deck with `Results`.
+- **Drivers:** (1) faithfulness to existing seams / minimal diff (no `roomSocket`
+  change; `useRoom`/`VoteDeck` extended, not forked); (2) correctness + privacy of
+  the reveal transition (no pre-reveal value leak; clean reset; the S8 highlight
+  tripwire discharged and now automated-tested); (3) no-auth MVP minimalism.
+- **Alternatives considered:** post-reveal keep the deck mounted+locked beside
+  Results (A2); show a permanently-disabled deck for the opted-out host (B2); place
+  the set-topic field in `HostControls` rather than `Topic` (C2); a `key`-driven
+  topic-draft reset instead of a guarded effect; leaving the tripwire as review-only
+  rather than an automated test.
+- **Why chosen:** A1 removes a redundant inert grid and gives reset a second
+  structural highlight-clear via remount; B1 makes `host_not_voting` unreachable from
+  the host's own UI and matches facilitator intent; C1 keeps topic display+edit
+  cohesive and leaves the non-host path untouched; the guarded effect avoids the
+  `key={null}` clear-A→null footgun; promoting the tripwire to a Room-level test
+  makes the one edge-detection-only path regression-proof rather than relying on
+  reviewer vigilance.
+- **Consequences:** toggling host-voting off then on forces the host to re-pick
+  (their vote is dropped server-side regardless); after a mid-round host transfer,
+  controls vanish for a beat while `host_id` is transiently null (accepted, mirrors
+  Roster); cross-client races can still surface `round_revealed`/`host_not_voting`/
+  `not_host` in the actor's banner (graceful, socket stays live); the S8 "deck
+  disabled on revealed" behavior is now exercised only in VoteDeck's own unit test
+  (its prop contract is still covered).
+- **Follow-ups:** if the spec later needs to distinguish "opted-out host" from
+  "didn't vote yet" in `Results`, derive it (`p.id === hostId && !host_voting`) and
+  give it a distinct cell; retire the T1 `/ws` echo and the S3/S4 HTTP round routes
+  (S10, D-35).
 
 ---
 

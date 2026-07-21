@@ -135,4 +135,45 @@ describe('RoomSocket', () => {
     socket.send({ type: 'cast_vote', card: '5' })
     expect(ws.sent).toHaveLength(0)
   })
+
+  it('drops reveal/reset/set_item/set_host_voting sends before any room_state (connecting)', () => {
+    const socket = openSocket()
+    expect(socket.getSnapshot().status).toBe('connecting')
+    socket.send({ type: 'reveal' })
+    socket.send({ type: 'reset' })
+    socket.send({ type: 'set_item', topic: 'X' })
+    socket.send({ type: 'set_host_voting', voting: false })
+    expect(lastSocket().sent).toHaveLength(0)
+  })
+
+  it('drops reveal/reset/set_item/set_host_voting sends while reconnecting', () => {
+    const socket = openSocket()
+    deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    const ws = lastSocket()
+    ws.onclose?.() // live-phase drop -> reconnecting, this.ws cleared
+    expect(socket.getSnapshot().status).toBe('reconnecting')
+    socket.send({ type: 'reveal' })
+    socket.send({ type: 'reset' })
+    socket.send({ type: 'set_item', topic: 'X' })
+    socket.send({ type: 'set_host_voting', voting: false })
+    expect(ws.sent).toHaveLength(0)
+  })
+
+  it('sends a set_item frame with a topic once live', () => {
+    const socket = openSocket()
+    deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    socket.send({ type: 'set_item', topic: 'X' })
+    expect(lastSocket().sent).toContainEqual(
+      JSON.stringify({ type: 'set_item', topic: 'X' }),
+    )
+  })
+
+  it('sends a set_item frame with a null topic once live', () => {
+    const socket = openSocket()
+    deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    socket.send({ type: 'set_item', topic: null })
+    expect(lastSocket().sent).toContainEqual(
+      JSON.stringify({ type: 'set_item', topic: null }),
+    )
+  })
 })
