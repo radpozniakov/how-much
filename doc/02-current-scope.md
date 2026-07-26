@@ -36,12 +36,22 @@ The smallest set that makes a real estimation session usable.
 | Room cleanup | In-memory; discarded after grace period when empty |
 | Reconnection | Rejoin as a new participant; in-round vote is lost |
 
+## Planned — in the current phase, not built yet
+
+Listed separately from "Out of scope" because they are committed work, not
+exclusions. See [07-v0.1-phase.md](07-v0.1-phase.md).
+
+- **Host-chosen card values** — the host sets the room's cards when creating it;
+  numbers only, fixed for the room's life, and blank means Fibonacci (V4)
+
 ## Out of scope
 
 - Accounts / authentication / authorization
 - Persistent storage, history, or result export
 - Backlog or multi-ticket management; integrations (Jira, etc.)
-- Multiple / custom decks, T-shirt sizing, special cards
+- T-shirt sizing and special cards (`?`, coffee) — custom decks are numbers-only
+  (V4); also out: named or saved decks, more than one deck per room, and changing
+  the deck after the room is created
 - Vote-value distribution charts (only average + consensus for now)
 - Spectators as a distinct role
 - Banning a removed participant (removal is not a ban — the code still works)
