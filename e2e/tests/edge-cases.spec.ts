@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test'
-import { card, createRoom, joinViaCode, waitForLive } from './helpers'
+import {
+  createRoom,
+  joinViaCode,
+  participantCards,
+  roomCodeHeading,
+  waitForLive,
+} from './helpers'
 
 // Error and reconnection paths. Covers FR-18 and robustness of the join flow.
 
@@ -30,7 +36,7 @@ test.describe('Edge cases', () => {
     const gCtx = await browser.newContext()
     const guest = await gCtx.newPage()
     await joinViaCode(guest, code, 'Guest')
-    await expect(card(host, /Participants \(2\)/)).toBeVisible()
+    await expect(participantCards(host)).toHaveCount(2)
 
     // Reload the guest tab. The reload drops the old socket, which removes the
     // participant, so the reconnect attaches with an identity no longer in the
@@ -46,9 +52,9 @@ test.describe('Edge cases', () => {
     await guest.getByRole('button', { name: 'Join' }).click()
 
     await waitForLive(guest)
-    await expect(guest.getByRole('heading', { name: `Room ${code}` })).toBeVisible()
+    await expect(roomCodeHeading(guest, code)).toBeVisible()
     // The room is intact and the guest is present again (as a fresh participant).
-    await expect(card(host, /Participants \(2\)/)).toBeVisible()
+    await expect(participantCards(host)).toHaveCount(2)
 
     await hostCtx.close()
     await gCtx.close()

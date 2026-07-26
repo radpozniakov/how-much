@@ -3,7 +3,6 @@ import type { FC, SyntheticEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { createRoom, requestErrorMessage } from '../../lib/api'
 import { saveSession } from '../../lib/session'
-import styles from './CreateRoomForm.module.css'
 
 export const CreateRoomForm: FC = () => {
   const navigate = useNavigate()
@@ -27,19 +26,20 @@ export const CreateRoomForm: FC = () => {
 
   return (
     <section className="card">
-      <h2>Create a room</h2>
-      <form className={styles.form} onSubmit={handleSubmit}>
-        <label>
-          Your name
+      <h2 className="card__title">Create a room</h2>
+      <form onSubmit={handleSubmit}>
+        <label className="field field--required">
+          <span className="field__label">Your name</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={40}
             autoComplete="off"
+            required
           />
         </label>
-        <button type="submit" disabled={busy}>
-          {busy ? 'Creating…' : 'Create room'}
+        <button type="submit" className="primary" disabled={busy}>
+          {busy ? 'Creating…' : 'Create'}
         </button>
         {error && (
           <p className="error" role="alert">

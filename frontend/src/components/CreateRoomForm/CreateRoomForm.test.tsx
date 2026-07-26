@@ -34,9 +34,7 @@ describe('CreateRoomForm', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: /create/i }))
 
-    await waitFor(() =>
-      expect(navigate).toHaveBeenCalledWith('/room/ABCDEF'),
-    )
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/room/ABCDEF'))
     expect(api.createRoom).toHaveBeenCalledWith('Alice')
     expect(session.saveSession).toHaveBeenCalledWith('ABCDEF', 'p1')
   })
@@ -44,6 +42,11 @@ describe('CreateRoomForm', () => {
   it('surfaces a server error inline', async () => {
     vi.mocked(api.createRoom).mockRejectedValue({ status: 422, detail: 'bad' })
     render(<CreateRoomForm />)
+    // Fill the required name field so submit reaches the API (the name input
+    // is `required`; an empty submit is blocked by native validation).
+    fireEvent.change(screen.getByLabelText(/name/i), {
+      target: { value: 'Alice' },
+    })
     fireEvent.click(screen.getByRole('button', { name: /create/i }))
     expect(await screen.findByRole('alert')).toHaveTextContent('bad')
     expect(navigate).not.toHaveBeenCalled()

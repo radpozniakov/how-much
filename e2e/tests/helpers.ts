@@ -6,6 +6,11 @@ import { expect, type Locator, type Page } from '@playwright/test'
 // distinct participant in a test must be a distinct context/page. These helpers
 // take whichever page they act on, so a single test can drive the host and
 // several participants side by side.
+//
+// Selector note (S13–S19 redesign): there is no longer a "Host controls" card.
+// The host's affordances are distributed — the topic editor and the "I'm voting"
+// toggle live inside the stage, and reveal/reset is a single button below the
+// participant grid. Prefer the role-based helpers below over locating a card.
 
 /** The card section is titled by an <h2>; scope to it so "Your name" / "1" etc.
  * resolve unambiguously across the several cards on a page. */
@@ -21,7 +26,7 @@ export async function createRoom(page: Page, name: string): Promise<string> {
   await page.goto('/')
   const create = card(page, 'Create a room')
   await create.getByLabel('Your name').fill(name)
-  await create.getByRole('button', { name: 'Create room' }).click()
+  await create.getByRole('button', { name: 'Create', exact: true }).click()
   await page.waitForURL(/\/room\/[A-Z0-9]{6}$/)
   await waitForLive(page)
   const match = /\/room\/([A-Z0-9]{6})$/.exec(page.url())
@@ -66,23 +71,100 @@ export async function waitForLive(page: Page): Promise<void> {
   await expect(page.getByText('live', { exact: true })).toBeVisible()
 }
 
+/** The room code heading in the header. The redesign shows the bare code (DN-D),
+ * not "Room <code>". */
+export function roomCodeHeading(page: Page, code: string): Locator {
+  return page.getByRole('heading', { name: code, exact: true })
+}
+
+/** The vote deck strip. A landmark region (aria-label), not a titled card, so it
+ * is not reachable via `card()`. */
+export function voteDeck(page: Page): Locator {
+  return page.getByRole('region', { name: 'Your vote' })
+}
+
 /** The vote deck button for a given card, scoped to the deck so "1" doesn't
  * also match "13"/"21". */
 export function voteCard(page: Page, value: string): Locator {
-  return card(page, 'Your vote').getByRole('button', {
-    name: value,
-    exact: true,
-  })
+  return voteDeck(page).getByRole('button', { name: value, exact: true })
 }
 
-/** A roster <li> identified by the participant's display name. */
+/** The task stage section (redesign §Stage) — shows the topic title, status,
+ * and vote-progress counter. */
+export function stage(page: Page): Locator {
+  return page.locator('section.stage')
+}
+
+/** The host's inline topic editor: the stage title itself is a borderless
+ * textarea for the host (absent for non-hosts, who get a read-only title). */
+export function topicEditor(page: Page): Locator {
+  return page.getByRole('textbox', { name: 'Topic' })
+}
+
+/** The single host reveal/reset button below the participant grid. It reveals
+ * the round, then flips label to "New voting" to reset it. */
+export function revealButton(page: Page): Locator {
+  return page.getByRole('button', { name: 'Reveal cards' })
+}
+
+export function resetButton(page: Page): Locator {
+  return page.getByRole('button', { name: 'New voting' })
+}
+
+/** The host's "I'm voting" checkbox, rendered under the stage status line. Its
+ * presence is also the most reliable host/non-host signal on the page. */
+export function hostVotingToggle(page: Page): Locator {
+  return page.getByRole('checkbox', { name: "I'm voting" })
+}
+
+/** Set the round topic as the host. The editor commits on Enter (or blur, or a
+ * 500ms autosave); Enter is the deterministic path for a test. */
+export async function setTopic(page: Page, topic: string): Promise<void> {
+  const editor = topicEditor(page)
+  await editor.fill(topic)
+  await editor.press('Enter')
+  // The value is echoed back by the server snapshot; waiting on it here means
+  // callers can assert on other clients without racing the broadcast.
+  await expect(editor).toHaveValue(topic)
+}
+
+/** All participant cards in the responsive grid (redesign §Participant cards
+ * grid). One card per participant; used for presence counts. */
+export function participantCards(page: Page): Locator {
+  return page.locator('.participant-card')
+}
+
+/** A participant card identified by the participant's display name. Replaces the
+ * old roster <li>. Voted state is read via the card's `data-state` attribute
+ * ('not-voted' | 'voted' | 'revealed') — the redesign shows state by glyph, not
+ * text, so `toContainText('voted')` no longer applies. */
 export function rosterEntry(page: Page, name: string): Locator {
-  return card(page, /Participants/).locator('li').filter({ hasText: name })
+  return participantCards(page).filter({ hasText: name })
 }
 
-/** A results <li> identified by the participant's display name. */
+/** Switch to the stats view via the segment control above the stage. The
+ * redesign moves the results dashboard out of the cards view, so tests must
+ * toggle here before asserting on Results (S18). */
+export async function showStats(page: Page): Promise<void> {
+  await page.getByRole('tab', { name: 'Graph view' }).click()
+}
+
+/** Switch back to the cards view (the participant grid) via the segment control.
+ * The inverse of showStats — needed when a test asserts on Results and then on
+ * the grid (only one is mounted at a time, S18). */
+export async function showCards(page: Page): Promise<void> {
+  await page.getByRole('tab', { name: 'Cards view' }).click()
+}
+
+/** A results <li> identified by the participant's display name. Only present
+ * once the stats view is active on a revealed round (see showStats). */
 export function resultEntry(page: Page, name: string): Locator {
   return card(page, 'Results').locator('li').filter({ hasText: name })
+}
+
+/** The host-only participants roster panel, opened from the header icon (S23). */
+export function rosterMenuTrigger(page: Page): Locator {
+  return page.getByRole('button', { name: 'Room participants' })
 }
 
 /** Set the host's "I'm voting" toggle (host page only). Host votes by default
@@ -94,7 +176,7 @@ export function resultEntry(page: Page, name: string): Locator {
  * assertion sees it "revert". Instead: click once, then wait for the echo to
  * settle the checkbox into the desired state. */
 export async function setHostVoting(page: Page, voting: boolean): Promise<void> {
-  const box = card(page, 'Host controls').getByRole('checkbox')
+  const box = hostVotingToggle(page)
   if ((await box.isChecked()) !== voting) {
     await box.click()
     await expect(box).toBeChecked({ checked: voting })

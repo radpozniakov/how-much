@@ -36,9 +36,7 @@ describe('JoinRoomForm', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: /join/i }))
 
-    await waitFor(() =>
-      expect(navigate).toHaveBeenCalledWith('/room/ABCDEF'),
-    )
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/room/ABCDEF'))
     expect(api.joinRoom).toHaveBeenCalledWith('ABCDEF', 'Bob')
     expect(session.saveSession).toHaveBeenCalledWith('ABCDEF', 'p2')
   })
@@ -46,6 +44,14 @@ describe('JoinRoomForm', () => {
   it('shows a 404 as a friendly inline error', async () => {
     vi.mocked(api.joinRoom).mockRejectedValue({ status: 404, detail: 'x' })
     render(<JoinRoomForm />)
+    // Fill the required fields so submit reaches the API (both inputs are
+    // `required`; an empty submit is blocked by native validation).
+    fireEvent.change(screen.getByLabelText(/name/i), {
+      target: { value: 'Bob' },
+    })
+    fireEvent.change(screen.getByLabelText(/code/i), {
+      target: { value: 'abcdef' },
+    })
     fireEvent.click(screen.getByRole('button', { name: /join/i }))
     expect(await screen.findByRole('alert')).toHaveTextContent(
       /no room with that code/i,

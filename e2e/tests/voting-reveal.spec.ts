@@ -3,10 +3,15 @@ import {
   card,
   createRoom,
   joinViaCode,
+  participantCards,
   resultEntry,
+  revealButton,
   rosterEntry,
   setHostVoting,
+  setTopic,
+  showStats,
   voteCard,
+  voteDeck,
 } from './helpers'
 
 // The heart of the app: private voting, then a host-triggered simultaneous
@@ -20,6 +25,9 @@ async function setupRoom(browser: Parameters<Parameters<typeof test>[2]>[0]['bro
   const host = await hostCtx.newPage()
   const code = await createRoom(host, 'Host')
   await setHostVoting(host, false) // facilitator only
+  // Voting and revealing are both gated on an estimation subject existing, so
+  // every scenario here needs a topic before anyone can cast a card.
+  await setTopic(host, 'Estimate the login page')
 
   const aCtx = await browser.newContext()
   const a = await aCtx.newPage()
@@ -29,8 +37,10 @@ async function setupRoom(browser: Parameters<Parameters<typeof test>[2]>[0]['bro
   const b = await bCtx.newPage()
   await joinViaCode(b, code, 'Ben')
 
-  // Everyone sees all three before we start.
-  await expect(card(host, /Participants \(3\)/)).toBeVisible()
+  // Both voters have a card before we start. The opted-out host is a facilitator
+  // and is excluded from the grid (FR-17), so this is 2, not 3 — the host is
+  // still in the room and still appears in the header roster (S23).
+  await expect(participantCards(host)).toHaveCount(2)
 
   const cleanup = async () => {
     await aCtx.close()
@@ -49,12 +59,16 @@ test.describe('Voting & reveal', () => {
     await voteCard(a, '5').click()
 
     // The host (and Ben) see that Ann has voted, but no value is shown anywhere
-    // pre-reveal: the Results card does not exist yet.
-    await expect(rosterEntry(host, 'Ann')).toContainText('voted')
-    await expect(rosterEntry(b, 'Ann')).toContainText('voted')
+    // pre-reveal: her card is in the voted state, not revealed, and the Results
+    // card does not exist yet.
+    await expect(rosterEntry(host, 'Ann')).toHaveAttribute('data-state', 'voted')
+    await expect(rosterEntry(b, 'Ann')).toHaveAttribute('data-state', 'voted')
     await expect(card(host, 'Results')).toHaveCount(0)
-    // Ben has not voted — no "voted" badge on his entry.
-    await expect(rosterEntry(host, 'Ben')).not.toContainText('voted')
+    // Ben has not voted — his card stays in the not-voted state.
+    await expect(rosterEntry(host, 'Ben')).toHaveAttribute(
+      'data-state',
+      'not-voted',
+    )
 
     await cleanup()
   })
@@ -72,7 +86,7 @@ test.describe('Voting & reveal', () => {
     await expect(voteCard(a, '3')).toHaveAttribute('aria-pressed', 'false')
 
     // Still just "voted" to the host — the change never leaks a value (FR-10).
-    await expect(rosterEntry(host, 'Ann')).toContainText('voted')
+    await expect(rosterEntry(host, 'Ann')).toHaveAttribute('data-state', 'voted')
     await cleanup()
   })
 
@@ -83,10 +97,12 @@ test.describe('Voting & reveal', () => {
 
     await voteCard(a, '5').click()
     await voteCard(b, '5').click()
-    await card(host, 'Host controls').getByRole('button', { name: 'Reveal' }).click()
+    await revealButton(host).click()
 
-    // All three clients now see the Results card with both cards revealed.
+    // All three clients now see the Results card with both cards revealed —
+    // the dashboard lives in the stats view (S18), so switch there first.
     for (const p of [host, a, b] as Page[]) {
+      await showStats(p)
       await expect(card(p, 'Results')).toBeVisible()
       await expect(resultEntry(p, 'Ann')).toContainText('5')
       await expect(resultEntry(p, 'Ben')).toContainText('5')
@@ -104,8 +120,9 @@ test.describe('Voting & reveal', () => {
 
     await voteCard(a, '3').click()
     await voteCard(b, '8').click()
-    await card(host, 'Host controls').getByRole('button', { name: 'Reveal' }).click()
+    await revealButton(host).click()
 
+    await showStats(host)
     await expect(card(host, 'Results')).toBeVisible()
     await expect(resultEntry(host, 'Ann')).toContainText('3')
     await expect(resultEntry(host, 'Ben')).toContainText('8')
@@ -120,7 +137,7 @@ test.describe('Voting & reveal', () => {
     browser,
   }) => {
     const { a, cleanup } = await setupRoom(browser)
-    const deck = card(a, 'Your vote').getByRole('button')
+    const deck = voteDeck(a).getByRole('button')
     await expect(deck).toHaveText(['0', '1', '2', '3', '5', '8', '13', '21'])
     await cleanup()
   })

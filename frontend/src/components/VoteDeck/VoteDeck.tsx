@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FC } from 'react'
 import { FIBONACCI_DECK } from '../../lib/deck'
-import styles from './VoteDeck.module.css'
 
 export interface VoteDeckProps {
   // The caller's own has_voted from the snapshot — presence, not the value.
@@ -41,14 +40,13 @@ export const VoteDeck: FC<VoteDeckProps> = ({
   const locked = revealed || disabled
 
   return (
-    <section className="card">
-      <h2>Your vote</h2>
-      <div className={styles.deck}>
+    <section className="vote-bar" aria-label="Your vote">
+      <div className="vote-deck">
         {FIBONACCI_DECK.map((card) => (
           <button
             key={card}
             type="button"
-            className={`${styles.card} ${selected === card ? styles.selected : ''}`}
+            className={`vote-deck__card ${selected === card ? 'vote-deck__card--selected' : ''}`}
             aria-pressed={selected === card}
             disabled={locked}
             onClick={() => {

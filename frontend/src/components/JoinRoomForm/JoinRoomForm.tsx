@@ -3,7 +3,6 @@ import type { FC, SyntheticEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { joinRoom, requestErrorMessage } from '../../lib/api'
 import { saveSession } from '../../lib/session'
-import styles from './JoinRoomForm.module.css'
 
 export const JoinRoomForm: FC = () => {
   const navigate = useNavigate()
@@ -28,27 +27,29 @@ export const JoinRoomForm: FC = () => {
 
   return (
     <section className="card">
-      <h2>Join a room</h2>
-      <form className={styles.form} onSubmit={handleSubmit}>
-        <label>
-          Your name
+      <h2 className="card__title">Join a room</h2>
+      <form onSubmit={handleSubmit}>
+        <label className="field field--required">
+          <span className="field__label">Your name</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={40}
             autoComplete="off"
+            required
           />
         </label>
-        <label>
-          Room code
+        <label className="field field--required">
+          <span className="field__label">Room code</span>
           <input
-            className={styles.code}
+            className="join-form__code"
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
             autoComplete="off"
+            required
           />
         </label>
-        <button type="submit" disabled={busy}>
+        <button type="submit" className="primary" disabled={busy}>
           {busy ? 'Joining…' : 'Join'}
         </button>
         {error && (

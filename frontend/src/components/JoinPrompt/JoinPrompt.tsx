@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import type { FC, SyntheticEvent } from 'react'
+import { useNavigate } from 'react-router'
 import { joinRoom, requestErrorMessage } from '../../lib/api'
+import { MAX_DISPLAY_NAME_LENGTH } from '../../lib/limits'
 import { saveSession } from '../../lib/session'
-import styles from './JoinPrompt.module.css'
+import { HomeIcon } from '../icons'
 
 export interface JoinPromptProps {
   code: string
@@ -12,6 +14,7 @@ export interface JoinPromptProps {
 // Deep-link / no-identity entry: prompt for a name, join over HTTP, then hand the
 // new participant_id back so the room can connect.
 export const JoinPrompt: FC<JoinPromptProps> = ({ code, onJoined }) => {
+  const navigate = useNavigate()
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -31,20 +34,30 @@ export const JoinPrompt: FC<JoinPromptProps> = ({ code, onJoined }) => {
   }
 
   return (
-    <main className="page">
-      <h1>Join room {code}</h1>
-      <section className="card">
-        <form className={styles.form} onSubmit={handleSubmit}>
-          <label>
-            Your name
+    <main className="landing">
+      <button
+        type="button"
+        className="icon-btn join-home"
+        onClick={() => navigate('/')}
+        aria-label="Go to home page"
+        title="Home"
+      >
+        <HomeIcon />
+      </button>
+      <section className="card join-card">
+        <h2 className="card__title">Join room {code}</h2>
+        <form onSubmit={handleSubmit}>
+          <label className="field field--required">
+            <span className="field__label">Your name</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              maxLength={40}
+              maxLength={MAX_DISPLAY_NAME_LENGTH}
               autoComplete="off"
+              required
             />
           </label>
-          <button type="submit" disabled={busy}>
+          <button type="submit" className="primary" disabled={busy}>
             {busy ? 'Joining…' : 'Join'}
           </button>
           {error && (

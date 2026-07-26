@@ -1,5 +1,15 @@
 import { expect, test } from '@playwright/test'
-import { card, createRoom, joinViaCode, joinViaLink, rosterEntry } from './helpers'
+import {
+  createRoom,
+  hostVotingToggle,
+  joinViaCode,
+  joinViaLink,
+  participantCards,
+  revealButton,
+  roomCodeHeading,
+  rosterEntry,
+  topicEditor,
+} from './helpers'
 
 // Room creation, identity, and the two join paths (code + shareable link).
 // Covers FR-1, FR-2a, FR-3, FR-4, FR-17.
@@ -10,20 +20,27 @@ test.describe('Create & join', () => {
   }) => {
     const code = await createRoom(page, 'Alice')
 
-    // The room header carries the code, and the creator is flagged host + you.
-    await expect(page.getByRole('heading', { name: `Room ${code}` })).toBeVisible()
-    const alice = rosterEntry(page, 'Alice')
-    await expect(alice).toContainText('host')
-    await expect(alice).toContainText('you')
+    // The header carries the bare code (DN-D) and identifies the participant.
+    await expect(roomCodeHeading(page, code)).toBeVisible()
+    await expect(page.locator('.room-header__name')).toHaveText('Alice')
+    // The creator's own participant card is present.
+    await expect(rosterEntry(page, 'Alice')).toBeVisible()
 
-    // Host-only controls are present for the creator (FR-12/FR-13).
-    await expect(card(page, 'Host controls')).toBeVisible()
+    // Host affordances are present for the creator (FR-12/FR-13). There is no
+    // "Host controls" card any more — they are the stage topic editor, the
+    // "I'm voting" toggle, and the reveal button below the grid.
+    await expect(topicEditor(page)).toBeVisible()
+    await expect(hostVotingToggle(page)).toBeVisible()
+    await expect(revealButton(page)).toBeVisible()
 
-    // The share link is the canonical deep link for this room (FR-2a). It's a
-    // read-only textbox (the Topic input is the only other one, and it's not
-    // read-only), so target it by that.
-    const link = page.locator('input[readonly]')
-    await expect(link).toHaveValue(`http://localhost:5173/room/${code}`)
+    // The header copy button copies the canonical deep link for this room
+    // (FR-2a). Read it back from the clipboard to confirm the value.
+    await page
+      .context()
+      .grantPermissions(['clipboard-read', 'clipboard-write'])
+    await page.getByRole('button', { name: 'Copy room link' }).click()
+    const copied = await page.evaluate(() => navigator.clipboard.readText())
+    expect(copied).toBe(`http://localhost:5173/room/${code}`)
   })
 
   test('a second participant joins by code and both see each other (FR-3, FR-17)', async ({
@@ -37,14 +54,16 @@ test.describe('Create & join', () => {
     const guest = await guestCtx.newPage()
     await joinViaCode(guest, code, 'Bob')
 
-    // Presence fans out to everyone (FR-17): both rosters show two people.
+    // Presence fans out to everyone (FR-17): both grids show two people.
     for (const p of [host, guest]) {
-      await expect(card(p, /Participants \(2\)/)).toBeVisible()
-      await expect(rosterEntry(p, 'Alice')).toContainText('host')
+      await expect(participantCards(p)).toHaveCount(2)
+      await expect(rosterEntry(p, 'Alice')).toBeVisible()
       await expect(rosterEntry(p, 'Bob')).toBeVisible()
     }
-    // Bob is not the host and gets no host controls.
-    await expect(card(guest, 'Host controls')).toHaveCount(0)
+    // Bob is not the host: no topic editor, no voting toggle, no reveal button.
+    await expect(topicEditor(guest)).toHaveCount(0)
+    await expect(hostVotingToggle(guest)).toHaveCount(0)
+    await expect(revealButton(guest)).toHaveCount(0)
 
     await hostCtx.close()
     await guestCtx.close()
@@ -62,7 +81,7 @@ test.describe('Create & join', () => {
     await joinViaLink(guest, code, 'Bob')
 
     await expect(host.getByText('Bob')).toBeVisible()
-    await expect(card(guest, /Participants \(2\)/)).toBeVisible()
+    await expect(participantCards(guest)).toHaveCount(2)
 
     await hostCtx.close()
     await guestCtx.close()
@@ -79,9 +98,11 @@ test.describe('Create & join', () => {
     const guest = await guestCtx.newPage()
     await joinViaCode(guest, code, 'Sam')
 
-    // Two people named "Sam" coexist — the roster lists two entries.
-    await expect(card(host, /Participants \(2\)/)).toBeVisible()
-    await expect(card(host, /Participants/).locator('li')).toHaveCount(2)
+    // Two people named "Sam" coexist — the grid shows two cards, both named Sam.
+    await expect(participantCards(host)).toHaveCount(2)
+    await expect(
+      participantCards(host).filter({ hasText: 'Sam' }),
+    ).toHaveCount(2)
 
     await hostCtx.close()
     await guestCtx.close()

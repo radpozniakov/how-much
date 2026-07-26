@@ -1,0 +1,1016 @@
+:root {
+  // Color — monochrome (spec §Colors). Do not introduce color.
+  --bg: #f7f5f3; // page background
+  --surface: #ffffff; // cards, stage
+  --ink: #000000; // all text + borders
+  --ink-muted: #4c4c4c; // secondary text (labels)
+
+  // Type (spec §Fonts): Inter for text, JetBrains Mono for titles + numbers.
+  --font-sans: 'Inter Variable', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, Consolas, monospace;
+
+  // Borders + radii (spec §Global styling).
+  --hairline: 1px solid var(--ink);
+  // A faint internal divider, for rules *inside* a hairline-bordered container
+  // where a second solid line would read as a doubled edge. Derived from --ink,
+  // so it stays inside the monochrome system.
+  --rule-faint: color-mix(in srgb, var(--ink) 12%, transparent);
+  --radius-container: 14px; // containers ~12–16px
+  --radius-card: 10px; // cards ~8–12px
+
+  // Spacing scale.
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+
+  --border: var(--ink);
+  --text: var(--ink);
+  --text-h: var(--ink);
+  --code-bg: var(--surface);
+  --accent: var(--surface);
+  --accent-bg: var(--ink);
+  --accent-border: var(--ink);
+  --sans: var(--font-sans);
+  --heading: var(--font-mono);
+  --mono: var(--font-mono);
+
+  font: 18px/1.45 var(--font-sans);
+  color-scheme: light;
+  color: var(--ink);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  @media (max-width: 1024px) {
+    font-size: 16px;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+#root {
+  min-height: 100svh;
+  box-sizing: border-box;
+}
+
+h1,
+h2 {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+h1 {
+  font-size: 44px;
+  letter-spacing: -1.2px;
+  margin: 0 0 var(--space-4);
+
+  @media (max-width: 1024px) {
+    font-size: 32px;
+  }
+}
+
+h2 {
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+  margin: 0 0 var(--space-2);
+
+  @media (max-width: 1024px) {
+    font-size: 20px;
+  }
+}
+
+p {
+  margin: 0;
+}
+
+code,
+.counter {
+  font-family: var(--font-mono);
+  display: inline-flex;
+  border-radius: 4px;
+  color: var(--ink);
+}
+
+code {
+  font-size: 15px;
+  line-height: 1.35;
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface);
+  border: var(--hairline);
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+input {
+  font: inherit;
+  font-weight: 600;
+  padding: var(--space-2) var(--space-3);
+  border: var(--hairline);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+
+  &:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 1px;
+  }
+}
+
+button {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  padding: var(--space-2) var(--space-4);
+  border: var(--hairline);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 1px;
+  }
+
+  &.primary {
+    background: var(--ink);
+    color: var(--surface);
+
+    &:hover:not(:disabled) {
+      background: var(--ink);
+      color: var(--surface);
+    }
+  }
+}
+
+form button {
+  margin-top: var(--space-3);
+}
+
+// ---------------------------------------------------------------------------
+// 2. BEM component blocks
+// ---------------------------------------------------------------------------
+
+// Layout wrapper for the single-column room screens.
+.page {
+  max-width: 560px;
+  margin: var(--space-8) auto;
+  padding: 0 var(--space-5);
+  text-align: left;
+}
+.room
+// Room header row (title + status).
+.room-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+// Monochrome error emphasis — no color coding (spec §Notes for regeneration).
+.error {
+  color: var(--ink);
+  font-weight: 400;
+  font-size: 14px;
+  font-family: var(--font-mono);
+  margin: 0;
+  padding-top: 10px;
+}
+
+// Card surface — used across pages and components.
+.card {
+  background: var(--surface);
+  border: var(--hairline);
+  border-radius: var(--radius-card);
+  padding: var(--space-5);
+
+  h2 {
+    margin-top: 0;
+  }
+
+  &__title {
+    font-size: 16px;
+    margin-bottom: 16px;
+    font-weight: 600;
+  }
+}
+
+// Form field — a label wrapping its caption + control.
+.field {
+  &__label {
+    // marker target
+  }
+
+  &--required &__label::after {
+    content: ' *';
+    color: var(--ink);
+    position: relative;
+    top: -6px;
+    left: 0px;
+    font-size: 10px;
+  }
+}
+
+// Main page ("/") — intro above a horizontal pair of cards (spec §Main page).
+.landing {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-5);
+  box-sizing: border-box;
+  text-align: center;
+
+  &__intro {
+    max-width: 640px;
+  }
+
+  &__title {
+    font-family: var(--font-mono);
+    font-weight: 400;
+    font-size: 28px;
+    letter-spacing: 0;
+    margin: 0 0 var(--space-3);
+  }
+
+  &__description {
+    font-family: var(--font-mono);
+    font-weight: 400;
+    font-size: 16px;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+
+  // Cards positioned horizontally (spec §Main page); stack on small screens.
+  &__cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5);
+    width: 100%;
+    max-width: 760px;
+    align-items: start;
+    text-align: left;
+
+    // Neutralize any global vertical margin inside the grid layout.
+    > * {
+      margin: 0;
+    }
+
+    @media (max-width: 640px) {
+      grid-template-columns: 1fr;
+    }
+  }
+}
+
+// Deep-link join prompt (/room/:id with no identity): a single main-page card,
+// centered in the .landing shell and width-matched to one landing card.
+.join-card {
+  width: 100%;
+  max-width: 368px;
+  // .landing centers text; match the main-page cards' left-aligned content.
+  text-align: left;
+}
+
+// Home button pinned to the top-left of the join screen (matches the room
+// header's 24px edge offset). Borderless + transparent, filling surface on
+// hover — same ghost style as the room header's action buttons.
+.icon-btn.join-home {
+  position: fixed;
+  top: var(--space-5);
+  left: var(--space-5);
+  border: none;
+  background: transparent;
+
+  &:hover:not(:disabled) {
+    background: var(--surface);
+    color: var(--ink);
+  }
+}
+
+// Room-code input on the join form.
+.join-form {
+  &__code {
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Room page redesign (spec §Room page) — header / stage / participant grid.
+// ---------------------------------------------------------------------------
+
+// Room screen shell: centered column, wide enough for the stage footprint.
+.room {
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-5);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+// Header band: room code + icon buttons (left), segment control (center),
+// participant name + status (right). 24px edge offset comes from .room padding.
+.room-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--space-4);
+
+  // The `code | live | actions` strip. The gap spaces the segments around their
+  // separators; the icon buttons keep their own tight gap inside &__actions.
+  &__lead {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    justify-self: start;
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  // Vertical hairline between strip segments. Faint rather than solid ink: it
+  // groups the segments without competing with the room code.
+  &__sep {
+    width: 1px;
+    height: 14px;
+    background: var(--ink);
+    opacity: 0.25;
+  }
+
+  // Header icon buttons (copy/exit in the lead strip, the participants-roster
+  // trigger in the trail): borderless + transparent, filling white on hover
+  // rather than inverting to solid ink like the default ghost button. Note this
+  // is what makes the roster trigger borderless — it inherits the look from the
+  // header, so it would render as a bordered button anywhere else.
+  .icon-btn {
+    border: none;
+    background: transparent;
+
+    &:hover:not(:disabled) {
+      background: var(--surface);
+      color: var(--ink);
+    }
+  }
+
+  // Room code, mono — overrides the global h1 sizing (spec §Header).
+  &__code {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.4px;
+    margin: 0;
+  }
+
+  &__copied {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+
+  &__trail {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    justify-self: end;
+  }
+
+  // The current participant's name is a click-to-edit control: a button in
+  // display mode, an input in edit mode. Strip native chrome from both so they
+  // read as the bold heading, then layer hover/focus affordances. Monochrome —
+  // no color; state shows as a faint ink wash (mirrors .stage__title--edit).
+  &__name {
+    // Match the room code's typography (&__code): mono, tight tracking, so the
+    // two header ends read as one type system.
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.4px;
+    appearance: none;
+    margin: 0;
+    padding: 2px var(--space-2);
+    color: inherit;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+    transition: background-color 0.12s ease;
+
+    // Display mode (button): hover hints the name is editable; disabled (not
+    // live) reads as plain text.
+    &:is(button) {
+      cursor: pointer;
+
+      &:hover:not(:disabled) {
+        // Keep the ink text on hover (override the global button invert to a
+        // white-on-ink fill); the affordance is the faint wash, not a flip.
+        color: var(--ink);
+        background: color-mix(in srgb, var(--ink) 4%, transparent);
+      }
+
+      &:disabled {
+        cursor: default;
+      }
+    }
+
+    // Edit mode (input): visually indistinguishable from the display name.
+    &--edit {
+      cursor: text;
+
+      &:hover:not(:focus) {
+        background: color-mix(in srgb, var(--ink) 4%, transparent);
+      }
+
+      &:focus {
+        outline: none;
+        background: color-mix(in srgb, var(--ink) 4%, transparent);
+      }
+    }
+  }
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+    justify-items: start;
+
+    &__lead,
+    &__trail {
+      justify-self: start;
+    }
+  }
+}
+
+// Minimal outline/ghost icon buttons (spec §Icon buttons).
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1);
+  width: 32px;
+  height: 32px;
+  border: var(--hairline);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 1px;
+  }
+}
+
+// Dedicated view-switcher section above the stage: centers the segment control.
+.view-switcher {
+  display: flex;
+  justify-content: center;
+}
+
+// Two-item segment control (spec §Segment control): active bold, inactive muted.
+.segment {
+  display: inline-flex;
+  gap: 4px;
+
+  &__item {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 400;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink-muted);
+
+    &:hover:not(:disabled) {
+      background: transparent;
+      color: var(--ink);
+    }
+
+    // Active tab: white fill, no border; inactive stays transparent + borderless.
+    &--active {
+      color: var(--ink);
+      background: var(--surface);
+    }
+
+    // Keep the active tab's white fill on hover (don't drop back to transparent).
+    &--active:hover:not(:disabled) {
+      background: var(--surface);
+    }
+  }
+}
+
+// Task stage (spec §Stage): centered white card, max 900px, JetBrains Mono title.
+.stage {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: solid 1px #c6c6c6;
+  border-radius: var(--radius-container);
+  padding: var(--space-6);
+  text-align: center;
+
+  &__title {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 24px;
+    line-height: 1.3;
+    letter-spacing: -0.3px;
+    margin: 0;
+    overflow-wrap: anywhere;
+
+    @media (max-width: 1024px) {
+      font-size: 20px;
+    }
+
+    &--empty {
+      font-weight: 400;
+      color: var(--ink-muted);
+    }
+
+    // Host inline editor: a textarea that reads as the title itself. Strip the
+    // native chrome so it is visually indistinguishable from the read-only
+    // heading, then layer on hover/focus affordances (S9 → merged into Stage).
+    &--edit {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      appearance: none;
+      background: transparent;
+      border: 0;
+      border-radius: var(--radius-card);
+      padding: 2px var(--space-2);
+      padding-bottom: 4px;
+      padding-top: 4px;
+      color: inherit;
+      text-align: center;
+      resize: none;
+      overflow: hidden;
+      cursor: text;
+      transition: background-color 0.12s ease;
+
+      &::placeholder {
+        font-weight: 400;
+        color: var(--ink-muted);
+        opacity: 1;
+      }
+
+      &:hover:not(:disabled):not(:focus) {
+        background: color-mix(in srgb, var(--ink) 4%, transparent);
+      }
+
+      &:focus {
+        outline: none;
+        background: color-mix(in srgb, var(--ink) 4%, transparent);
+      }
+
+      // Locked (reconnecting or revealed): read as plain, non-editable text.
+      &:disabled {
+        cursor: default;
+        opacity: 1;
+      }
+    }
+  }
+
+  &__meta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    margin-top: 28px;
+  }
+
+  &__status {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: #000;
+    font-weight: 600;
+  }
+
+  &__counter {
+    font-size: 14px;
+    padding: 2px 8px;
+    border: var(--hairline);
+    border-radius: 999px;
+    background-color: var(--ink);
+    color: var(--surface);
+  }
+}
+
+// Participant grid (spec §Participant cards grid): auto-responsive columns,
+// matching the stage width. Column count adapts to the available width via
+// auto-fill — no explicit density control (S19, DN-C). The per-breakpoint min
+// track width tunes how small a card may get before another column drops, so
+// the grid stays legible from wide desktops down to narrow phones without ever
+// forcing horizontal page scroll (NFR-4).
+.participant-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 900px;
+  display: grid;
+  // Fixed-width tracks (not 1fr) so leftover row space goes to the sides:
+  // justify-content: center then centers any number of cards, including a
+  // partial final row or a grid that does not fill one row.
+  grid-template-columns: repeat(auto-fill, 110px);
+  justify-content: center;
+  gap: var(--space-4);
+
+  @media (max-width: 1024px) {
+    grid-template-columns: repeat(auto-fill, 96px);
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: repeat(auto-fill, 84px);
+    gap: var(--space-3);
+  }
+
+  @media (max-width: 400px) {
+    grid-template-columns: repeat(auto-fill, 72px);
+  }
+}
+
+// Portrait participant card (spec §Participant card): border + inner content
+// only, no color coding.
+.participant-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+
+  &__face {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    background: var(--surface);
+    border: var(--hairline);
+    border-radius: var(--radius-card);
+    color: var(--ink);
+  }
+
+  // Not voted: dashed border + `?` glyph.
+  &--not-voted &__face {
+    border-style: dashed;
+  }
+
+  &__mark,
+  &__value {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 28px;
+    line-height: 1;
+  }
+
+  &__name {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 14px;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+}
+
+// Stats view empty state (S18): shown when the stats segment is active but the
+// round is not yet revealed, so there are no values to present (FR-10).
+.stats-empty {
+  text-align: center;
+  color: var(--ink-muted);
+
+  &__hint {
+    font-family: var(--font-sans);
+    font-size: 14px;
+  }
+}
+
+// Host controls.
+// Host "I'm voting" opt-in, centered just below the stage status line.
+.host-voting {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+// Custom checkbox following the monochrome theme: white fill + solid black
+// border when unchecked, black fill + white tick when checked.
+.checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  // Reset the global input padding — with border-box it would otherwise exceed
+  // the 18px width and force the box to grow (making it non-square).
+  padding: 0;
+  box-sizing: border-box;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: var(--surface);
+  cursor: pointer;
+  position: relative;
+
+  &:checked {
+    background: var(--ink);
+  }
+
+  // White tick drawn from the corner of a rotated box (right + bottom borders).
+  &:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid var(--surface);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+// The single reveal/reset host action, centered below the participant cards.
+.host-reveal {
+  display: flex;
+  justify-content: center;
+}
+
+// Connection status, as one bare-text segment of the header strip. Monochrome
+// (spec §Notes for regeneration): with both the pill border and any weight
+// contrast gone, states separate by ink level — settled states take full ink,
+// in-flight ones stay muted — plus a strikethrough once the socket is dead.
+.status {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 400;
+  white-space: nowrap;
+  color: var(--ink);
+  cursor: default;
+
+  &--connecting,
+  &--reconnecting {
+    color: var(--ink-muted);
+  }
+
+  &--rejected {
+    text-decoration: line-through;
+  }
+}
+
+// The host's participants roster: an icon trigger in the header with a panel
+// anchored under it. Monochrome — a white surface on a solid hairline, matching
+// the card/stage treatment, so it reads as part of the same system.
+.participants-menu {
+  position: relative;
+  display: inline-flex;
+
+  &__panel {
+    position: absolute;
+    top: calc(100% + var(--space-2));
+    // Anchored to the trigger's right edge: the header's trailing group sits at
+    // the page edge, so a left-anchored panel would overflow the viewport.
+    right: 0;
+    z-index: 10;
+    // Scoped border-box: the stylesheet has no global reset, so without this the
+    // min/max widths would exclude the padding + border and the panel would run
+    // 26px wider than the values below claim.
+    box-sizing: border-box;
+    min-width: 200px;
+    max-width: 280px;
+    // A full room is ROOM_CAPACITY = 30 (backend/app/config.py), which is taller
+    // than most viewports; the header is static, so without its own scroller the
+    // tail of the list could only be reached by scrolling the whole page.
+    max-height: min(50vh, 420px);
+    overflow-y: auto;
+    padding: var(--space-3);
+    border: var(--hairline);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    text-align: left;
+  }
+
+  &__title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-2);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--ink-muted);
+  }
+
+  &__count {
+    font-family: var(--font-mono);
+    font-weight: 400;
+    letter-spacing: 0;
+  }
+
+  &__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-1) 0;
+    font-size: 14px;
+
+    // Hairline rules between rows only, so the panel edge is not doubled.
+    & + & {
+      border-top: 1px solid var(--rule-faint);
+    }
+  }
+
+  // Names run to MAX_DISPLAY_NAME_LENGTH (40), which overruns the panel width.
+  // min-width: 0 is required for the ellipsis: a flex item defaults to
+  // min-width: auto and would otherwise refuse to shrink below its text.
+  &__name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // Marks the viewer's own row. Mono + muted so it reads as a tag, not a name.
+  &__badge {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-muted);
+  }
+}
+
+// Topic display + host editor.
+// Host topic editor (the read-only variant moved to the Stage, S14).
+.topic {
+  &__form {
+    flex-direction: row;
+  }
+
+  &__input {
+    flex: 1;
+  }
+}
+
+// Fibonacci vote deck (spec §Voting cards): a horizontal row of rounded-square
+// cards. Selected card is filled black with a white number; the rest are
+// outlined black-on-white. State is border + fill only — no color coding.
+// Voting deck pinned to the bottom of the room (spec §Voting cards). No panel
+// chrome — the bar carries no border and blends into the page so only the
+// cards read as visible elements; it stays in view as the room scrolls.
+.vote-bar {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  padding: var(--space-4) 0;
+  background: var(--bg);
+}
+
+.vote-deck {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+
+  &__card {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+    border-radius: var(--radius-card);
+
+    // Selected: filled ink with a white number. Kept on hover too, so hovering
+    // the active card does not read as a state change.
+    &--selected,
+    &--selected:hover:not(:disabled) {
+      background: var(--ink);
+      color: var(--surface);
+      font-weight: 700;
+    }
+
+    @media (max-width: 640px) {
+      width: 52px;
+      height: 52px;
+      font-size: 18px;
+    }
+  }
+}
+
+// Revealed results.
+.results {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  &__value {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--text-h);
+  }
+
+  &__badge {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    background: var(--accent-bg);
+    color: var(--accent);
+
+    &--consensus {
+      background: var(--ok-bg, var(--accent-bg));
+      color: var(--ok, var(--accent));
+    }
+  }
+
+  &__stats {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+}
