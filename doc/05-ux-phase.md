@@ -151,3 +151,43 @@ small-screen usability across all screens. **Refs:** phase "In scope"
 Finalize labels and messages — replace dev placeholders ("View 1 (cards)",
 "View 2 (stats)"), room-full and error copy, empty/first-round states. **Refs:**
 phase "In scope" (copy clarity).
+
+### S23 — Host participants roster (UI only) · `DONE`
+A users icon beside the host's name in the header opens a panel listing every
+participant, with the host's own row tagged `me`. Renders **existing snapshot
+data only** (`room.participants`) — no new frames, no functional outcome change,
+so it sits inside this phase's guiding principle. Unlike the card grid it lists
+an opted-out host too, since they are in the room even when excluded from voting
+(FR-17). Host-gated because it is the anchor for the actions in DN-E below.
+**Refs:** FR-17; spec §Room page/Header, §Icon buttons.
+
+- **DN-E — Per-row host actions.** ⛔ *Not resolved — blocks any follow-up.*
+  The roster is intended to host **delegate host role** and **kick participant**
+  next. Both are new *functional* behavior, not UX polish: they need new WS
+  frames plus backend domain rules (who may delegate, what a kicked participant
+  sees, how kick interacts with the host-transfer window that makes `host_id`
+  briefly null). Per this phase's guiding principle these are **out of scope for
+  the UX phase** and require decision entries in
+  [03-decisions.md](03-decisions.md) before being built. S23 ships the anchor
+  only; the roster rows are deliberately inert text, and the panel uses
+  `role="group"` rather than `role="menu"` until real menuitems exist.
+
+  **Security prerequisite — fix `attach` first.** A security review of S23 found
+  a pre-existing hole that these two actions would turn from nuisance into room
+  takeover. `ws.py`'s `AttachFrame` branch authenticates on `participant_id`
+  alone, checking only *membership* — and `room_view` broadcasts every
+  `participant.id` **and** `host_id` to every client. So any member can reopen a
+  socket as `host_id` and pass `Room._require_host`. Today's ceiling is
+  nuisance (force reveal/reset, rewrite the topic). With kick + delegate it
+  becomes: any participant can evict everyone else and seize host permanently.
+  Required before those frames ship:
+  1. Issue an unguessable per-participant session token at join, return it only
+     to the joining client, never include it in `room_view`, and require it on
+     `attach` (compare with `hmac.compare_digest`; keep the error identical to
+     the unknown-id case so it is not a membership oracle).
+  2. Authorize every new frame in the domain via `_require_host`, matching
+     `set_item`/`reveal`/`reset`. Client-side `isHost` is a UX affordance only.
+  3. New frames carry a **target** id and no actor id — the actor is the
+     socket's handshake identity, as with every existing frame.
+  4. Guard `kick` against targeting the host, verify `delegate_host`'s target is
+     a current member, and log actor/target/room/outcome for both.

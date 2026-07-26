@@ -1,4 +1,4 @@
-import { Home, Copy, LogOut, CircleCheck } from 'lucide-react'
+import { Home, Copy, LogOut, CircleCheck, Users } from 'lucide-react'
 import type { LucideProps } from 'lucide-react'
 
 // Central icon module. We use lucide-react for consistent, battle-tested outline
@@ -11,6 +11,7 @@ export type IconProps = LucideProps
 export const HomeIcon = (props: IconProps) => <Home size={18} {...props} />
 export const CopyIcon = (props: IconProps) => <Copy size={18} {...props} />
 export const ExitIcon = (props: IconProps) => <LogOut size={18} {...props} />
+export const UsersIcon = (props: IconProps) => <Users size={18} {...props} />
 
 // The participant "voted" state uses a larger check-in-circle glyph.
 export const CheckIcon = (props: IconProps) => <CircleCheck size={28} {...props} />

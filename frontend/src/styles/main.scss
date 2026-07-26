@@ -11,6 +11,10 @@
 
   // Borders + radii (spec §Global styling).
   --hairline: 1px solid var(--ink);
+  // A faint internal divider, for rules *inside* a hairline-bordered container
+  // where a second solid line would read as a doubled edge. Derived from --ink,
+  // so it stays inside the monochrome system.
+  --rule-faint: color-mix(in srgb, var(--ink) 12%, transparent);
   --radius-container: 14px; // containers ~12–16px
   --radius-card: 10px; // cards ~8–12px
 
@@ -376,8 +380,11 @@ form button {
     opacity: 0.25;
   }
 
-  // Header action buttons (copy/exit): borderless + transparent, filling white
-  // on hover rather than inverting to solid ink like the default ghost button.
+  // Header icon buttons (copy/exit in the lead strip, the participants-roster
+  // trigger in the trail): borderless + transparent, filling white on hover
+  // rather than inverting to solid ink like the default ghost button. Note this
+  // is what makes the roster trigger borderless — it inherits the look from the
+  // header, so it would render as a bordered button anywhere else.
   .icon-btn {
     border: none;
     background: transparent;
@@ -808,6 +815,96 @@ form button {
 
   &--rejected {
     text-decoration: line-through;
+  }
+}
+
+// The host's participants roster: an icon trigger in the header with a panel
+// anchored under it. Monochrome — a white surface on a solid hairline, matching
+// the card/stage treatment, so it reads as part of the same system.
+.participants-menu {
+  position: relative;
+  display: inline-flex;
+
+  &__panel {
+    position: absolute;
+    top: calc(100% + var(--space-2));
+    // Anchored to the trigger's right edge: the header's trailing group sits at
+    // the page edge, so a left-anchored panel would overflow the viewport.
+    right: 0;
+    z-index: 10;
+    // Scoped border-box: the stylesheet has no global reset, so without this the
+    // min/max widths would exclude the padding + border and the panel would run
+    // 26px wider than the values below claim.
+    box-sizing: border-box;
+    min-width: 200px;
+    max-width: 280px;
+    // A full room is ROOM_CAPACITY = 30 (backend/app/config.py), which is taller
+    // than most viewports; the header is static, so without its own scroller the
+    // tail of the list could only be reached by scrolling the whole page.
+    max-height: min(50vh, 420px);
+    overflow-y: auto;
+    padding: var(--space-3);
+    border: var(--hairline);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    text-align: left;
+  }
+
+  &__title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-2);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--ink-muted);
+  }
+
+  &__count {
+    font-family: var(--font-mono);
+    font-weight: 400;
+    letter-spacing: 0;
+  }
+
+  &__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-1) 0;
+    font-size: 14px;
+
+    // Hairline rules between rows only, so the panel edge is not doubled.
+    & + & {
+      border-top: 1px solid var(--rule-faint);
+    }
+  }
+
+  // Names run to MAX_DISPLAY_NAME_LENGTH (40), which overruns the panel width.
+  // min-width: 0 is required for the ellipsis: a flex item defaults to
+  // min-width: auto and would otherwise refuse to shrink below its text.
+  &__name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // Marks the viewer's own row. Mono + muted so it reads as a tag, not a name.
+  &__badge {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-muted);
   }
 }
 

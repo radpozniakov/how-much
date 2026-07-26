@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { FC, KeyboardEvent } from 'react'
+import type { FC, KeyboardEvent, ReactNode } from 'react'
 import type { ConnectionStatus } from '../../lib/roomSocket'
 import { MAX_DISPLAY_NAME_LENGTH } from '../../lib/limits'
 import { StatusIndicator } from '../StatusIndicator/StatusIndicator'
@@ -17,6 +17,10 @@ export interface RoomHeaderProps {
   // Leave the room (clear the per-tab identity + navigate home).
   onExit: () => void
   status: ConnectionStatus
+  // Optional control rendered beside the participant name. Host-only in practice
+  // (the participants roster menu), but the header stays agnostic about who may
+  // see it — Room decides, the same way Stage takes a `statusControl` slot.
+  participantsMenu?: ReactNode
 }
 
 // The room header band (spec §Room page/Header): a `code | live | actions` strip
@@ -29,6 +33,7 @@ export const RoomHeader: FC<RoomHeaderProps> = ({
   onRename,
   onExit,
   status,
+  participantsMenu,
 }) => {
   const [copied, setCopied] = useState(false)
 
@@ -150,6 +155,7 @@ export const RoomHeader: FC<RoomHeaderProps> = ({
             {participantName}
           </button>
         )}
+        {participantsMenu}
       </div>
     </header>
   )

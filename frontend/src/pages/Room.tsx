@@ -9,6 +9,7 @@ import {
 } from '../components/HostControls/HostControls'
 import { JoinPrompt } from '../components/JoinPrompt/JoinPrompt'
 import { ParticipantGrid } from '../components/ParticipantGrid/ParticipantGrid'
+import { ParticipantsMenu } from '../components/ParticipantsMenu/ParticipantsMenu'
 import { RoomHeader } from '../components/RoomHeader/RoomHeader'
 import { Stage } from '../components/Stage/Stage'
 import { StatsView } from '../components/StatsView/StatsView'
@@ -103,6 +104,17 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
         onRename={setName}
         onExit={exitRoom}
         status={status}
+        // Host-only roster beside the name. Gated here rather than inside the
+        // header so the header stays a dumb band; the host actions this anchors
+        // next (delegate, kick) are host-only too, so the whole control is.
+        participantsMenu={
+          isHost && room ? (
+            <ParticipantsMenu
+              participants={room.participants}
+              currentParticipantId={participantId}
+            />
+          ) : undefined
+        }
       />
 
       {error && (

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { Room } from './Room'
@@ -63,6 +63,54 @@ describe('Room (S9 wiring)', () => {
     )
     expect(
       screen.queryByRole('button', { name: 'Reveal cards' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the participants roster to the host, listing everyone with self as "me"', async () => {
+    const user = userEvent.setup()
+    renderRoomAs('pid-1')
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        // An opted-out host is absent from the card grid (FR-17); the roster
+        // must list them regardless, so assert with host_voting off.
+        host_voting: false,
+        participants: [
+          makeParticipant({ id: 'pid-1', name: 'Alice' }),
+          makeParticipant({ id: 'pid-2', name: 'Bob' }),
+        ],
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Room participants' }))
+
+    // Scoped to the panel: ParticipantGrid is also a list of participants, so an
+    // unscoped listitem query would match its cards too. Named, so a future
+    // fieldset or grouped control on this page cannot silently capture it.
+    const panel = screen.getByRole('group', { name: /participants/i })
+    const rows = within(panel).getAllByRole('listitem')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toHaveTextContent('Alice')
+    expect(rows[1]).toHaveTextContent('Bob')
+    // getByText, not toHaveTextContent: the latter matches substrings, so the
+    // negative assertion would wrongly pass for any name containing "me".
+    expect(within(rows[0]).getByText('me')).toBeInTheDocument()
+    expect(within(rows[1]).queryByText('me')).not.toBeInTheDocument()
+  })
+
+  it('hides the participants roster from a non-host', () => {
+    renderRoomAs('pid-2')
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        participants: [
+          makeParticipant({ id: 'pid-1', name: 'Alice' }),
+          makeParticipant({ id: 'pid-2', name: 'Bob' }),
+        ],
+      }),
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Room participants' }),
     ).not.toBeInTheDocument()
   })
 

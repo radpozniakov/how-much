@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FC, SyntheticEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { joinRoom, requestErrorMessage } from '../../lib/api'
+import { MAX_DISPLAY_NAME_LENGTH } from '../../lib/limits'
 import { saveSession } from '../../lib/session'
 import { HomeIcon } from '../icons'
 
@@ -51,7 +52,7 @@ export const JoinPrompt: FC<JoinPromptProps> = ({ code, onJoined }) => {
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              maxLength={40}
+              maxLength={MAX_DISPLAY_NAME_LENGTH}
               autoComplete="off"
               required
             />

@@ -26,6 +26,32 @@ describe('RoomHeader', () => {
     expect(screen.getByText('Alice')).toBeInTheDocument()
   })
 
+  describe('participantsMenu slot', () => {
+    it('is absent by default', () => {
+      renderHeader()
+      expect(screen.queryByTestId('slot')).not.toBeInTheDocument()
+    })
+
+    it('renders the injected control beside the name', () => {
+      renderHeader({ participantsMenu: <span data-testid="slot">roster</span> })
+      expect(screen.getByTestId('slot')).toBeInTheDocument()
+    })
+
+    it('keeps the control mounted while the name is being edited', async () => {
+      // The trailing group swaps the name button for an input in edit mode; the
+      // slot sits outside that ternary and must survive the swap.
+      const user = userEvent.setup()
+      renderHeader({ participantsMenu: <span data-testid="slot">roster</span> })
+
+      await user.click(screen.getByRole('button', { name: 'Alice' }))
+
+      expect(
+        screen.getByRole('textbox', { name: 'Your display name' }),
+      ).toBeInTheDocument()
+      expect(screen.getByTestId('slot')).toBeInTheDocument()
+    })
+  })
+
   it('copies the shareable room link on the copy button', async () => {
     // userEvent.setup() installs a jsdom clipboard; spy on it to capture the
     // link the component writes.
