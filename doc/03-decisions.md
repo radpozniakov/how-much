@@ -23,10 +23,10 @@ initial requirements interview.
   values when creating it. Still true, and the reason D-48 is only a partial
   supersession: one deck per room, chosen once, with no presets or saved decks.
 - **D-8 Cards: numbers only.** No `?` (unsure) or coffee card in MVP — keep the
-  deck minimal. Set is `0, 1, 2, 3, 5, 8, 13, 21` — no `40`/`100`.
+  deck minimal. Set is `1, 2, 3, 5, 8, 13, 21` — no `40`/`100`.
   **Untouched by D-48**, and deliberately so: a host-chosen deck is still numbers
   only. The set named above moved from "the cards" to "the default cards"; that a
-  card *is* a number did not move at all.
+  card *is* a number did not move at all. **D-49** later dropped its leading `0`.
 - **D-9 Identity: name only, no auth.** Lowest friction; no accounts to build.
 - **D-10 Names non-unique.** Duplicates allowed; internal ID disambiguates. Avoids
   validation UX.
@@ -455,21 +455,29 @@ closes.
   called by `CreateRoomRequest`), so a bad deck is a `422` on creation rather than a
   room that is already broken, and the domain sees a deck valid by construction.
   The rules: split on commas, trim, **drop empty segments** (a trailing comma is
-  typing, not intent); each value a finite non-negative number below `1000` and at
-  most 6 characters once normalized; **2 to 15** cards; order preserved as entered,
-  never sorted.
+  typing, not intent); each value a finite number in `[1, 999]` and at most 6
+  characters once normalized; **2 to 12** cards; order preserved as entered, never
+  sorted. *(Ranges and deck size restated by **D-49**; originally `[0, 1000)` and
+  2 to 15.)*
   **Duplicates are rejected, not silently deduped** — the one genuinely debatable
   rule here. Dedup is friendlier; rejection is honest, and `1, 1, 2` is a typo whose
   quiet correction would hand the host a deck that differs from what they typed.
   Pinned by test as *decided* rather than left to be rediscovered.
-  **Normalization is load-bearing, not cosmetic.** `1.0` → `1`, `01` → `1`, `.5` →
-  `0.5`, all before storage, because `Room.results()` computes consensus by
+  **Normalization is load-bearing, not cosmetic.** `1.0` → `1`, `01` → `1`, `1.50`
+  → `1.5`, all before storage, because `Room.results()` computes consensus by
   comparing the card *strings* (`len(set(votes.values())) == 1`). An un-normalized
   deck holding both `1` and `1.0` would let two voters who actually agree fail to
   read as consensus. Canonicalizing also turns that pair into the duplicate it is,
   so the two rules reinforce each other.
+  **The lower bound is what keeps that normalization honest.** Below `1e-4` `str`
+  switches to exponent form, so a card would store as `1e-05` — contradicting the
+  promise that what the room shows is a plain number, and at five characters short
+  enough to slip the length bound, on a deck that is immutable. Found in review of
+  this slice, when the floor was `0.0001` and admitted exactly that. **D-49** raised
+  the floor to `1` and so excludes the case by range rather than by guard; the
+  argument for *rejecting* rather than re-spelling is recorded there.
   **Consequences:**
-  - **`results()` had to stop parsing cards as `int`.** `int("0.5")` raises
+  - **`results()` had to stop parsing cards as `int`.** `int("1.5")` raises
     `ValueError` — a 500, not a domain error, and only on reveal, so a room with a
     decimal card would look fine right up until the first reveal. It is `float` now,
     pinned by a decimal-deck test at the domain level and an E2E through the real
@@ -497,3 +505,32 @@ closes.
     — but a mistyped deck is an ordinary outcome, so `api.ts` strips the prefix. That
     is a leaked implementation detail, not a wording choice, so it is fixed here
     rather than left to S22.
+
+- **D-49 Card values are `1`–`999`; a deck holds at most 12.** Tightens the D-48
+  bounds: the floor rises from `0` to `1`, the ceiling becomes inclusive `999`
+  instead of exclusive `1000`, and `MAX_DECK_SIZE` drops from 15 to 12. Decimals
+  are untouched *inside* the range — `1.5` is still a card — so this bounds how
+  small a value may be, not how round.
+  **The default deck lost its leading `0`**, becoming `1, 2, 3, 5, 8, 13, 21`. This
+  is the consequence that reaches a user, and it is forced rather than incidental:
+  `CreateRoomForm` prints the default verbatim as the "leave blank for…" hint, so a
+  default outside the bounds would be a suggestion the form rejects with a 422 when
+  a host copied it. The alternative — exempt `0` from the floor and keep the eight-
+  card default — was considered and dropped: a floor with a footnote is harder to
+  state than a floor, and the exemption would exist only to preserve one card. The
+  cost is accepted: a host who wants a zero card cannot have one.
+  A test now pins the property rather than the value — `parse_deck` over the joined
+  default must return the default — so any future drift between the constant and
+  the rules fails at the boundary instead of in a host's face. Nothing else pinned
+  it: `Room.deck` accepts any tuple, because validation is at the create boundary
+  and nowhere else (D-48).
+  **It also retires a guard.** With a floor of 1 no accepted value can reach
+  exponent notation, so the `1e-05`-on-a-card-face bug D-48 records is excluded by
+  the range. The reasoning behind *rejecting* such values rather than re-spelling
+  them is kept because it still governs: expanding with `format(…, "f")` rounds to
+  six decimals, which would turn `1e-7` into `0` and `1.0000001` into `1` — a value
+  quietly changed underneath the host, which is worse than a bound they are told
+  about. The same call explains why the negative check is gone: `-1`, `0` and `0.5`
+  now fail one rule with one message instead of two rules with two.
+  `MAX_CARD_LENGTH` stays 6 and is still load-bearing — `1.23456` is inside the
+  range and too long to print on a card.

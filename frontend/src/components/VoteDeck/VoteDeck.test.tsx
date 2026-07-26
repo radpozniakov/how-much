@@ -157,13 +157,13 @@ describe('VoteDeck', () => {
     const onVote = vi.fn()
     render(
       <VoteDeck
-        deck={['0', '0.5', '1', '2']}
+        deck={['1', '1.5', '2', '3']}
         hasVoted={false}
         revealed={false}
         onVote={onVote}
       />,
     )
-    fireEvent.click(card('0.5'))
-    expect(onVote).toHaveBeenCalledWith('0.5')
+    fireEvent.click(card('1.5'))
+    expect(onVote).toHaveBeenCalledWith('1.5')
   })
 })

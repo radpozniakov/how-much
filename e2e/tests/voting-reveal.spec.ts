@@ -140,10 +140,13 @@ test.describe('Voting & reveal', () => {
     browser,
   }) => {
     // Fibonacci is the default rather than the constraint since V4 (D-48), and
-    // this is what "left the field blank" gets you.
+    // this is what "left the field blank" gets you. Spelled out on purpose: this
+    // is the one place the default's actual values are checked against the real
+    // server, so the backend constant and the client's hint mirror cannot drift
+    // apart unnoticed. No leading 0 since the card floor became 1 (D-49).
     const { a, cleanup } = await setupRoom(browser)
     const deck = voteDeck(a).getByRole('button')
-    await expect(deck).toHaveText(['0', '1', '2', '3', '5', '8', '13', '21'])
+    await expect(deck).toHaveText(['1', '2', '3', '5', '8', '13', '21'])
     await cleanup()
   })
 
@@ -187,19 +190,21 @@ test.describe('Voting & reveal', () => {
     browser,
   }) => {
     // The V4 landmine through the real stack: `results()` parsed cards with
-    // `int()`, so a room holding `0.5` looked fine until the first reveal, then
-    // 500'd. Only an actual reveal over the socket proves the fix.
-    const { host, a, b, cleanup } = await setupRoom(browser, '0, 0.5, 1, 2')
+    // `int()`, so a room holding a half-point card looked fine until the first
+    // reveal, then 500'd. Only an actual reveal over the socket proves the fix.
+    // The half card is `1.5` rather than `0.5` since the floor became 1 (D-49):
+    // the rule bounds how small a card is, not how round.
+    const { host, a, b, cleanup } = await setupRoom(browser, '1, 1.5, 2, 3')
 
-    await voteCard(a, '0.5').click()
-    await voteCard(b, '1').click()
+    await voteCard(a, '1.5').click()
+    await voteCard(b, '2').click()
     await revealButton(host).click()
 
     await showStats(host)
-    await expect(resultEntry(host, 'Ann')).toContainText('0.5')
-    await expect(resultEntry(host, 'Ben')).toContainText('1')
-    // (0.5 + 1) / 2 = 0.75, which Results formats to one decimal place.
-    await expect(card(host, 'Results')).toContainText('0.8')
+    await expect(resultEntry(host, 'Ann')).toContainText('1.5')
+    await expect(resultEntry(host, 'Ben')).toContainText('2')
+    // (1.5 + 2) / 2 = 1.75, which Results formats to one decimal place.
+    await expect(card(host, 'Results')).toContainText('1.8')
 
     await cleanup()
   })

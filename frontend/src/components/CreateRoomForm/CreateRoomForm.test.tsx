@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { CreateRoomForm } from './CreateRoomForm'
 import * as api from '../../lib/api'
+import { FIBONACCI_DECK } from '../../lib/deck'
 import * as session from '../../lib/session'
 import { makeRoom } from '../../test/fixtures'
 
@@ -81,8 +82,14 @@ describe('CreateRoomForm', () => {
     const cards = screen.getByLabelText('Card values')
     expect(cards).not.toBeRequired()
     // The hint names the deck a blank field yields, and describes the input
-    // rather than joining its accessible name.
-    expect(cards).toHaveAccessibleDescription(/0, 1, 2, 3, 5, 8, 13, 21/)
+    // rather than joining its accessible name. Read off the constant rather than
+    // spelled out: what this pins is that the hint and the default cannot drift
+    // apart, and the default's actual values are pinned against the real server
+    // in the e2e (voting-reveal.spec.ts) where a mismatch would matter.
+    // A substring match, not the whole hint: S22 owns the surrounding wording.
+    expect(cards).toHaveAccessibleDescription(
+      new RegExp(FIBONACCI_DECK.join(', ')),
+    )
   })
 
   it('surfaces a rejected deck inline and stays on the page', async () => {

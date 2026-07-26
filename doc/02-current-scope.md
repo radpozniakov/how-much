@@ -23,7 +23,7 @@ The smallest set that makes a real estimation session usable.
 | Identity | Name only, non-unique, internal ID distinguishes participants |
 | Rename | A participant can rename themselves at any time; everyone sees it live |
 | Capacity | Up to 30 participants per room |
-| Deck | Numbers only, no special cards; `0,1,2,3,5,8,13,21` by default |
+| Deck | Numbers only, no special cards; 2–12 cards from 1 to 999, `1,2,3,5,8,13,21` by default |
 | Card values | Host sets the room's cards when creating it (2–15 numbers, comma-separated); fixed for the room's life |
 | Item | Single current item with optional free-text topic |
 | Voting | Private selection; changeable until reveal |

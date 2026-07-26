@@ -31,7 +31,7 @@ def _normalize_card(raw: str) -> str:
     holding both ``1`` and ``1.0`` would let two voters who actually agree fail to
     read as consensus. Normalizing here means such a deck is rejected as the
     duplicate it is (see :func:`parse_deck`), and that every stored card has one
-    spelling: ``1.0`` -> ``1``, ``01`` -> ``1``, ``.5`` -> ``0.5``.
+    spelling: ``1.0`` -> ``1``, ``01`` -> ``1``, ``1.50`` -> ``1.5``.
 
     Parsing is Python's ``float``, which is deliberately permissive: ``1e2`` and
     ``+5`` are accepted and normalized to ``100`` and ``5``. Nothing is lost by
@@ -39,10 +39,16 @@ def _normalize_card(raw: str) -> str:
     number — and the bounds below are applied to the normalized form, which is
     what actually reaches a card face.
 
+    The value range makes that promise cheap to keep: ``str`` only reaches for
+    exponent notation below ``1e-4``, and ``MIN_CARD_VALUE`` of 1 puts that far out
+    of reach, so no accepted card can be spelled ``1e-05``. It was a live hazard
+    when the floor was ``0.0001`` (D-49) and is now excluded by the range rather
+    than guarded against.
+
     Raises:
-        ValueError: if the segment is not a finite, non-negative number, is not
-            below ``MAX_CARD_VALUE``, or is longer than ``MAX_CARD_LENGTH``
-            characters once normalized.
+        ValueError: if the segment is not a finite number, is outside
+            ``MIN_CARD_VALUE``..``MAX_CARD_VALUE`` inclusive, or is longer than
+            ``MAX_CARD_LENGTH`` characters once normalized.
     """
     try:
         value = float(raw)
@@ -50,13 +56,19 @@ def _normalize_card(raw: str) -> str:
         raise ValueError(f"{raw!r} is not a number") from None
     # `inf`/`nan` parse as floats, so they need naming here rather than falling
     # through the comparisons below — `nan` fails every one of them and would
-    # otherwise be reported as negative, which it is not.
+    # otherwise be reported as too small, which it is not.
     if not math.isfinite(value):
         raise ValueError(f"{raw!r} is not a number")
-    if value < 0:
-        raise ValueError(f"{raw!r} is negative; card values must be zero or more")
-    if value >= config.MAX_CARD_VALUE:
-        raise ValueError(f"{raw!r} is too large; card values must be below 1000")
+    # The floor subsumes the old negative check: -1 is not a card for the same
+    # reason 0 and 0.5 are not, and one message says so once.
+    if value < config.MIN_CARD_VALUE:
+        raise ValueError(
+            f"{raw!r} is too small; card values must be {config.MIN_CARD_VALUE} or more"
+        )
+    if value > config.MAX_CARD_VALUE:
+        raise ValueError(
+            f"{raw!r} is too large; card values must be {config.MAX_CARD_VALUE} or less"
+        )
     card = str(int(value)) if value.is_integer() else str(value)
     if len(card) > config.MAX_CARD_LENGTH:
         raise ValueError(

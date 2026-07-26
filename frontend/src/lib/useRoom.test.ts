@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { useRoom } from './useRoom'
 import { clearSession, loadSession, saveSession } from './session'
+import { FIBONACCI_DECK } from './deck'
 import type { RoomView } from '../types'
 import { MockWebSocket, deliver, lastSocket } from '../test/mockWebSocket'
 
 const fakeRoom: RoomView = {
   code: 'ABCDEF',
-  deck: ['0', '1', '2', '3', '5', '8', '13', '21'],
+  deck: [...FIBONACCI_DECK],
   host_id: 'pid-1',
   participants: [{ id: 'pid-1', name: 'Alice', has_voted: false }],
   current_item: null,

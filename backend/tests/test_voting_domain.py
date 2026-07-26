@@ -6,6 +6,7 @@ independently of any transport (S6). Reveal, reset, and results stats are S4.
 
 import pytest
 from app import config
+from app.rooms.deck import parse_deck
 from app.rooms.errors import (
     HostNotVoting,
     InvalidCard,
@@ -25,9 +26,18 @@ def _room_with(*names: str) -> tuple[Room, list[str]]:
 def test_default_deck_is_exactly_fibonacci():
     # Guards D-8: numbers only, no 40/100, no special cards. Since V4 (D-48) this
     # is the *default* rather than the constraint — a room whose host named no card
-    # values gets exactly this, and `Room.deck` defaults to it.
-    assert config.FIBONACCI_DECK == ("0", "1", "2", "3", "5", "8", "13", "21")
+    # values gets exactly this, and `Room.deck` defaults to it. No leading 0 since
+    # D-49 raised the floor to 1.
+    assert config.FIBONACCI_DECK == ("1", "2", "3", "5", "8", "13", "21")
     assert Room(code="ROOM01").deck == config.FIBONACCI_DECK
+
+
+def test_the_default_deck_is_a_deck_a_host_could_have_typed():
+    # The default is a *suggestion* — `CreateRoomForm` prints it as what leaving the
+    # field blank gives you — so it has to survive the same rules a typed deck does.
+    # Nothing else pins that: `Room.deck` takes any tuple, so a default that drifted
+    # outside the bounds would only surface as a 422 on a host copying the hint.
+    assert parse_deck(", ".join(config.FIBONACCI_DECK)) == config.FIBONACCI_DECK
 
 
 # --- item -------------------------------------------------------------------
@@ -102,17 +112,17 @@ def test_a_fibonacci_card_absent_from_a_custom_deck_is_rejected():
 
 
 def test_a_decimal_card_is_votable():
-    room, alice = _custom_room(("0", "0.5", "1", "2"))
-    room.cast_vote(alice, "0.5")
-    assert room.votes[alice] == "0.5"
+    room, alice = _custom_room(("1", "1.5", "2", "3"))
+    room.cast_vote(alice, "1.5")
+    assert room.votes[alice] == "1.5"
 
 
 def test_a_card_matching_only_before_normalization_is_rejected():
     # Deck membership is exact string matching, which is why the boundary
-    # normalizes: this room holds "0.5", so "0.50" is not one of its cards.
-    room, alice = _custom_room(("0", "0.5", "1", "2"))
+    # normalizes: this room holds "1.5", so "1.50" is not one of its cards.
+    room, alice = _custom_room(("1", "1.5", "2", "3"))
     with pytest.raises(InvalidCard):
-        room.cast_vote(alice, "0.50")
+        room.cast_vote(alice, "1.50")
 
 
 def test_unknown_participant_cannot_vote():
