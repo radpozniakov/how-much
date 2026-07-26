@@ -352,11 +352,28 @@ form button {
   align-items: center;
   gap: var(--space-4);
 
+  // The `code | live | actions` strip. The gap spaces the segments around their
+  // separators; the icon buttons keep their own tight gap inside &__actions.
   &__lead {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: var(--space-2);
     justify-self: start;
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  // Vertical hairline between strip segments. Faint rather than solid ink: it
+  // groups the segments without competing with the room code.
+  &__sep {
+    width: 1px;
+    height: 14px;
+    background: var(--ink);
+    opacity: 0.25;
   }
 
   // Header action buttons (copy/exit): borderless + transparent, filling white
@@ -377,7 +394,7 @@ form button {
     font-weight: 700;
     font-size: 16px;
     letter-spacing: -0.4px;
-    margin: 0 8px 0 0;
+    margin: 0;
   }
 
   &__copied {
@@ -772,29 +789,24 @@ form button {
   justify-content: center;
 }
 
-// Connection status pill. Monochrome (spec §Notes for regeneration): states are
-// distinguished by border style + weight + emphasis, never by color.
+// Connection status, as one bare-text segment of the header strip. Monochrome
+// (spec §Notes for regeneration): with both the pill border and any weight
+// contrast gone, states separate by ink level — settled states take full ink,
+// in-flight ones stay muted — plus a strikethrough once the socket is dead.
 .status {
   font-family: var(--font-mono);
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: var(--hairline);
+  font-size: 16px;
+  font-weight: 400;
   white-space: nowrap;
   color: var(--ink);
-
-  &--live {
-    font-weight: 600;
-  }
+  cursor: default;
 
   &--connecting,
   &--reconnecting {
     color: var(--ink-muted);
-    border-style: dashed;
   }
 
   &--rejected {
-    font-weight: 600;
     text-decoration: line-through;
   }
 }

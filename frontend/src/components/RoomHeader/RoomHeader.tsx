@@ -19,8 +19,8 @@ export interface RoomHeaderProps {
   status: ConnectionStatus
 }
 
-// The room header band (spec §Room page/Header): room code + copy/exit icon
-// buttons top-left, and the current participant name + status top-right. The
+// The room header band (spec §Room page/Header): a `code | live | actions` strip
+// top-left, hairline-separated, and the current participant name top-right. The
 // participant-view segment control lives in its own section above the stage
 // (ViewSwitcher). Monochrome, ghost icon buttons distinguished by content only.
 export const RoomHeader: FC<RoomHeaderProps> = ({
@@ -99,24 +99,29 @@ export const RoomHeader: FC<RoomHeaderProps> = ({
     <header className="room-header">
       <div className="room-header__lead">
         <h1 className="room-header__code">{code}</h1>
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={copyLink}
-          aria-label="Copy room link"
-          title={copied ? 'Copied!' : 'Copy room link'}
-        >
-          <CopyIcon />
-        </button>
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={onExit}
-          aria-label="Leave room"
-          title="Leave room"
-        >
-          <ExitIcon />
-        </button>
+        <span className="room-header__sep" aria-hidden="true" />
+        <StatusIndicator status={status} />
+        <span className="room-header__sep" aria-hidden="true" />
+        <div className="room-header__actions">
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={copyLink}
+            aria-label="Copy room link"
+            title={copied ? 'Copied!' : 'Copy room link'}
+          >
+            <CopyIcon />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={onExit}
+            aria-label="Leave room"
+            title="Leave room"
+          >
+            <ExitIcon />
+          </button>
+        </div>
         <span className="room-header__copied" role="status" aria-live="polite">
           {copied ? 'Link copied' : ''}
         </span>
@@ -145,7 +150,6 @@ export const RoomHeader: FC<RoomHeaderProps> = ({
             {participantName}
           </button>
         )}
-        <StatusIndicator status={status} />
       </div>
     </header>
   )
