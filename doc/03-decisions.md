@@ -178,3 +178,61 @@ initial requirements interview.
   client falls back to a fresh join (D-15) — a reconnect past grace is a new
   participant, and any in-round vote is lost (FR-18). No slot-holding or timers on
   either side.
+
+## UX / UI phase
+
+Recorded when the phase closed — these landed in the code without a decision entry
+at the time. Build log: [archive/ux-phase-backlog.md](archive/ux-phase-backlog.md).
+
+- **D-40 Styling: one SCSS/BEM stylesheet, not per-component CSS modules.** The
+  S7–S9 pattern (a `.module.css` beside each component) was replaced by a single
+  `src/styles/main.scss` with BEM class names, and `sass` added as a dev
+  dependency. The redesign is a small, tightly-coupled monochrome system — the same
+  tokens, borders, and spacing recur on every screen — so one stylesheet keeps the
+  visual language in one readable place instead of scattered across fifteen module
+  files. Component folders keep their `.tsx` plus a colocated test.
+  _Trade-off accepted:_ no build-time class-name scoping — discipline is the BEM
+  naming, not the tooling.
+- **D-41 UI icons via `lucide-react`, behind a local alias module.** The redesign
+  calls for icon buttons (copy code, exit room, participants). They are imported
+  only through `src/components/icons.tsx`, which re-exports the handful in use and
+  pins project sizing defaults, so the dependency has exactly one call site to
+  swap. This **ends the Phase 1 "no new UI/runtime packages" constraint**, which
+  had already bent for `react-router` (D-37) and `@fontsource-variable`;
+  hand-rolling SVG icon sprites was judged the wrong place to spend effort. NFR-6
+  (no external *services*) is untouched — this is a bundled dependency.
+- **D-42 Rename is self-service only.** A participant can change their own display
+  name mid-session via a `set_name` WS frame; the new name reaches everyone through
+  the normal snapshot broadcast (D-36), so there is no local post-commit name
+  state. The frame deliberately carries **no `participant_id`** — the socket fixed
+  the caller's identity at handshake, so the server can only ever rename the
+  connected participant, and nobody can rename anyone else. Validation matches the
+  join path exactly (trimmed, non-blank, ≤ `MAX_DISPLAY_NAME_LENGTH` — D-34), and
+  names stay non-unique (D-10). Shipped during the UX phase without a matching
+  requirement; FR-19 is to be backfilled (see
+  [07-v0.1-phase.md](07-v0.1-phase.md)).
+- **D-43 A round needs a subject, and a reveal needs a vote — enforced in the UI
+  only.** The redesign added two preconditions to the round flow that the domain does
+  not have: with no `current_item` set, the vote deck and the reveal action are both
+  disabled (the stage shows a "waiting for the subject" status), and reveal is
+  additionally disabled until at least one vote has been cast. The reveal control is
+  hidden outright when nobody is eligible to vote. "New voting" (reset) is
+  deliberately left enabled throughout, so a host can always escape a stuck round.
+  Rationale: estimating an unnamed subject, or revealing an empty round, are both
+  meaningless actions that the pre-redesign UI allowed.
+  _Consequences, both accepted:_ (1) this **narrows FR-12** ("the host, and only the
+  host, reveals the round") with preconditions the requirement does not state; (2)
+  because it is UI-only, `Room.reveal` remains unconditional (D-12) and a direct
+  WS/HTTP call still reveals a topic-less or vote-less round — the gate is a UX
+  affordance, not an invariant. Promote it into the domain if it ever needs to be
+  guaranteed. `expected_voter_ids()`, documented in the Phase 1 log as the reveal
+  gate, no longer exists — eligibility is now derived in `Room.tsx` for the
+  vote-progress denominator instead.
+- **D-44 Post-reveal the vote deck stays visible but locked.** The deck is a
+  permanent bottom fixture of the room layout (spec §Voting cards); once revealed it
+  remains on screen, disabled, and the round's values are read in the stats view
+  (S18) rather than a separate panel. This **reverses S9's decision A1**, which had
+  the deck unmount and be replaced by a `Results` block — that made sense in the
+  pre-redesign vertical stack, but in the redesigned layout the deck's absence left
+  the bottom of the room empty and the grid jumping on every reveal. Fixed layout
+  beat conditional layout.

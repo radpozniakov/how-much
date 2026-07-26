@@ -2,8 +2,10 @@
 
 > **Archived build log.** Phase 1 (MVP) is complete and verified working
 > end-to-end. Every slice below is `DONE` except **S10 (deployment polish)**,
-> which is carried forward into the UX phase — see
-> [../05-ux-phase.md](../05-ux-phase.md). Kept for history; not a live task list.
+> which was carried into the UX phase ([ux-phase-backlog.md](ux-phase-backlog.md)),
+> went unfinished there too, and is now tracked in
+> [../07-v0.1-phase.md](../07-v0.1-phase.md). Kept for history; not a live task
+> list.
 
 Sequenced work to build the MVP defined in [../02-current-scope.md](../02-current-scope.md).
 
@@ -788,6 +790,9 @@ snapshot field S9 uses has shipped since S6b.
   unmounts and `<Results>` renders in its place; reset (`revealed:true→false`)
   remounts a fresh deck (`selected:null`). Rejected: keeping the deck mounted+locked
   beside Results (redundant inert grid duplicating the revealed values).
+  > **Superseded by D-44.** The UX redesign reversed this: the deck is now a
+  > permanent bottom fixture that stays visible but locked after reveal, with the
+  > values read in the stats view. The rejected alternative is what shipped.
 - **Opted-out host has no deck (B1).** `canVote = !isHost || host_voting`; the deck
   renders only when `canVote && !revealed`. An opted-out host is a facilitator, not
   a voter, and this makes `host_not_voting` unreachable from the host's own UI.
@@ -951,8 +956,9 @@ controls. **Refs:** FR-12–FR-16, FR-17 · D-12, D-14, D-16.
 Tighten dev CORS to explicit origins (D-28), finalize Docker/compose for a
 deployable setup, config, and run docs. **Refs:** NFR-3
 
-> Not completed in Phase 1. Carried forward — now tracked in
-> [../05-ux-phase.md](../05-ux-phase.md).
+> Not completed in Phase 1, nor in the UX phase
+> ([ux-phase-backlog.md](ux-phase-backlog.md)) — now tracked in
+> [../07-v0.1-phase.md](../07-v0.1-phase.md).
 
 ---
 

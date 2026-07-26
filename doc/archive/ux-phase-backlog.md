@@ -1,9 +1,47 @@
-# 05 — UX / UI Phase
+# UX / UI Phase — Backlog · `CLOSED`
 
-> **Status: active.** Phase 1 (MVP) is complete — the tool works end-to-end
-> (see [02-current-scope.md](02-current-scope.md) and
-> [archive/phase1-mvp-backlog.md](archive/phase1-mvp-backlog.md)). This phase
-> improves the **look and feel** of that working tool.
+> **Archived build log.** The redesign shipped: the design foundation and every
+> screen slice (S11–S19, S23) is `DONE`. Four slices were **not** completed and
+> are carried forward into [../07-v0.1-phase.md](../07-v0.1-phase.md), not
+> dropped — **S10** (deployment polish, itself carried from Phase 1), **S20**
+> (interaction & state polish), **S21** (accessibility & responsiveness), and
+> **S22** (copy & microcopy). Kept for history; not a live task list.
+>
+> Predecessor: [phase1-mvp-backlog.md](phase1-mvp-backlog.md). Successor:
+> [../07-v0.1-phase.md](../07-v0.1-phase.md).
+
+## Shipped beyond this backlog
+
+Five changes landed during the phase that are not slices below. Recorded here so
+the build log matches the code, and promoted to decisions D-40–D-44 in
+[../03-decisions.md](../03-decisions.md). The last three are *functional* changes,
+which this phase's guiding principle said were out of scope — they shipped anyway,
+so they are written down rather than left implicit:
+
+- **Styling architecture changed** — the per-component CSS modules from S7–S9
+  were replaced by a single SCSS/BEM stylesheet (`src/styles/main.scss`, `sass`
+  added). Component folders keep their `.tsx` + colocated test only (D-40).
+- **`lucide-react` icons** — the header/roster icon buttons the spec calls for,
+  behind a central `components/icons.tsx` alias module pinning sizing defaults.
+  This ends the Phase 1 "no new UI/runtime packages" constraint (D-41).
+- **Participant self-rename** — a *functional* addition, not UX polish: a new
+  `set_name` WS frame + `Room.set_name`, surfaced as a click-to-edit name in the
+  header. Renaming is self-service only (the frame carries no `participant_id`,
+  so a socket can only rename itself) and fans out via the normal snapshot
+  broadcast (D-42). It has no FR of its own — see the contract-additions note in
+  [../07-v0.1-phase.md](../07-v0.1-phase.md).
+- **Round-flow preconditions** — the vote deck and the reveal action are disabled
+  until the host sets a subject, and reveal additionally requires at least one cast
+  vote; the reveal control is hidden when nobody is eligible to vote. Reset stays
+  enabled throughout. UI-only, so the domain still reveals unconditionally — this
+  narrows FR-12 in practice (D-43).
+- **Post-reveal the deck stays visible but locked**, with the round's values read in
+  the stats view — reversing S9's decision A1, which unmounted the deck and replaced
+  it with a `Results` block (D-44).
+
+Phase 1 (MVP) context: [../02-current-scope.md](../02-current-scope.md) and
+[phase1-mvp-backlog.md](phase1-mvp-backlog.md). This phase improved the **look
+and feel** of that working tool.
 
 ## Goal
 
@@ -13,11 +51,11 @@ results — without changing what the app *does*.
 
 ## Guiding principle — preserve core functionality
 
-The behavior defined in [01-requirements.md](01-requirements.md) (FR-1…FR-18,
+The behavior defined in [01-requirements.md](../01-requirements.md) (FR-1…FR-18,
 NFR-1…NFR-6) is the fixed contract for this phase. UX/UI work may restyle,
 re-lay-out, and re-sequence screens, but must **not** alter the functional
 outcome. Any change that would touch a requirement or a decision in
-[03-decisions.md](03-decisions.md) is out of scope here and must be raised as a
+[03-decisions.md](../03-decisions.md) is out of scope here and must be raised as a
 new decision first.
 
 ## In scope
@@ -31,20 +69,23 @@ new decision first.
 
 ## Out of scope (unchanged from MVP)
 
-Everything in [02-current-scope.md](02-current-scope.md)'s "Out of scope" list still
+Everything in [02-current-scope.md](../02-current-scope.md)'s "Out of scope" list still
 applies — accounts, persistence, backlog/tickets, multiple decks, distribution
 charts, timers, i18n, mobile-native. New *features* are not part of a UX phase.
 
 ## Carried forward from Phase 1
 
-- **S10 — Deployment polish** · `TODO`
+- **S10 — Deployment polish** · `CARRIED → v0.1`
   Tighten dev CORS to explicit origins (D-28), finalize Docker/compose for a
   deployable setup, config, and run docs. **Refs:** NFR-3. Independent of the
-  UX work; can be done at any point in this phase.
+  UX work. Not completed here either — carried a second time, now tracked in
+  [../07-v0.1-phase.md](../07-v0.1-phase.md).
 
 ## Design source
 
-The visual direction is fixed by [06-redesign-spec.md](06-redesign-spec.md):
+The visual direction is fixed by [redesign-spec.md](redesign-spec.md) (archived
+alongside this log; durable rules promoted to
+[../06-design-language.md](../06-design-language.md)):
 monochrome (`#F7F5F3` background, `#000` ink/borders, `#FFF` cards), Inter for
 text and JetBrains Mono for titles/numbers, solid `1px` borders with rounded
 corners, generous centered whitespace. The slices below digest that spec into
@@ -57,7 +98,7 @@ Status legend: `TODO` · `IN PROGRESS` · `DONE`
 The spec was drawn as a mockup and, in places, collides with the fixed
 functional contract this phase must not change. Per the guiding principle above,
 each is raised here as a decision; the contract holds until a new decision in
-[03-decisions.md](03-decisions.md) changes it. These gate the slices that
+[03-decisions.md](../03-decisions.md) changes it. These gate the slices that
 reference them — resolve before building those.
 
 - **DN-A — Deck values.** ✅ *Resolved: Fibonacci stays.* The spec's voting row
@@ -68,7 +109,8 @@ reference them — resolve before building those.
   Results are contractually **average + consensus only** — distribution charts
   are explicitly out of scope (FR-16, D-16). **S18 re-presents the existing
   stats** (each vote, average, consensus) in a dashboard layout; it does **not**
-  add new analytics. Confirm.
+  add new analytics. ✅ *Resolved as built:* S18 shipped exactly that — a
+  `StatsView` over the existing `results` payload, no new analytics.
 - **DN-C — Density selector vs voting row.** ✅ *Resolved: no explicit density
   control.* The spec conflated one bottom row as both the vote-casting cards
   *and* a grid "density selector." The bottom row **casts votes** (S17); the
@@ -137,17 +179,17 @@ Auto-responsive column behavior for the participant grid across viewport sizes
 and small screens (column count adapts to available width; no explicit density
 control, DN-C). **Refs:** NFR-4; spec §Participant cards grid.
 
-### S20 — Interaction & state polish · `TODO`
+### S20 — Interaction & state polish · `CARRIED → v0.1`
 Transitions, feedback on vote cast/change, reveal animation, presence indicators,
 and loading/empty/error/full-room states. **Refs:** FR-5 (full-room message),
 FR-12, FR-17; phase "In scope".
 
-### S21 — Accessibility & responsiveness pass · `TODO`
+### S21 — Accessibility & responsiveness pass · `CARRIED → v0.1`
 Keyboard navigation, visible focus states, contrast, semantic markup, and
 small-screen usability across all screens. **Refs:** phase "In scope"
 (accessibility, responsiveness).
 
-### S22 — Copy & microcopy · `TODO`
+### S22 — Copy & microcopy · `CARRIED → v0.1`
 Finalize labels and messages — replace dev placeholders ("View 1 (cards)",
 "View 2 (stats)"), room-full and error copy, empty/first-round states. **Refs:**
 phase "In scope" (copy clarity).
@@ -161,33 +203,29 @@ an opted-out host too, since they are in the room even when excluded from voting
 (FR-17). Host-gated because it is the anchor for the actions in DN-E below.
 **Refs:** FR-17; spec §Room page/Header, §Icon buttons.
 
-- **DN-E — Per-row host actions.** ⛔ *Not resolved — blocks any follow-up.*
-  The roster is intended to host **delegate host role** and **kick participant**
-  next. Both are new *functional* behavior, not UX polish: they need new WS
-  frames plus backend domain rules (who may delegate, what a kicked participant
-  sees, how kick interacts with the host-transfer window that makes `host_id`
-  briefly null). Per this phase's guiding principle these are **out of scope for
-  the UX phase** and require decision entries in
-  [03-decisions.md](03-decisions.md) before being built. S23 ships the anchor
-  only; the roster rows are deliberately inert text, and the panel uses
-  `role="group"` rather than `role="menu"` until real menuitems exist.
+- **DN-E — Per-row host actions.** ➡️ *Carried → v0.1 as V1 and V2.*
+  The roster is intended to host **hand over the host role** and **remove a
+  participant** next. Both are new *functional* behavior, not UX polish: they need
+  new WS frames plus backend domain rules (who may hand over, what a removed
+  participant sees, how removal interacts with the host role). Per this phase's
+  guiding principle they were correctly **out of scope for the UX phase**; they
+  now open the next phase — see
+  [../07-v0.1-phase.md](../07-v0.1-phase.md). S23 shipped the anchor only; the
+  roster rows are deliberately inert text, and the panel uses `role="group"`
+  rather than `role="menu"` until real menuitems exist.
 
-  **Security prerequisite — fix `attach` first.** A security review of S23 found
-  a pre-existing hole that these two actions would turn from nuisance into room
-  takeover. `ws.py`'s `AttachFrame` branch authenticates on `participant_id`
-  alone, checking only *membership* — and `room_view` broadcasts every
-  `participant.id` **and** `host_id` to every client. So any member can reopen a
-  socket as `host_id` and pass `Room._require_host`. Today's ceiling is
-  nuisance (force reveal/reset, rewrite the topic). With kick + delegate it
-  becomes: any participant can evict everyone else and seize host permanently.
-  Required before those frames ship:
-  1. Issue an unguessable per-participant session token at join, return it only
-     to the joining client, never include it in `room_view`, and require it on
-     `attach` (compare with `hmac.compare_digest`; keep the error identical to
-     the unknown-id case so it is not a membership oracle).
-  2. Authorize every new frame in the domain via `_require_host`, matching
-     `set_item`/`reveal`/`reset`. Client-side `isHost` is a UX affordance only.
-  3. New frames carry a **target** id and no actor id — the actor is the
-     socket's handshake identity, as with every existing frame.
-  4. Guard `kick` against targeting the host, verify `delegate_host`'s target is
-     a current member, and log actor/target/room/outcome for both.
+  **Security note on `attach`.** A security review of S23 flagged a pre-existing
+  gap: `ws.py`'s `AttachFrame` branch authenticates on `participant_id` alone,
+  checking only *membership* — and `room_view` broadcasts every `participant.id`
+  **and** `host_id` to every client. So any member can open a second socket as
+  another participant, including the host, and pass `Room._require_host`. Today's
+  ceiling is nuisance (force reveal/reset, rewrite the topic) and every effect is
+  undoable by a reset. A host handover is the first action that would **not** be
+  undoable, since it moves `host_id` durably.
+  → *Sequencing decided in v0.1:* the two features are **not** gated on closing
+  this gap; the impersonation risk is recorded as a known limitation and the
+  session-token fix is tracked as optional hardening (V3). See
+  [../07-v0.1-phase.md](../07-v0.1-phase.md). The review's other three points are
+  not optional and carry into V1/V2 as design constraints there: authorize in the
+  domain via `_require_host`, have new frames carry a **target** id and no actor
+  id, and validate the target (member, and not a self-removal).

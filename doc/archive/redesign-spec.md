@@ -1,12 +1,35 @@
-# 06 — Redesign Spec (UX / UI)
+# Redesign Spec (UX / UI) · `SUPERSEDED`
 
-> **Design source of truth for the UX/UI phase.** Captured verbatim as handed
-> off. The backlog in [05-ux-phase.md](05-ux-phase.md) is the digested,
-> sequenced version of this document. Where this spec collides with the fixed
-> functional contract ([01-requirements.md](01-requirements.md),
-> [03-decisions.md](03-decisions.md)), the backlog's **"Decisions needed"**
-> section records the conflict — the contract wins until a new decision changes
-> it (per the phase's guiding principle).
+> **Archived mockup handoff.** Captured verbatim as handed off; this was the design
+> source of truth for the UX/UI phase, and
+> [ux-phase-backlog.md](ux-phase-backlog.md) is the digested, sequenced version of
+> it. The redesign has shipped, so the implementation is now the truth and the
+> durable rules have been promoted to
+> [../06-design-language.md](../06-design-language.md). Kept for provenance — read
+> the design-language doc instead.
+>
+> **Superseded on the points below.** Each was mockup illustration rather than a
+> decision, and collided with the fixed functional contract
+> ([../01-requirements.md](../01-requirements.md),
+> [../03-decisions.md](../03-decisions.md)); the backlog's **"Decisions needed"**
+> section resolved them. Listed here so this document is not read as current:
+>
+> - **§Voting cards, the values `4, 8, 12, 24, 32, 48, 64`** — illustrative only.
+>   The deck is **Fibonacci** `0, 1, 2, 3, 5, 8, 13, 21` (FR-9, D-7/D-8 · DN-A).
+> - **§Participant cards grid, the "density selector"** — never built. The grid is
+>   simply auto-responsive, with no density control (DN-C).
+> - **"the current screen shows 8 columns × 3 rows"** — describes the mockup
+>   screenshot, not a rule.
+> - **§Segment control, `"View 1 (cards)"` / `"View 2 (stats)"`** — dev
+>   placeholders, not final copy. Still open as S22 in
+>   [../07-v0.1-phase.md](../07-v0.1-phase.md).
+> - **"dashboard/stats" framing** — narrowed to re-presenting the existing results
+>   (average + consensus); no new analytics (FR-16, D-16 · DN-B).
+> - **"Room ID" throughout** — means the room **`code`** (D-29). There is no
+>   separate id field (DN-D).
+>
+> The per-screen layout sections below are implemented; `frontend/src/styles/main.scss`
+> and the components are authoritative for how the UI actually looks.
 
 App type: real-time planning-poker / estimation voting tool.
 This spec describes the UI so an LLM can reason about or regenerate it.
