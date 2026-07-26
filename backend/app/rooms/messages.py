@@ -2,9 +2,10 @@
 
 Every frame is a flat ``{"type": ..., ...payload}`` object. This module defines
 the two server->client frames (``room_state`` and ``error``), the inbound
-handshake frames (``join`` / ``attach``), and the S6b round-action frames
-(``set_item`` / ``cast_vote`` / ``set_host_voting`` / ``reveal`` / ``reset``),
-plus parsers that turn a raw decoded object into a validated frame.
+handshake frames (``join`` / ``attach``), and the round-action frames
+(``set_item`` / ``set_name`` / ``cast_vote`` / ``set_host_voting`` /
+``transfer_host`` / ``reveal`` / ``reset``), plus parsers that turn a raw decoded
+object into a validated frame.
 
 The handshake and round phases have **separate** frame registries: the first
 frame on a socket must be a handshake frame, and every frame after it must be a
@@ -28,6 +29,7 @@ from pydantic import BaseModel, ValidationError, field_validator
 
 from app import config
 from app.rooms.errors import (
+    CannotTargetSelf,
     HostNotVoting,
     InvalidCard,
     NotHost,
@@ -60,7 +62,7 @@ def error_frame(reason: str, message: str) -> dict[str, Any]:
 
 # Stable WS reason slug per domain error — the socket's counterpart to the
 # HTTP ``_ROOM_ERROR_STATUS`` map in :mod:`app.main`. Round actions can only raise
-# the five below; anything unmapped is a bug, surfaced as the defensive
+# the six below; anything unmapped is a bug, surfaced as the defensive
 # ``internal`` slug (kept distinct from the frame ``type: "error"``).
 _ERROR_REASONS: dict[type[RoomError], str] = {
     NotHost: "not_host",
@@ -68,6 +70,7 @@ _ERROR_REASONS: dict[type[RoomError], str] = {
     HostNotVoting: "host_not_voting",
     RoundRevealed: "round_revealed",
     UnknownParticipant: "not_in_room",
+    CannotTargetSelf: "cannot_target_self",
 }
 
 
@@ -167,6 +170,25 @@ class SetHostVotingFrame(BaseModel):
     voting: bool
 
 
+class TransferHostFrame(BaseModel):
+    """Hand the host role to another participant (host-only, FR-20/D-45).
+
+    The field is ``target_id``, **not** ``participant_id`` — deliberately. Every
+    round frame pointedly omits an actor id so a client cannot attribute an action
+    to someone else; a field literally named ``participant_id`` here would sit one
+    typo away from being read as that actor id by the next person to touch this
+    file. The name says which end of the action it is.
+
+    No length or format validator, unlike ``topic``/``name``: those are values the
+    domain trusts, so the frame is their only bound. This one is matched against
+    ``room.participants`` in ``Room.transfer_host``, which is a stricter check than
+    any transport-boundary bound could express.
+    """
+
+    type: Literal["transfer_host"]
+    target_id: str
+
+
 class RevealFrame(BaseModel):
     """Reveal the round (host-only, FR-12)."""
 
@@ -184,6 +206,7 @@ RoundFrame = (
     | SetNameFrame
     | CastVoteFrame
     | SetHostVotingFrame
+    | TransferHostFrame
     | RevealFrame
     | ResetFrame
 )
@@ -198,6 +221,7 @@ _ROUND_TYPES: dict[str, type[BaseModel]] = {
     "set_name": SetNameFrame,
     "cast_vote": CastVoteFrame,
     "set_host_voting": SetHostVotingFrame,
+    "transfer_host": TransferHostFrame,
     "reveal": RevealFrame,
     "reset": ResetFrame,
 }

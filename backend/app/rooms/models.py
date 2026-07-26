@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from app import config
 from app.rooms.errors import (
+    CannotTargetSelf,
     HostNotVoting,
     InvalidCard,
     NotHost,
@@ -208,6 +209,47 @@ class Room:
         self.host_voting = voting
         if not voting and self.host_id is not None:
             self.votes.pop(self.host_id, None)
+
+    def transfer_host(self, participant_id: str, target_id: str) -> None:
+        """Hand the host role to another participant (host-only, FR-20/D-45).
+
+        A *move*, not a grant: ``host_id`` is a single field, so exactly one host
+        exists at any moment and no co-host or residue is possible. Unlike the
+        disconnect-driven auto-transfer (D-13) there is no transient
+        ``host_id: None`` window, so the host UI never flickers through an
+        unowned state.
+
+        ``host_voting`` resets to ``True``, exactly as ``remove_participant`` does
+        when a host leaves and the role auto-transfers. The reason is the incoming
+        host: an inherited opt-out they never chose would leave them with no deck
+        and outside the vote-progress denominator, silently. Both hosts end up
+        voters and either may opt out afterwards.
+
+        The outgoing host's vote is deliberately **not** dropped — they remain a
+        member, and ``results()`` is defined over cast votes regardless of who
+        holds the role. They also regain the right to vote with no code here: it
+        is ``cast_vote``'s ``participant_id == self.host_id`` guard that stops an
+        opted-out host, and the instant ``host_id`` moves they no longer match it.
+
+        Legal at any point, including after reveal — see ``RoundRevealed`` for why
+        this is not the inconsistency it looks like: a handover touches no input
+        to ``results()``.
+
+        Raises:
+            NotHost: if the caller is not the host. This also enforces the
+                actor's membership, since a non-member is never the host.
+            CannotTargetSelf: if the host targets themselves.
+            UnknownParticipant: if the target is not in the room.
+        """
+        self._require_host(participant_id)
+        # Self-target first: it would otherwise pass the membership check below and
+        # surface as a confusing success, or as an error whose message is false.
+        if target_id == participant_id:
+            raise CannotTargetSelf()
+        if target_id not in self.participants:
+            raise UnknownParticipant()
+        self.host_id = target_id
+        self.host_voting = True
 
     def reveal(self, participant_id: str) -> None:
         """Reveal the round so every vote becomes visible (host-only, FR-12).

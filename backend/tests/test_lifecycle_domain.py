@@ -74,7 +74,7 @@ def test_last_participant_leaving_clears_host():
     assert room.participants == {}
 
 
-def test_host_transfer_resets_host_voting():
+def test_host_leave_transfer_resets_host_voting():
     room, (host, alice) = _room_with("Host", "Alice")
     room.set_host_voting(host, False)
     room.remove_participant(host)

@@ -9,6 +9,7 @@ the socket path. The placeholder ``/ws`` echo stays until S10.
 
 import asyncio
 import contextlib
+import logging
 from collections.abc import AsyncIterator
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
@@ -17,6 +18,7 @@ from fastapi.responses import JSONResponse
 
 from app import config
 from app.rooms.errors import (
+    CannotTargetSelf,
     HostNotVoting,
     InvalidCard,
     NotHost,
@@ -28,6 +30,38 @@ from app.rooms.errors import (
 from app.rooms.router import router as rooms_router
 from app.rooms.store import store
 from app.rooms.ws import ws_router
+
+
+def _configure_logging(level: int = logging.INFO) -> None:
+    """Make ``app.*`` log records actually surface (S23 constraint 4).
+
+    Without this nothing in ``app.*`` is ever emitted: the root logger defaults to
+    ``WARNING`` with no handlers, and uvicorn's default ``LOGGING_CONFIG`` declares
+    handlers for its own ``uvicorn*`` loggers only — it sets no root handler and
+    does not touch the root level. So the handover audit trail would exist in the
+    source and nowhere else. (This is why ``connection.py``'s ``logger.debug`` has
+    never emitted anything either, despite its comment.)
+
+    The level is set **unconditionally** and the handler added **only** when root
+    has none. That split is what makes this work in both environments, and it is
+    deliberately *not* ``logging.basicConfig``: basicConfig returns early when root
+    already holds any handler, and on that path it skips the level too — so under
+    pytest, whose plugin attaches capture handlers before this module is imported,
+    it would configure nothing at all and silently defeat the guard in
+    ``tests/test_logging_config.py``. Here the conditional handler leaves a test
+    harness's own capture in place while the level still applies.
+
+    One stream at one level is all this app has to say; a real config with an
+    env-read level knob belongs to S10's deployment work, per D-30 (only
+    genuinely-varying values become env-read).
+    """
+    root = logging.getLogger()
+    root.setLevel(level)
+    if not root.handlers:  # uvicorn leaves root bare; pytest does not
+        root.addHandler(logging.StreamHandler())
+
+
+_configure_logging()
 
 
 async def _sweeper(interval: float) -> None:
@@ -65,6 +99,11 @@ _ROOM_ERROR_STATUS: dict[type[RoomError], int] = {
     InvalidCard: 422,
     UnknownParticipant: 404,
     NotHost: 403,
+    # Unreachable over HTTP today — handover is WS-only (there is no HTTP route for
+    # it, and D-35's dual-transport period is spent). Mapped anyway so this table
+    # stays a complete statement of how domain errors translate, rather than one a
+    # future HTTP route would silently fall through to 500.
+    CannotTargetSelf: 422,
 }
 
 
