@@ -129,7 +129,8 @@ async def broadcast_room_state(room: Room) -> None:
     """Fan the current ``RoomView`` snapshot out to a room's sockets (D-36).
 
     The one place a state change becomes a broadcast; called at every presence
-    mutation site (HTTP + WS). A no-op when the room has no connected sockets."""
+    mutation site — the WS receive loop and, still, the HTTP join (D-50 left that
+    route standing). A no-op when the room has no connected sockets."""
     await manager.broadcast(room.code, room_state_frame(room))
 
 
@@ -139,9 +140,10 @@ async def apply_and_broadcast(room: Room, action: Callable[[], None]) -> None:
     ``action`` is a zero-arg closure over a synchronous ``Room`` method. The
     broadcast is bound to a *successful* mutation: if ``action`` raises (a domain
     ``RoomError``), it propagates and no broadcast is sent, so a rejected action
-    never disturbs other clients. This single seam is used by both transports —
-    the HTTP round routes and the WS receive loop — so broadcast can't be
-    forgotten at a call site."""
+    never disturbs other clients. This was the single seam shared by both
+    transports, which is how it kept broadcast from being forgotten at a call
+    site; since D-50 retired the HTTP round routes its only caller is the WS
+    receive loop, and the guarantee is the same one for one transport."""
     action()
     await broadcast_room_state(room)
 

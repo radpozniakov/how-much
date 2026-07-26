@@ -136,10 +136,11 @@ HandshakeFrame = JoinFrame | AttachFrame
 class SetItemFrame(BaseModel):
     """Set or clear the current item's topic (host-only in the domain, FR-8).
 
-    Bounds the topic length at the transport boundary exactly as the HTTP
-    ``SetItemRequest`` does — ``Room.set_item`` only trims, so without this a
-    socket could set an unbounded topic that HTTP would reject (D-36 parity).
-    ``None`` or blank clears the topic."""
+    Bounds the topic length at the transport boundary, because ``Room.set_item``
+    only trims — without this a socket could set an unbounded topic. This used to
+    be described as parity with the HTTP ``SetItemRequest``; that model is gone
+    with D-50, so the bound is no longer a mirror of anything and is simply the
+    boundary's own rule. ``None`` or blank clears the topic."""
 
     type: Literal["set_item"]
     topic: str | None = None

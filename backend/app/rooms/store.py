@@ -82,8 +82,11 @@ class RoomStore:
     def sweep(self) -> None:
         """Discard rooms empty for at least ``EMPTY_ROOM_TTL_SECONDS`` (D-18/FR-6).
 
-        Lazy, not scheduled: cleanup piggybacks on store access (`get`/`create`)
-        rather than a background task while we're HTTP-only (until S6). `get()`
+        Lazy, not scheduled: cleanup piggybacks on store access (`get`/`create`).
+        That was originally *instead of* a background task, back when the app was
+        HTTP-only; S6 added the real sweeper (`main._sweeper`) and this stayed as
+        the belt to its braces, so an expired room is unreachable on the next
+        access even between sweeps. `get()`
         sweeps before returning, so an expired room is unreachable the instant
         grace passes; its memory is reclaimed on that next access, not at exactly
         the TTL. A rejoin clears `empty_since`, so a re-occupied room is spared."""

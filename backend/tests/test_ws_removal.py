@@ -428,3 +428,44 @@ def test_missing_target_id_is_bad_request(client):
         ok = ws.receive_json()
 
     assert ok["room"]["revealed"] is True
+
+
+def test_no_transport_evicts_a_participant_without_host_authority(client):
+    """The D-50 regression guard: eviction requires host authority, whatever the door.
+
+    V5's motivation was an HTTP route that reached this capability with no host check
+    and no actor check, sitting beside a socket path that had three guards. Nothing in
+    the suite asserted the *capability* rule transport-independently — the tests that
+    happened to cover the HTTP door were about snapshot convergence and never checked
+    authority, so deleting them left the rule itself unpinned. This states it directly,
+    so a route re-added later fails here rather than shipping.
+
+    Deliberately asserts on the roster, not on status codes: the point is that the
+    participant survives, by whatever means the attempt is refused."""
+    code, host_id = _create(client)
+    bob_id = _join_http(client, code, "Bob")
+
+    # Everything happens while Bob holds a live socket, so the attempts mirror the
+    # real threat: a connected member trying to evict the host. (Bob leaves
+    # legitimately when his socket closes, which is why the roster is asserted here
+    # rather than after the block.)
+    with client.websocket_connect(f"/ws/rooms/{code}") as bob_ws:
+        bob_ws.send_json({"type": "attach", "participant_id": bob_id})
+        bob_ws.receive_json()
+
+        # 1. Over the socket, a non-host cannot evict the host.
+        bob_ws.send_json({"type": "remove_participant", "target_id": host_id})
+        err = bob_ws.receive_json()
+        assert err["type"] == "error" and err["reason"] == "not_host"
+
+        # 2. No HTTP verb reaches the capability at all — 404/405, never a 2xx.
+        for verb in ("delete", "post", "put", "patch"):
+            resp = getattr(client, verb)(f"/rooms/{code}/participants/{host_id}")
+            assert resp.status_code in (404, 405), (
+                f"{verb.upper()} reached a live handler"
+            )
+
+        room = store.get(code)
+        assert host_id in room.participants  # survived every attempt
+        assert bob_id in room.participants
+        assert room.host_id == host_id  # and authority did not move
