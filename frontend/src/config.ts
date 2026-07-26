@@ -5,7 +5,7 @@ export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 // WebSocket *base* (scheme + host, no path). The room socket path is appended
 // per-room via roomSocketUrl below. This is a base — not a full endpoint — so a
-// stale value can't silently double the path; the T1 `/ws` echo is retired (S10).
+// stale value can't silently double the path; the T1 `/ws` echo is retired (D-50).
 export const WS_BASE_URL =
   import.meta.env.VITE_WS_BASE_URL ?? 'ws://localhost:8000'
 

@@ -84,8 +84,8 @@ Host actions taken on *another* participant, as distinct from controlling the ro
 
 ## Non-functional requirements
 
-- **NFR-1 Transport** — Real-time state is delivered over WebSocket. Room creation
-  may use HTTP.
+- **NFR-1 Transport** — Real-time state is delivered over WebSocket. Creating and
+  joining a room may use HTTP; nothing after that does (D-50).
 - **NFR-2 No persistence** — State is in-memory only; a backend restart loses all
   rooms. Acceptable for MVP.
 - **NFR-3 Footprint** — Backend and frontend each run in their own Docker container.

@@ -1,10 +1,10 @@
 """how-much backend.
 
-Transport plumbing (health + the room WebSocket + a placeholder echo socket) plus
-the room HTTP API. Real-time presence lands in S6a via ``ws_router``, and the round
-message protocol (set_item/cast_vote/…/reveal/reset) lands over the same socket in
-S6b — the HTTP round routes stay alongside it (D-35) until the frontend exercises
-the socket path. The placeholder ``/ws`` echo stays until S10.
+Transport plumbing (health + the room WebSocket) plus the two-route room HTTP API.
+Presence and the round message protocol (set_item/cast_vote/…/reveal/reset) both
+run over ``ws_router``'s socket, which since D-50 is the only transport for
+anything past the handshake: the HTTP round routes and the placeholder ``/ws``
+echo were retired once the frontend had proven the socket path.
 """
 
 import asyncio
@@ -12,7 +12,7 @@ import contextlib
 import logging
 from collections.abc import AsyncIterator
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -92,6 +92,16 @@ app = FastAPI(title="how-much", version="0.1.0", lifespan=lifespan)
 # How each domain error maps to an HTTP status. 409 is a state conflict (the room
 # won't accept the action as things stand), 422 an invalid value, 404 a missing
 # referent, 403 a permission failure. Anything unmapped is a bug → 500.
+#
+# **Only ``RoomFull`` is reachable over HTTP now** (raised by ``store.join``). D-50
+# left two routes standing — create and join — and every other entry below belongs
+# to an action that is WS-only: the round frames, the handover (D-45), the removal
+# (D-47). The table is deliberately kept complete rather than pruned to the one row
+# that fires. Its value was never coverage of today's routes; it is that a domain
+# error translates to a *considered* status wherever it surfaces, so adding an HTTP
+# route later cannot silently fall through to a 500. Pruning would convert this from
+# a statement about the error type to a statement about the current route list —
+# which is exactly the coupling that made the retired routes worth retiring.
 _ROOM_ERROR_STATUS: dict[type[RoomError], int] = {
     RoomFull: 409,
     HostNotVoting: 409,
@@ -99,11 +109,6 @@ _ROOM_ERROR_STATUS: dict[type[RoomError], int] = {
     InvalidCard: 422,
     UnknownParticipant: 404,
     NotHost: 403,
-    # Unreachable over HTTP today — both actions that raise it, handover (D-45) and
-    # removal (D-47), are WS-only (there is no HTTP route for either, and D-35's
-    # dual-transport period is spent). Mapped anyway so this table stays a complete
-    # statement of how domain errors translate, rather than one a future HTTP route
-    # would silently fall through to 500.
     CannotTargetSelf: 422,
 }
 
@@ -134,20 +139,3 @@ app.include_router(ws_router)
 async def health() -> dict[str, str]:
     """Liveness check used by the frontend and compose."""
     return {"status": "ok"}
-
-
-@app.websocket("/ws")
-async def ws(websocket: WebSocket) -> None:
-    """Placeholder WebSocket: accepts a connection and echoes each message.
-
-    Proves the transport works end to end. Replaced by the real message
-    protocol in T2.
-    """
-    await websocket.accept()
-    await websocket.send_json({"type": "hello", "message": "how-much ws connected"})
-    try:
-        while True:
-            data = await websocket.receive_text()
-            await websocket.send_json({"type": "echo", "message": data})
-    except WebSocketDisconnect:
-        pass

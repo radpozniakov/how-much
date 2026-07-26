@@ -123,18 +123,23 @@ def test_non_host_disconnect_removes_leaver(client):
     assert update["room"]["host_id"] == host_id  # host unchanged
 
 
-def test_http_presence_reflects_to_socket(client):
-    """D-36: an HTTP-driven presence change broadcasts to connected sockets."""
+def test_http_join_reflects_to_socket(client):
+    """D-36, in the one place it is still observable from outside the socket: the
+    surviving HTTP join broadcasts to sockets already in the room.
+
+    This is what is left of the old ``test_http_presence_reflects_to_socket`` after
+    D-50. That test drove a join *and* a removal over HTTP to show the two transports
+    converge on one snapshot; the removal route is gone, so only the join half can
+    still be asserted — and the convergence claim itself is no longer falsifiable
+    with one transport. Kept because the broadcast on a *non-socket* mutation is the
+    part that could still silently regress."""
     code, host_id = _create(client)
     with client.websocket_connect(f"/ws/rooms/{code}") as ws:
         ws.send_json({"type": "attach", "participant_id": host_id})
         ws.receive_json()  # own snapshot
-        carol_id = _join_http(client, code, "Carol")  # HTTP POST
+        _join_http(client, code, "Carol")  # HTTP POST /participants
         joined = ws.receive_json()
-        client.delete(f"/rooms/{code}/participants/{carol_id}")  # HTTP DELETE
-        left = ws.receive_json()
     assert any(p["name"] == "Carol" for p in joined["room"]["participants"])
-    assert all(p["name"] != "Carol" for p in left["room"]["participants"])
 
 
 def test_duplicate_attach_keeps_participant_present(client):
@@ -161,22 +166,6 @@ def test_duplicate_attach_keeps_participant_present(client):
     assert host_id in store.get(code).participants
 
 
-def test_http_delete_while_connected_net_effect(client):
-    code, host_id = _create(client)
-    bob_id = _join_http(client, code, "Bob")
-    with client.websocket_connect(f"/ws/rooms/{code}") as bob_ws:
-        bob_ws.send_json({"type": "attach", "participant_id": bob_id})
-        bob_ws.receive_json()
-        client.delete(f"/rooms/{code}/participants/{bob_id}")  # DELETE while connected
-        frame = bob_ws.receive_json()
-        assert all(p["id"] != bob_id for p in frame["room"]["participants"])
-    # bob_ws then drops: its finally's store.leave raises UnknownParticipant (bob
-    # already gone) and is swallowed — no crash, host still present, one removal.
-    room = store.get(code)
-    assert bob_id not in room.participants
-    assert host_id in room.participants
-
-
 def test_handshake_frame_mid_session_is_bad_request_and_stays_connected(client):
     """After the handshake, a stray join/attach is not a round frame (S6b) — it is
     rejected as bad_request without dropping the live socket."""
@@ -193,9 +182,15 @@ def test_handshake_frame_mid_session_is_bad_request_and_stays_connected(client):
 
 
 def test_room_state_carries_no_card_value_pre_reveal(client):
-    """FR-10: presence snapshot exposes has_voted, never the card value."""
+    """FR-10: presence snapshot exposes has_voted, never the card value.
+
+    The vote is placed through the domain rather than over a socket, because the
+    assertion is about the *handshake* snapshot — the very first frame a client
+    receives has to withhold the value, so the vote must predate the connection.
+    It used to be placed with ``PUT /vote``, which D-50 removed; the transport was
+    never the subject here."""
     code, host_id = _create(client)
-    client.put(f"/rooms/{code}/vote", json={"participant_id": host_id, "card": "5"})
+    store.get(code).cast_vote(host_id, "5")
     with client.websocket_connect(f"/ws/rooms/{code}") as ws:
         ws.send_json({"type": "attach", "participant_id": host_id})
         frame = ws.receive_json()

@@ -4,8 +4,9 @@ Round frames (set_item, cast_vote, set_host_voting, reveal, reset) dispatch to
 the domain and rebroadcast the RoomView (D-36). A frame carries no participant_id
 — the action is attributed to the socket's own identity (established at
 handshake). A rejected action returns an ``error`` frame to the offending socket
-only. The S3/S4 HTTP round routes are retained (D-35) and now broadcast too, so a
-``curl`` action reflects to connected sockets.
+only. Since D-50 retired the S3/S4 HTTP round routes this is the only transport
+for a round action, so the tests here that used to drive one over ``curl`` and
+watch it surface on a socket are gone with the routes.
 
 Uses the synchronous ``TestClient.websocket_connect``; a server broadcast lands in
 a session's queue and is read by its ``receive_json``.
@@ -134,46 +135,6 @@ def test_host_not_voting_errors_with_host_not_voting(client):
     assert err["type"] == "error" and err["reason"] == "host_not_voting"
 
 
-def test_http_vote_reflects_to_socket(client):
-    """D-36: an HTTP PUT /vote reflects live to a connected socket."""
-    code, host_id = _create(client)
-    with client.websocket_connect(f"/ws/rooms/{code}") as ws:
-        ws.send_json({"type": "attach", "participant_id": host_id})
-        ws.receive_json()  # own snapshot
-        client.put(f"/rooms/{code}/vote", json={"participant_id": host_id, "card": "3"})
-        frame = ws.receive_json()
-    me = next(p for p in frame["room"]["participants"] if p["id"] == host_id)
-    assert frame["type"] == "room_state" and me["has_voted"] is True
-
-
-def test_all_http_round_routes_broadcast(client):
-    """F1 regression: the 5 HTTP round routes each broadcast to a connected socket."""
-    code, host_id = _create(client)
-    with client.websocket_connect(f"/ws/rooms/{code}") as ws:
-        ws.send_json({"type": "attach", "participant_id": host_id})
-        ws.receive_json()
-
-        client.put(
-            f"/rooms/{code}/item", json={"participant_id": host_id, "topic": "T"}
-        )
-        assert ws.receive_json()["room"]["current_item"] == "T"
-
-        client.put(f"/rooms/{code}/vote", json={"participant_id": host_id, "card": "2"})
-        assert any(p["has_voted"] for p in ws.receive_json()["room"]["participants"])
-
-        client.put(
-            f"/rooms/{code}/host-voting",
-            json={"participant_id": host_id, "voting": False},
-        )
-        assert ws.receive_json()["room"]["host_voting"] is False
-
-        client.post(f"/rooms/{code}/reveal", json={"participant_id": host_id})
-        assert ws.receive_json()["room"]["revealed"] is True
-
-        client.post(f"/rooms/{code}/reset", json={"participant_id": host_id})
-        assert ws.receive_json()["room"]["revealed"] is False
-
-
 def test_ws_reveal_reflects_to_second_socket(client):
     """D-36 other direction: a WS reveal reaches a second socket and the domain."""
     code, host_id = _create(client)
@@ -194,9 +155,10 @@ def test_ws_reveal_reflects_to_second_socket(client):
 
 
 def test_over_long_topic_over_ws_is_bad_request(client):
-    """F3: the WS set_item frame enforces MAX_TOPIC_LENGTH like the HTTP route; the
-    over-long topic is rejected as bad_request (a frame validation failure) and the
-    socket stays connected."""
+    """F3: the WS set_item frame enforces MAX_TOPIC_LENGTH at the frame boundary
+    (`messages.SetItemFrame` — `Room.set_item` only trims); the over-long topic is
+    rejected as bad_request (a frame validation failure) and the socket stays
+    connected. This used to read "like the HTTP route", which D-50 deleted."""
     code, host_id = _create(client)
     with client.websocket_connect(f"/ws/rooms/{code}") as ws:
         ws.send_json({"type": "attach", "participant_id": host_id})
@@ -223,16 +185,22 @@ def test_malformed_round_frame_keeps_socket_alive(client):
     assert ok["room"]["revealed"] is True
 
 
-def test_action_after_http_delete_errors_not_in_room(client):
-    """A participant removed over HTTP while its socket stays open gets a
-    not_in_room error on its next action — no crash (risk R6)."""
+def test_action_after_participant_vanishes_errors_not_in_room(client):
+    """A participant who left the room while its socket stays open gets a
+    not_in_room error on its next action — no crash (risk R6).
+
+    The removal goes straight through ``store.leave``, which is the mechanism swap
+    D-50 forced: this used to use ``DELETE /participants/{id}``. The domain call is
+    in fact the *only* remaining way to reach the state under test — a host removal
+    (D-47) detaches the socket as it goes, so it can never leave an attached socket
+    pointing at an absent participant. What R6 guards is the dispatch path being
+    handed a stale identity, not the means by which it went stale."""
     code, host_id = _create(client)
     bob_id = _join_http(client, code, "Bob")
     with client.websocket_connect(f"/ws/rooms/{code}") as bob_ws:
         bob_ws.send_json({"type": "attach", "participant_id": bob_id})
         bob_ws.receive_json()  # bob snapshot
-        client.delete(f"/rooms/{code}/participants/{bob_id}")  # removed over HTTP
-        bob_ws.receive_json()  # the delete broadcast
+        store.leave(store.get(code), bob_id)  # gone from the domain, socket still up
         bob_ws.send_json({"type": "cast_vote", "card": "5"})
         err = bob_ws.receive_json()
     assert err["type"] == "error" and err["reason"] == "not_in_room"

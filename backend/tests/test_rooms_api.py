@@ -1,6 +1,8 @@
 """API-level tests for POST /rooms (create + join-as-host)."""
 
+import pytest
 from app import config
+from app.rooms.errors import InvalidCard
 from app.rooms.models import CODE_ALPHABET
 
 
@@ -110,11 +112,17 @@ def test_the_deck_rides_the_room_view_for_joiners_too(client):
     assert joined["room"]["deck"] == ["1", "2", "3"]
 
 
-def test_a_vote_outside_the_custom_deck_is_rejected_over_http(client):
+def test_a_vote_outside_the_custom_deck_is_rejected(client):
+    """The deck the create route wrote actually constrains voting.
+
+    Still a wiring test: it creates over HTTP, so the path from ``cards`` to an
+    enforced deck is covered end to end. Only the assertion moved to the domain,
+    where ``cast_vote`` decides — it used to go through ``PUT /vote``, which D-50
+    removed. ``InvalidCard`` is what that route was mapping to its 422 anyway."""
+    from app.rooms.store import store
+
     created = client.post("/rooms", json={"name": "Alice", "cards": "1,2,3"}).json()
-    code = created["room"]["code"]
-    resp = client.put(
-        f"/rooms/{code}/vote",
-        json={"participant_id": created["participant_id"], "card": "8"},
-    )
-    assert resp.status_code == 422  # InvalidCard
+    room = store.get(created["room"]["code"])
+    with pytest.raises(InvalidCard):
+        room.cast_vote(created["participant_id"], "8")
+    room.cast_vote(created["participant_id"], "2")  # and a card in the deck is fine

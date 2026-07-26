@@ -1,8 +1,11 @@
 """Domain errors for the room aggregate.
 
-Raised by the model, translated to HTTP status codes at the router boundary
-(and later to error messages over the WebSocket). Keeping them transport-free
-lets the domain be tested without a request/response in sight.
+Raised by the model, and translated at whichever boundary the caller came in on:
+almost always to an ``error`` frame over the WebSocket (``ws.py``), and for the
+two surviving HTTP routes to a status code via ``main._ROOM_ERROR_STATUS`` — where
+``RoomFull`` is now the only one reachable (D-50). Keeping them transport-free lets
+the domain be tested without a request/response in sight, and is what let the HTTP
+round routes be deleted without touching a single rule.
 """
 
 from __future__ import annotations

@@ -141,6 +141,9 @@ initial requirements interview.
   round routes are dropped once the frontend is live (folded into S10). _Chosen over
   a hard cutover to WS-only in S6, which would have left the round logic reachable
   only through the harder-to-drive socket while that socket was still unproven._
+  **Fulfilled, not superseded, by D-50** — this decision named its own end condition
+  and V5 executed it. The forward note matters because the dual transport reads as
+  drift in hindsight: it was time-boxed from the day it was chosen.
 - **D-36 WebSocket delivery: full-snapshot broadcast driven by the domain.**
   Server→client state is the whole `RoomView` (a snapshot, not deltas — cheap for
   ≤ 30 participants (D-6), and it reuses the exact shape the HTTP layer already
@@ -149,7 +152,9 @@ initial requirements interview.
   same broadcast and no connected client diverges — which is what makes the dual
   transport (D-35) safe rather than a source of drift. The FR-10 pre-reveal gate is
   inherited for free: the snapshot is the same guarded `RoomView`, so card values
-  are absent until reveal regardless of transport.
+  are absent until reveal regardless of transport. **The convergence half of this is
+  no longer testable** — D-50 left one transport, so there is nothing to converge
+  *from*; the domain-driven half still holds and is what the mechanism now rests on.
 
 ## S7 — Frontend room shell
 
@@ -534,3 +539,91 @@ closes.
   now fail one rule with one message instead of two rules with two.
   `MAX_CARD_LENGTH` stays 6 and is still load-bearing — `1.23456` is inside the
   range and too long to print on a card.
+
+- **D-50 The HTTP round and presence routes are retired; the socket is the only
+  transport past the handshake.** Deletes `PUT /{code}/item`, `PUT /{code}/vote`,
+  `PUT /{code}/host-voting`, `POST /{code}/reveal`, `POST /{code}/reset`,
+  `DELETE /{code}/participants/{participant_id}`, and the T1 `/ws` echo. `POST /rooms`
+  and `POST /rooms/{code}/participants` stay — they are entry points, and a client has
+  no socket until it knows which room to open one for (D-5, D-38). This **fulfils
+  D-35** rather than reversing it: the dual transport was time-boxed at the moment it
+  was chosen, and the frontend has driven the socket since S7. No new FR — NFR-1
+  already describes the end state, so this brings the code into line with a
+  requirement it already had.
+  **The reason it went ahead of V3, which was the substantive change to the phase
+  plan:** `DELETE /{code}/participants/{participant_id}` read its target from the path
+  and applied *no host check and no actor check at all*. Every participant id ships in
+  every snapshot, so anyone holding the room code could eject any participant — the
+  host included — over plain `curl`, with no socket and no impersonation, and
+  `allow_origins=["*"]` with `allow_methods=["*"]` let a web page preflight it. V2 had
+  just built `_require_host` plus a self-target guard for exactly that operation over
+  the socket; the HTTP door beside it had neither.
+  **This retirement closed six holes, not one — found while reviewing the change, and
+  worth recording because it was not the argument the work was justified on.** The five
+  *round* routes took their `participant_id` from the **request body**, and
+  `_require_host` does nothing but compare that id to `host_id`. Since `RoomView` ships
+  `host_id` to every client (`views.py:82`), any code-holder could join, read the
+  host's id out of a snapshot, and pass it as `participant_id` to satisfy the guard —
+  making `reveal`, `reset`, `set_item`, `vote` and `host-voting` forgeable over HTTP by
+  design, not by oversight. Body-supplied identity is the defect; the socket path takes
+  identity from the connection instead, which is why it has no equivalent.
+  **On sequencing, the honest version is narrower than "strictly worse."** The deleted
+  `DELETE` was strictly cheaper to *exploit* — a `curl` one-liner against a WebSocket
+  client — and that is what justified doing V5 first. It was **not** larger in
+  *capability*: `attach` yields the same arbitrary eject plus every host action,
+  from the same precondition. That argument therefore expired the moment V5 landed. V3
+  shrinks to `attach` plus one string in `session.ts`, and it is now the entire
+  authorization perimeter — see the note on its backlog item.
+  **What became of the D-36 parity tests.** Four tests existed to show an HTTP action
+  and a WS action converge on one snapshot, which is D-36's sharpest claim. With one
+  transport that claim is unfalsifiable — there is nothing left to converge *from* —
+  so three are deleted and D-36 carries a note saying so, because a reader will come
+  looking for the test that proves it. The fourth was **kept in reduced form** as
+  `test_http_join_reflects_to_socket`, and this is a deliberate departure from the
+  plan: the surviving HTTP join still broadcasts to sockets already in the room, and
+  it is the *only* remaining non-socket mutation that reaches connected clients.
+  Nothing else covered it — the existing join fan-out test sends a WS `join` frame —
+  so deleting all four as written would have silently dropped the last test of
+  `join_room`'s `broadcast_room_state`.
+  Three further tests kept their assertion and swapped mechanism, the deck rule and
+  the R6 stale-socket guard among them; the subject was never the transport.
+  **One deletion did lose real coverage, and the plan's own re-check missed it.** V5
+  flagged `test_rejoin_within_grace_succeeds` as the one test to verify rather than
+  assume, and nominated `test_rejoin_clears_empty_since` plus
+  `test_reoccupancy_cancels_cleanup` as its cover. They are not: both assert only on
+  `empty_since` and the sweep count, and neither exercises a room that is actually in
+  grace. What went uncovered was the deleted test's real payload — that someone
+  rejoining an emptied room inside its grace window **becomes host**. Caught by
+  mutation, after the fact: making `add_participant` skip the host assignment for an
+  in-grace room fails on `main` and passed all 244 tests here. The consequence is not
+  cosmetic — the room returns with `host_id is None`, so nobody can reveal or reset it
+  and it is effectively bricked (D-13, D-18). Now pinned at domain level by
+  `test_rejoin_within_grace_gets_a_host`, which goes through `store.leave`/`store.join`
+  so the grace stamp is real. The lesson is about the method, not the test: "the domain
+  counterpart is strictly richer" was true for 31 of the 32 deletions and read as
+  true for the 32nd, and only mutation testing separated them.
+  Backend 279 → 245 tests, frontend (188) and e2e (44) untouched and verified by
+  running them.
+  **Two defences were broadened rather than pruned**, for the same reason — their value
+  is not tied to the route that used to trigger them. `_ROOM_ERROR_STATUS` now maps six
+  errors no HTTP route can raise (`RoomFull` is the last reachable one); it stays
+  complete so a future route cannot fall through to a 500, which is a property of the
+  error type, not of today's route list. And `ws.py`'s `suppress(UnknownParticipant)` in
+  the disconnect `finally` loses its only *production* trigger — a host removal detaches
+  the socket first, so `unregister` returns `False`, and a swept room fails the
+  `is not None` guard — but it stays, because if the participant is absent for any
+  reason the escaping exception skips `broadcast_room_state` and every *other* client
+  in the room silently loses their FR-17 leave fan-out. Measured, not assumed: removing
+  it makes that fan-out never arrive.
+  **Eight dangling references had to be repointed, across more files than the plan
+  listed.** Beyond `messages.py`'s `SetItemRequest` parity claim: two more in `ws.py`
+  (the re-resolve guard cited the deleted `DELETE` as its only reason, contradicting the
+  `finally` comment 47 lines below), `connection.py`'s "used by both transports",
+  `errors.py`'s HTTP-first framing, `store.py`'s "while we're HTTP-only", a test
+  docstring claiming parity with a route that no longer exists, and `frontend/config.ts`
+  crediting the `/ws` echo's retirement to S10. The pattern is worth naming: a comment
+  that justifies a rule by *naming a route* dangles when the route goes, where one that
+  states the rule does not. Repointing them was the bulk of the review's yield.
+  _Chosen over keeping the routes as a debugging affordance: they were unreachable from
+  the app, untested against the guards the socket path had grown, and every one of them
+  accepted identity from the caller._

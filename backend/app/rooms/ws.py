@@ -247,9 +247,12 @@ async def room_socket(websocket: WebSocket, code: str) -> None:
                 await websocket.send_json(error_frame("bad_request", str(exc)))
                 continue
 
-            # Re-resolve each action: a connected room can't be swept, but an HTTP
-            # DELETE of the last participant can leave this socket open on a room
-            # the sweeper later reclaims — guard against dispatching on None.
+            # Re-resolve each action rather than closing over one `Room`: the room
+            # this socket belongs to can go away mid-session, and then dispatching
+            # would be on `None`. The example this used to give was an HTTP DELETE
+            # of the last participant, which D-50 removed; the mechanism that
+            # remains is the sweeper reclaiming a room that emptied out (risk R1,
+            # pinned by `test_action_after_room_swept_errors_room_not_found`).
             room = store.get(code)
             if room is None:
                 await websocket.send_json(
@@ -294,7 +297,18 @@ async def room_socket(websocket: WebSocket, code: str) -> None:
         if manager.unregister(code, participant_id, websocket):
             room = store.get(code)
             if room is not None:
-                # already removed (e.g. an HTTP DELETE for the same pid) is fine
+                # The participant being gone already used to mean an HTTP DELETE for
+                # the same pid, and D-50 deleted that route. No *production* path
+                # reaches this now: a host removal detaches the socket first, so
+                # `unregister` above returns False, and a swept room fails the
+                # `is not None` guard. It is still reached by the suite — see
+                # `test_action_after_participant_vanishes_errors_not_in_room`, which
+                # calls `store.leave` directly to build exactly this state.
+                # Kept, because this is a `finally` on the disconnect path: if the
+                # participant is absent for any reason, the cost of letting that
+                # exception escape is that `broadcast_room_state` below never runs,
+                # so every *other* client in the room silently loses their FR-17
+                # leave fan-out. Cheap guard, disproportionate failure.
                 with contextlib.suppress(UnknownParticipant):
                     store.leave(room, participant_id)
                 await broadcast_room_state(room)  # leave fan-out (FR-17)
