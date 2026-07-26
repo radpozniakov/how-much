@@ -595,14 +595,15 @@ closes.
   grace. What went uncovered was the deleted test's real payload — that someone
   rejoining an emptied room inside its grace window **becomes host**. Caught by
   mutation, after the fact: making `add_participant` skip the host assignment for an
-  in-grace room fails on `main` and passed all 244 tests here. The consequence is not
+  in-grace room fails on `main` and passed all 244 tests this branch then had. The
+  consequence is not
   cosmetic — the room returns with `host_id is None`, so nobody can reveal or reset it
   and it is effectively bricked (D-13, D-18). Now pinned at domain level by
   `test_rejoin_within_grace_gets_a_host`, which goes through `store.leave`/`store.join`
   so the grace stamp is real. The lesson is about the method, not the test: "the domain
   counterpart is strictly richer" was true for 31 of the 32 deletions and read as
   true for the 32nd, and only mutation testing separated them.
-  Backend 279 → 245 tests, frontend (188) and e2e (44) untouched and verified by
+  Backend 279 → 246 tests, frontend (188) and e2e (44) untouched and verified by
   running them.
   **Two defences were broadened rather than pruned**, for the same reason — their value
   is not tied to the route that used to trigger them. `_ROOM_ERROR_STATUS` now maps six
