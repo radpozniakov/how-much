@@ -5,10 +5,13 @@ import {
   joinViaCode,
   participantCards,
   resultEntry,
+  revealButton,
   rosterEntry,
   setHostVoting,
+  setTopic,
   showStats,
   voteCard,
+  voteDeck,
 } from './helpers'
 
 // The heart of the app: private voting, then a host-triggered simultaneous
@@ -22,6 +25,9 @@ async function setupRoom(browser: Parameters<Parameters<typeof test>[2]>[0]['bro
   const host = await hostCtx.newPage()
   const code = await createRoom(host, 'Host')
   await setHostVoting(host, false) // facilitator only
+  // Voting and revealing are both gated on an estimation subject existing, so
+  // every scenario here needs a topic before anyone can cast a card.
+  await setTopic(host, 'Estimate the login page')
 
   const aCtx = await browser.newContext()
   const a = await aCtx.newPage()
@@ -31,8 +37,10 @@ async function setupRoom(browser: Parameters<Parameters<typeof test>[2]>[0]['bro
   const b = await bCtx.newPage()
   await joinViaCode(b, code, 'Ben')
 
-  // Everyone sees all three before we start.
-  await expect(participantCards(host)).toHaveCount(3)
+  // Both voters have a card before we start. The opted-out host is a facilitator
+  // and is excluded from the grid (FR-17), so this is 2, not 3 — the host is
+  // still in the room and still appears in the header roster (S23).
+  await expect(participantCards(host)).toHaveCount(2)
 
   const cleanup = async () => {
     await aCtx.close()
@@ -89,7 +97,7 @@ test.describe('Voting & reveal', () => {
 
     await voteCard(a, '5').click()
     await voteCard(b, '5').click()
-    await card(host, 'Host controls').getByRole('button', { name: 'Reveal' }).click()
+    await revealButton(host).click()
 
     // All three clients now see the Results card with both cards revealed —
     // the dashboard lives in the stats view (S18), so switch there first.
@@ -112,7 +120,7 @@ test.describe('Voting & reveal', () => {
 
     await voteCard(a, '3').click()
     await voteCard(b, '8').click()
-    await card(host, 'Host controls').getByRole('button', { name: 'Reveal' }).click()
+    await revealButton(host).click()
 
     await showStats(host)
     await expect(card(host, 'Results')).toBeVisible()
@@ -129,7 +137,7 @@ test.describe('Voting & reveal', () => {
     browser,
   }) => {
     const { a, cleanup } = await setupRoom(browser)
-    const deck = card(a, 'Your vote').getByRole('button')
+    const deck = voteDeck(a).getByRole('button')
     await expect(deck).toHaveText(['0', '1', '2', '3', '5', '8', '13', '21'])
     await cleanup()
   })

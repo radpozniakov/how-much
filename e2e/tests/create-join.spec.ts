@@ -1,11 +1,14 @@
 import { expect, test } from '@playwright/test'
 import {
-  card,
   createRoom,
+  hostVotingToggle,
   joinViaCode,
   joinViaLink,
   participantCards,
+  revealButton,
+  roomCodeHeading,
   rosterEntry,
+  topicEditor,
 } from './helpers'
 
 // Room creation, identity, and the two join paths (code + shareable link).
@@ -17,16 +20,18 @@ test.describe('Create & join', () => {
   }) => {
     const code = await createRoom(page, 'Alice')
 
-    // The header carries the code and identifies the current participant.
-    await expect(
-      page.getByRole('heading', { name: `Room ${code}` }),
-    ).toBeVisible()
+    // The header carries the bare code (DN-D) and identifies the participant.
+    await expect(roomCodeHeading(page, code)).toBeVisible()
     await expect(page.locator('.room-header__name')).toHaveText('Alice')
     // The creator's own participant card is present.
     await expect(rosterEntry(page, 'Alice')).toBeVisible()
 
-    // Host-only controls are present for the creator (FR-12/FR-13).
-    await expect(card(page, 'Host controls')).toBeVisible()
+    // Host affordances are present for the creator (FR-12/FR-13). There is no
+    // "Host controls" card any more — they are the stage topic editor, the
+    // "I'm voting" toggle, and the reveal button below the grid.
+    await expect(topicEditor(page)).toBeVisible()
+    await expect(hostVotingToggle(page)).toBeVisible()
+    await expect(revealButton(page)).toBeVisible()
 
     // The header copy button copies the canonical deep link for this room
     // (FR-2a). Read it back from the clipboard to confirm the value.
@@ -55,8 +60,10 @@ test.describe('Create & join', () => {
       await expect(rosterEntry(p, 'Alice')).toBeVisible()
       await expect(rosterEntry(p, 'Bob')).toBeVisible()
     }
-    // Bob is not the host and gets no host controls.
-    await expect(card(guest, 'Host controls')).toHaveCount(0)
+    // Bob is not the host: no topic editor, no voting toggle, no reveal button.
+    await expect(topicEditor(guest)).toHaveCount(0)
+    await expect(hostVotingToggle(guest)).toHaveCount(0)
+    await expect(revealButton(guest)).toHaveCount(0)
 
     await hostCtx.close()
     await guestCtx.close()
