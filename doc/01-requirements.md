@@ -3,7 +3,8 @@
 ## Actors
 
 - **Host** — the participant who created the room. Controls the round (reveal,
-  reset) and may toggle whether they personally vote. See [Host role](03-decisions.md).
+  reset), may toggle whether they personally vote, and may hand the role to another
+  participant (FR-20). See [Host role](03-decisions.md).
 - **Participant** — anyone else in the room. Always votes; cannot control the round.
 
 ## Functional requirements
@@ -22,7 +23,8 @@
 - **FR-6** A room lives in memory while occupied and is discarded **1 minute**
   after the last participant has left.
 - **FR-7** If the host disconnects, the host role auto-transfers to another
-  participant so the room remains controllable.
+  participant so the room remains controllable — see FR-20 for the deliberate
+  handover.
 
 ### Voting round
 - **FR-8** The room works on a **single current item** at a time — an optional
@@ -48,6 +50,14 @@
   in real time for everyone.
 - **FR-18** A dropped participant who reconnects rejoins as a **new** participant
   (same name if re-entered); any vote in the in-progress round is lost.
+- **FR-19** — *reserved: participant self-rename (shipped as `set_name`, D-42);
+  requirement to be backfilled — see [07-v0.1-phase.md](07-v0.1-phase.md).*
+
+### Room control
+Host actions taken on *another* participant, as distinct from controlling the round.
+- **FR-20** The host can hand the host role to another participant in the room. The
+  role **moves**: the former host becomes an ordinary participant and votes, and the
+  new host votes by default. There is exactly one host at any moment.
 
 ## Non-functional requirements
 
@@ -65,4 +75,7 @@
 
 ## Open questions
 
-- None open. All MVP decisions resolved — see [03-decisions.md](03-decisions.md).
+- No open **MVP** decisions — see [03-decisions.md](03-decisions.md).
+- Outstanding for the current phase: **FR-19** is reserved but unwritten (the
+  behavior ships; the requirement does not exist yet). The v0.1 phase tracks the
+  rest — see [07-v0.1-phase.md](07-v0.1-phase.md).

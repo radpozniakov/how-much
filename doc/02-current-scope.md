@@ -30,7 +30,8 @@ The smallest set that makes a real estimation session usable.
 | Host voting toggle | Host can opt in/out of voting; others always vote |
 | Results | All votes + average + consensus flag |
 | Presence | Real-time who's-in / who-voted over WebSocket |
-| Host handoff | Auto-transfer host if the current host disconnects |
+| Host auto-handoff | Auto-transfer host if the current host disconnects |
+| Host handover | Host hands the role to another participant; the former host becomes an ordinary voter |
 | Room cleanup | In-memory; discarded after grace period when empty |
 | Reconnection | Rejoin as a new participant; in-round vote is lost |
 
@@ -39,7 +40,6 @@ The smallest set that makes a real estimation session usable.
 Listed separately from "Out of scope" because they are committed work, not
 exclusions. See [07-v0.1-phase.md](07-v0.1-phase.md).
 
-- **Host handover** — the host gives the host role to another participant (V1)
 - **Removing a participant** — host-only, and not a ban (V2)
 
 ## Out of scope
