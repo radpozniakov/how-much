@@ -50,6 +50,30 @@ describe('api error normalization', () => {
     }
   })
 
+  it('strips pydantic\'s "Value error, " prefix off a custom-validator message', async () => {
+    // Latent until V4 (FR-22/D-48): a 422 used to mean a name so malformed the UI
+    // had already blocked it, but a rejected deck — duplicates, a bad count — is
+    // the routine outcome of an ordinary typo, so the prefix would now be read.
+    stubFetch(422, {
+      detail: [
+        {
+          loc: ['body', 'cards'],
+          msg: 'Value error, card values must not repeat',
+          type: 'value_error',
+        },
+      ],
+    })
+    try {
+      await createRoom('Alice', '1, 1, 2')
+      expect.unreachable('createRoom should have thrown')
+    } catch (err) {
+      expect(isApiError(err)).toBe(true)
+      if (isApiError(err)) {
+        expect(err.detail).toBe('card values must not repeat')
+      }
+    }
+  })
+
   it('maps a network failure to status 0', async () => {
     vi.stubGlobal(
       'fetch',
@@ -79,5 +103,23 @@ describe('api success', () => {
     expect(result.participantId).toBe('p1')
     expect(result.room.code).toBe('ABCDEF')
     expect(result.link).toBe('http://localhost:5173/room/ABCDEF')
+  })
+
+  it('sends the raw card values, and null when they are blank', async () => {
+    // Raw because the server owns the deck rules (FR-22/D-48); null rather than
+    // "" so "the host named no values" is one thing on the wire, not two.
+    const body = async (cards?: string) => {
+      stubFetch(201, {
+        participant_id: 'p1',
+        room: { code: 'ABCDEF', participants: [] },
+        link: 'l',
+      })
+      await createRoom('Alice', cards)
+      return JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string)
+    }
+
+    expect(await body('1, 2, 4')).toEqual({ name: 'Alice', cards: '1, 2, 4' })
+    expect(await body('   ')).toEqual({ name: 'Alice', cards: null })
+    expect(await body()).toEqual({ name: 'Alice', cards: null })
   })
 })

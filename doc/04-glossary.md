@@ -24,7 +24,9 @@
   an internal ID disambiguates.
 - **Item / Topic** — The single thing being estimated in the current round. An
   optional free-text label the host can set. No backlog exists.
-- **Deck** — The set of selectable cards. In MVP: Fibonacci numbers only.
+- **Deck** — The set of selectable cards for a room. Numbers only. Chosen by the
+  host when creating the room and fixed for its life; left unset, it is the
+  Fibonacci default `0, 1, 2, 3, 5, 8, 13, 21`.
 - **Card / Vote** — A single participant's estimate selection for the current round.
 - **Round** — One cycle: participants vote privately → host reveals → results shown
   → host resets for the next item.

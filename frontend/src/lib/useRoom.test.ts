@@ -7,6 +7,7 @@ import { MockWebSocket, deliver, lastSocket } from '../test/mockWebSocket'
 
 const fakeRoom: RoomView = {
   code: 'ABCDEF',
+  deck: ['0', '1', '2', '3', '5', '8', '13', '21'],
   host_id: 'pid-1',
   participants: [{ id: 'pid-1', name: 'Alice', has_voted: false }],
   current_item: null,

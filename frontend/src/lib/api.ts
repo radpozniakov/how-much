@@ -54,7 +54,13 @@ function normalizeDetail(body: unknown): string {
       const first: unknown = detail[0]
       if (first && typeof first === 'object' && 'msg' in first) {
         const msg = (first as { msg: unknown }).msg
-        if (typeof msg === 'string') return msg
+        // Pydantic prefixes every custom-validator message with "Value error, ",
+        // which is its own implementation detail and not a sentence anyone should
+        // read. Latent until V4: a 422 used to mean a name so malformed the UI had
+        // already blocked it, but the card-values field can be rejected for
+        // duplicates or a bad count that no input attribute can prevent, so this
+        // is now the routine message for an ordinary typo.
+        if (typeof msg === 'string') return msg.replace(/^Value error, /, '')
       }
     }
   }
@@ -88,8 +94,19 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return data as T
 }
 
-export async function createRoom(name: string): Promise<CreateResult> {
-  const res = await post<CreateResponse>('/rooms', { name })
+/** Create a room as its host. `cards` is the host's optional comma-separated card
+ * values (FR-22/D-48), sent raw — the server owns parsing and normalizing them, so
+ * there is one implementation of those rules and it is the one that decides. Blank
+ * is sent as null, which the server reads as "no choice" and answers with the
+ * Fibonacci default. An invalid deck comes back as a 422 the caller renders. */
+export async function createRoom(
+  name: string,
+  cards = '',
+): Promise<CreateResult> {
+  const res = await post<CreateResponse>('/rooms', {
+    name,
+    cards: cards.trim() || null,
+  })
   // Use the server's canonical code (uppercase, D-17), never the raw input.
   return { participantId: res.participant_id, room: res.room, link: res.link }
 }

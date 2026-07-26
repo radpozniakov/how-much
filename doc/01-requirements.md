@@ -31,8 +31,10 @@
 ### Voting round
 - **FR-8** The room works on a **single current item** at a time — an optional
   free-text topic/title the host can set. There is no backlog.
-- **FR-9** The estimation deck is **Fibonacci numbers only**: `0, 1, 2, 3, 5, 8,
-  13, 21`. No `40`/`100`, no special cards (`?`, coffee).
+- **FR-9** The estimation deck is **numbers only** — no special cards (`?`,
+  coffee), no T-shirt sizes. Its **default** is the Fibonacci set `0, 1, 2, 3, 5,
+  8, 13, 21`, which a room gets when its host names no card values; a host who
+  does name them sets the deck instead (FR-22).
 - **FR-10** During a round, each voter privately selects one card. Others see only
   *that* a participant has voted, not the value.
 - **FR-11** A voter may change their selection until the round is revealed.
@@ -66,6 +68,16 @@ Host actions taken on *another* participant, as distinct from controlling the ro
   still works, so they may rejoin at once as a new participant (FR-18). The host
   cannot remove themselves — a host who wants to leave hands the role over first
   (FR-20). Removal frees a seat against the FR-5 capacity limit.
+
+### Room configuration
+- **FR-22** The host chooses the room's **card values when creating it**, in one
+  optional comma-separated field. Left blank, the room gets the FR-9 Fibonacci
+  default. Each value must be a number, zero or more and below `1000`, at most 6
+  characters once normalized to a canonical form (`1.0` and `01` both mean `1`);
+  decimals are allowed. A deck holds **2 to 15** cards, in the order the host
+  entered them, and repeated values are **rejected** rather than deduplicated. The
+  deck is **fixed for the room's life** — there is no way to change it afterwards,
+  and a host who wants different values creates a new room.
 
 ## Non-functional requirements
 

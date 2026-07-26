@@ -4,8 +4,9 @@
 > end-to-end, and the UX/UI redesign has shipped (build history:
 > `archive/phase1-mvp-backlog.md` and `archive/ux-phase-backlog.md`; rationale:
 > [03-decisions.md](03-decisions.md)). Keep this updated as scope changes. The
-> current [v0.1 phase](07-v0.1-phase.md) **does** add behavior — host handover and
-> removing a participant — so expect the table below to move with it.
+> current [v0.1 phase](07-v0.1-phase.md) **does** add behavior — host handover,
+> removing a participant, and host-chosen card values — so expect the table below
+> to move with it.
 >
 > Known gaps, all tracked in [07-v0.1-phase.md](07-v0.1-phase.md): **deployment
 > polish (S10)** — tighten CORS, finalize Docker/compose, run docs; **interaction
@@ -22,7 +23,8 @@ The smallest set that makes a real estimation session usable.
 | Identity | Name only, non-unique, internal ID distinguishes participants |
 | Rename | A participant can rename themselves at any time; everyone sees it live |
 | Capacity | Up to 30 participants per room |
-| Deck | Fibonacci numbers only (`0,1,2,3,5,8,13,21`), no special cards |
+| Deck | Numbers only, no special cards; `0,1,2,3,5,8,13,21` by default |
+| Card values | Host sets the room's cards when creating it (2–15 numbers, comma-separated); fixed for the room's life |
 | Item | Single current item with optional free-text topic |
 | Voting | Private selection; changeable until reveal |
 | Reveal | Host-only reveal; shows all cards |
@@ -41,17 +43,17 @@ The smallest set that makes a real estimation session usable.
 Listed separately from "Out of scope" because they are committed work, not
 exclusions. See [07-v0.1-phase.md](07-v0.1-phase.md).
 
-- **Host-chosen card values** — the host sets the room's cards when creating it;
-  numbers only, fixed for the room's life, and blank means Fibonacci (V4)
+- *(Nothing outstanding — host-chosen card values shipped as V4 and is in the
+  table above.)*
 
 ## Out of scope
 
 - Accounts / authentication / authorization
 - Persistent storage, history, or result export
 - Backlog or multi-ticket management; integrations (Jira, etc.)
-- T-shirt sizing and special cards (`?`, coffee) — custom decks are numbers-only
-  (V4); also out: named or saved decks, more than one deck per room, and changing
-  the deck after the room is created
+- T-shirt sizing and special cards (`?`, coffee) — custom decks are numbers-only;
+  also out: named or saved decks, more than one deck per room, and changing the
+  deck after the room is created
 - Vote-value distribution charts (only average + consensus for now)
 - Spectators as a distinct role
 - Banning a removed participant (removal is not a ban — the code still works)

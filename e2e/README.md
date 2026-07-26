@@ -39,7 +39,7 @@ HOWMUCH_FRONTEND_URL=http://host:5173 HOWMUCH_API_URL=http://host:8000 npm test
 | Spec | Requirements |
 |------|--------------|
 | `create-join.spec.ts` | FR-1, FR-2a, FR-3, FR-4, FR-17 — create/host, join by code + link, duplicate names |
-| `voting-reveal.spec.ts` | FR-9, FR-10, FR-11, FR-12, FR-15, FR-16 — private votes, change vote, reveal + average + consensus |
+| `voting-reveal.spec.ts` | FR-9, FR-10, FR-11, FR-12, FR-15, FR-16, FR-22 — private votes, change vote, reveal + average + consensus, host-chosen card values |
 | `host-controls.spec.ts` | FR-8, FR-13, FR-14 — topic, host-voting toggle, reset, non-host restrictions |
 | `presence-handoff.spec.ts` | FR-7, FR-17 — live presence, host auto-transfer on disconnect |
 | `edge-cases.spec.ts` | FR-18 — bad room code, tab reload/reconnect recovery |

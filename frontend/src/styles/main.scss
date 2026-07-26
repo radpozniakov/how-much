@@ -244,6 +244,18 @@ form button {
     left: 0px;
     font-size: 10px;
   }
+
+  // Help text under an optional control (the card-values field, V4). Muted ink
+  // and a smaller size carry the subordination — no color, per the monochrome
+  // design language. Sits outside the wrapping <label> and is bound with
+  // aria-describedby, so it describes the field without joining its name.
+  &__hint {
+    display: block;
+    margin-top: var(--space-1);
+    font-size: 12px;
+    color: var(--ink-muted);
+    line-height: 1.4;
+  }
 }
 
 // Main page ("/") — intro above a horizontal pair of cards (spec §Main page).

@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FC } from 'react'
-import { FIBONACCI_DECK } from '../../lib/deck'
 
 export interface VoteDeckProps {
+  // The room's card values, straight from the snapshot (FR-22/D-48). A prop
+  // rather than the imported constant since V4: the deck is the host's choice at
+  // creation, so this component renders what the room holds and has no opinion
+  // about what that should be. Fixed for the room's life, so it never changes
+  // under a mounted deck.
+  deck: string[]
   // The caller's own has_voted from the snapshot — presence, not the value.
   hasVoted: boolean
   revealed: boolean
@@ -12,6 +17,7 @@ export interface VoteDeckProps {
 }
 
 export const VoteDeck: FC<VoteDeckProps> = ({
+  deck,
   hasVoted,
   revealed,
   onVote,
@@ -42,7 +48,7 @@ export const VoteDeck: FC<VoteDeckProps> = ({
   return (
     <section className="vote-bar" aria-label="Your vote">
       <div className="vote-deck">
-        {FIBONACCI_DECK.map((card) => (
+        {deck.map((card) => (
           <button
             key={card}
             type="button"

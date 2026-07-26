@@ -18,9 +18,15 @@ initial requirements interview.
 ## Product / behavior
 
 - **D-7 Estimation scale: Fibonacci only.** Classic Planning Poker; no need for
-  multiple decks in MVP.
+  multiple decks in MVP. **Partly superseded by D-48** (v0.1): Fibonacci is now the
+  *default* deck rather than the only one — the host may name the room's card
+  values when creating it. Still true, and the reason D-48 is only a partial
+  supersession: one deck per room, chosen once, with no presets or saved decks.
 - **D-8 Cards: numbers only.** No `?` (unsure) or coffee card in MVP — keep the
   deck minimal. Set is `0, 1, 2, 3, 5, 8, 13, 21` — no `40`/`100`.
+  **Untouched by D-48**, and deliberately so: a host-chosen deck is still numbers
+  only. The set named above moved from "the cards" to "the default cards"; that a
+  card *is* a number did not move at all.
 - **D-9 Identity: name only, no auth.** Lowest friction; no accounts to build.
 - **D-10 Names non-unique.** Duplicates allowed; internal ID disambiguates. Avoids
   validation UX.
@@ -432,3 +438,62 @@ closes.
     with two irreversible actions on one row "Confirm" tells a screen-reader user that
     *something* will happen but not which; and the row actions gain the `:disabled`
     treatment `.icon-btn` never had, off-live now being their only disabled state.
+- **D-48 The deck is room state, chosen once at creation.** `Room` gains
+  `deck: tuple[str, ...]`, defaulting to `config.FIBONACCI_DECK`; `store.create`
+  threads it; `cast_vote` validates against `self.deck`; `RoomView` carries it. This
+  **supersedes D-7 in part** — Fibonacci becomes the *default* rather than the
+  constraint — and leaves **D-8 standing untouched**: cards are still numbers only,
+  so no `?`, no coffee card, no T-shirt sizes. Named or saved decks, more than one
+  deck per room, and changing a deck after creation all stay out of scope.
+  **Fixed at creation is the load-bearing choice**, not a simplification deferred.
+  It buys the whole slice out of the only hard question a mutable deck poses — a
+  cast vote holding a card that has left the deck — and with it goes any need for a
+  host-only frame, mid-round invalidation, or a control in the roster. A host who
+  wants different values makes a new room. The cost is real and accepted: a typo in
+  the deck is unfixable without abandoning the room.
+  **Validation is at the create boundary and nowhere else** (`app/rooms/deck.py`,
+  called by `CreateRoomRequest`), so a bad deck is a `422` on creation rather than a
+  room that is already broken, and the domain sees a deck valid by construction.
+  The rules: split on commas, trim, **drop empty segments** (a trailing comma is
+  typing, not intent); each value a finite non-negative number below `1000` and at
+  most 6 characters once normalized; **2 to 15** cards; order preserved as entered,
+  never sorted.
+  **Duplicates are rejected, not silently deduped** — the one genuinely debatable
+  rule here. Dedup is friendlier; rejection is honest, and `1, 1, 2` is a typo whose
+  quiet correction would hand the host a deck that differs from what they typed.
+  Pinned by test as *decided* rather than left to be rediscovered.
+  **Normalization is load-bearing, not cosmetic.** `1.0` → `1`, `01` → `1`, `.5` →
+  `0.5`, all before storage, because `Room.results()` computes consensus by
+  comparing the card *strings* (`len(set(votes.values())) == 1`). An un-normalized
+  deck holding both `1` and `1.0` would let two voters who actually agree fail to
+  read as consensus. Canonicalizing also turns that pair into the duplicate it is,
+  so the two rules reinforce each other.
+  **Consequences:**
+  - **`results()` had to stop parsing cards as `int`.** `int("0.5")` raises
+    `ValueError` — a 500, not a domain error, and only on reveal, so a room with a
+    decimal card would look fine right up until the first reveal. It is `float` now,
+    pinned by a decimal-deck test at the domain level and an E2E through the real
+    socket. Display needed nothing: `Results.tsx` already formats with `toFixed(1)`.
+    Consensus deliberately still compares strings, which normalization makes exact.
+  - **Distribution is the snapshot, and that is the entire story.** `RoomView.deck`
+    reaches every client on every broadcast (D-36), so a participant who never saw
+    the create form votes from the room's own deck and a reconnecting one gets it
+    for free — `session.ts` persists nothing new.
+  - **`lib/deck.ts` demotes from mirror-of-the-only-deck to mirror-of-the-default.**
+    `VoteDeck` takes the deck as a prop and renders the snapshot's. The constant's
+    one remaining job is telling a host what leaving the field blank will give them.
+    Its old note — that drift between it and the backend was the only route to
+    `invalid_card` — is replaced by something stronger: the deck is immutable and
+    arrives in the snapshot, so a client can only click cards the room holds.
+    `invalid_card` stays unreachable from the UI and remains the guard against
+    hand-crafted frames.
+  - **The client does not pre-validate, deliberately.** `CreateRoomForm` sends the
+    raw string; a second implementation of these rules on that side could only drift
+    from the one that decides. The form surfaces the `422` inline instead, which it
+    must: duplicates and a bad card count are things no input attribute can prevent,
+    unlike the topic and name bounds whose client mirrors make rejection unreachable.
+  - **It exposed pydantic's `"Value error, "` prefix as user-visible copy.** Latent
+    until now — a 422 used to mean a name so malformed the UI had already blocked it
+    — but a mistyped deck is an ordinary outcome, so `api.ts` strips the prefix. That
+    is a leaked implementation detail, not a wording choice, so it is fixed here
+    rather than left to S22.

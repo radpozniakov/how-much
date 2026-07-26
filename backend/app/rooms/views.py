@@ -45,6 +45,13 @@ class RoomView(BaseModel):
     is what gets broadcast (D-36)."""
 
     code: str
+    # The room's card values, in the host's order (FR-22/D-48). Riding the
+    # snapshot is the whole distribution story: it reaches every client on every
+    # broadcast (D-36), so a client renders the deck it is actually voting into and
+    # a reconnecting participant gets it for free — nothing new to persist
+    # client-side. Fixed at creation, so it is the one field here that never
+    # changes over a room's life.
+    deck: list[str]
     host_id: str | None
     participants: list[ParticipantView]
     current_item: str | None
@@ -71,6 +78,7 @@ def room_view(room: Room) -> RoomView:
     """Build the client-facing snapshot of ``room`` (shared by HTTP + WS)."""
     return RoomView(
         code=room.code,
+        deck=list(room.deck),
         host_id=room.host_id,
         participants=[
             ParticipantView(id=p.id, name=p.name, has_voted=p.id in room.votes)

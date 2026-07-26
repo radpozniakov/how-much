@@ -68,6 +68,14 @@ class Room:
     and whether the round has been revealed."""
 
     code: str
+    # The room's card values, chosen by the host at creation and fixed for the
+    # room's life (FR-22/D-48). Immutable and never reassigned, which is what buys
+    # the slice out of the hard question: no cast vote can ever hold a card that
+    # has left the deck. Defaults to the Fibonacci deck, so every construction site
+    # that predates V4 — and every room whose host left the field blank — is
+    # unchanged. Validated at the create boundary (`app.rooms.deck.parse_deck`), so
+    # the domain can treat it as valid by construction.
+    deck: tuple[str, ...] = config.FIBONACCI_DECK
     participants: dict[str, Participant] = field(default_factory=dict)
     host_id: str | None = None
     current_item: str | None = None
@@ -187,7 +195,7 @@ class Room:
             RoundRevealed: if the round has already been revealed (FR-11).
             UnknownParticipant: if the participant is not in the room.
             HostNotVoting: if the host casts a vote while opted out (D-14).
-            InvalidCard: if the card is not a Fibonacci deck value (D-8).
+            InvalidCard: if the card is not in this room's deck (D-8/D-48).
         """
         if self.revealed:
             raise RoundRevealed()
@@ -195,7 +203,10 @@ class Room:
             raise UnknownParticipant()
         if participant_id == self.host_id and not self.host_voting:
             raise HostNotVoting()
-        if card not in config.FIBONACCI_DECK:
+        # `self.deck`, not the Fibonacci constant: since V4 the deck is room state
+        # (D-48). Membership is exact string matching against canonical values,
+        # which is why the boundary normalizes before storing.
+        if card not in self.deck:
             raise InvalidCard(card)
         self.votes[participant_id] = card
 
@@ -336,10 +347,17 @@ class Room:
         This single domain-side gate keeps card values from leaking pre-reveal
         (FR-10). Stats are over cast votes only (reveal is unconditional, so a
         partial round reports the average/consensus of those who did vote). The
-        average is unrounded — display formatting is the frontend's concern."""
+        average is unrounded — display formatting is the frontend's concern.
+
+        ``float``, not ``int``: a deck may hold decimals since V4 (D-48), and
+        ``int("0.5")`` raises ``ValueError`` — a 500, not a domain error, and only
+        on reveal, so a room with a ``0.5`` card would look fine right up until its
+        first reveal. Consensus is deliberately **not** recomputed from these
+        floats: it compares the card strings, which the create boundary
+        normalized, so equality there stays exact."""
         if not self.revealed:
             return None
-        values = [int(card) for card in self.votes.values()]
+        values = [float(card) for card in self.votes.values()]
         average = sum(values) / len(values) if values else None
         consensus = len(values) > 0 and len(set(self.votes.values())) == 1
         return RoundResults(

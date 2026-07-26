@@ -24,10 +24,32 @@ ROOM_CAPACITY = 30
 # Upper bound on a display name's length, applied after trimming (D-34).
 MAX_DISPLAY_NAME_LENGTH = 40
 
-# The estimation deck: Fibonacci numbers only, as string tokens (D-7, D-8). No
-# 40/100, no special cards. Stored as strings so votes serialize uniformly and
-# the set is the single source of truth for what counts as a valid card.
+# The **default** estimation deck: Fibonacci numbers as string tokens (D-7, D-8).
+# No 40/100, no special cards. Stored as strings so votes serialize uniformly.
+#
+# Since V4 (D-48) this is the default rather than the constraint: a room that was
+# created without card values holds exactly this, and `Room.deck` — not this
+# constant — is what `cast_vote` validates against. D-8 is untouched: a custom deck
+# is still numbers only.
 FIBONACCI_DECK: tuple[str, ...] = ("0", "1", "2", "3", "5", "8", "13", "21")
+
+# Bounds on a host-chosen deck (D-48), applied at the create boundary by
+# `app.rooms.deck.parse_deck`. Two is the smallest set that is a choice at all;
+# fifteen keeps the card row legible in a 30-person room (the default deck is 8).
+MIN_DECK_SIZE = 2
+MAX_DECK_SIZE = 15
+
+# Bounds on a single card, so every value stays legible printed on one. The value
+# bound is exclusive and both are checked against the *normalized* form, which is
+# what actually reaches a card face.
+MAX_CARD_VALUE = 1000
+MAX_CARD_LENGTH = 6
+
+# Upper bound on the raw comma-separated card-values string, applied before it is
+# split. MAX_DECK_SIZE * MAX_CARD_LENGTH plus separators is ~120, so this is
+# generous; its job is to bound the work done parsing a hostile input, the same
+# role MAX_TOPIC_LENGTH plays for the topic.
+MAX_DECK_INPUT_LENGTH = 200
 
 # Upper bound on the current item's topic, applied after trimming. Mirrors the
 # bounded display name and keeps the in-memory room from growing unbounded.

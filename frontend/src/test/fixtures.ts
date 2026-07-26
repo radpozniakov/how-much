@@ -1,9 +1,13 @@
+import { FIBONACCI_DECK } from '../lib/deck'
 import type { Participant, ResultsView, RoomView } from '../types'
 
 // A default RoomView for component tests; override any field per case.
 export function makeRoom(overrides: Partial<RoomView> = {}): RoomView {
   return {
     code: 'ABCDEF',
+    // The default deck, matching a room created with the card-values field left
+    // blank (FR-22/D-48). Override `deck` to test a host-chosen one.
+    deck: [...FIBONACCI_DECK],
     host_id: null,
     participants: [],
     current_item: null,

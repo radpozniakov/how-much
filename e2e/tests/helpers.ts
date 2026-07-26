@@ -21,11 +21,20 @@ export function card(page: Page, heading: string | RegExp): Locator {
 }
 
 /** Create a room from the landing page and return its 6-char code. The creator
- * becomes the host (FR-1). */
-export async function createRoom(page: Page, name: string): Promise<string> {
+ * becomes the host (FR-1).
+ *
+ * `cards` is the host's optional comma-separated card values (FR-22/D-48). Left
+ * out, the field stays blank and the room gets the Fibonacci default — which is
+ * what every scenario predating V4 does, unchanged. */
+export async function createRoom(
+  page: Page,
+  name: string,
+  cards?: string,
+): Promise<string> {
   await page.goto('/')
   const create = card(page, 'Create a room')
   await create.getByLabel('Your name').fill(name)
+  if (cards !== undefined) await create.getByLabel('Card values').fill(cards)
   await create.getByRole('button', { name: 'Create', exact: true }).click()
   await page.waitForURL(/\/room\/[A-Z0-9]{6}$/)
   await waitForLive(page)
