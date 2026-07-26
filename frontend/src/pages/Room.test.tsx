@@ -454,4 +454,45 @@ describe('Room (S9 wiring)', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText(/removed you/)).toBeNull()
   })
+
+  // --- Host-chosen card values (FR-22/D-48): the deck comes off the snapshot.
+
+  it("votes with the room's deck, not the client-side default", async () => {
+    const user = userEvent.setup()
+    renderRoomAs('pid-2') // a non-host voter
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        deck: ['1', '2', '4', '8', '12', '16'],
+        current_item: 'Login page',
+        participants: [
+          makeParticipant({ id: 'pid-1', name: 'Alice' }),
+          makeParticipant({ id: 'pid-2', name: 'Bob' }),
+        ],
+      }),
+    )
+
+    const deck = within(screen.getByRole('region', { name: 'Your vote' }))
+    expect(deck.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      '1',
+      '2',
+      '4',
+      '8',
+      '12',
+      '16',
+    ])
+    // 13 and 21 are Fibonacci cards this room does not hold: nothing renders the
+    // constant any more, so they are simply not offered.
+    for (const absent of ['13', '21']) {
+      expect(deck.queryByRole('button', { name: absent })).toBeNull()
+    }
+
+    // And a card off that deck reaches the socket as the string the room holds,
+    // so `invalid_card` stays unreachable from the UI.
+    await user.click(deck.getByRole('button', { name: '12' }))
+    expect(JSON.parse(lastSocket().sent.at(-1)!)).toEqual({
+      type: 'cast_vote',
+      card: '12',
+    })
+  })
 })

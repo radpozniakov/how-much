@@ -26,8 +26,14 @@ class RoomStore:
         self._rooms: dict[str, Room] = {}
         self._clock = clock
 
-    def create(self) -> Room:
+    def create(self, deck: tuple[str, ...] = config.FIBONACCI_DECK) -> Room:
         """Create, store, and return a new room with a unique join code.
+
+        ``deck`` is the host's chosen card values (FR-22/D-48), already parsed and
+        normalized at the create boundary; it defaults to the Fibonacci deck, which
+        is also what a host who left the field blank gets. The store just threads
+        it through — a deck is fixed at creation, so this is the only place it is
+        ever set.
 
         Raises:
             RuntimeError: if a unique code could not be allocated within the
@@ -37,7 +43,7 @@ class RoomStore:
         for _ in range(_MAX_CODE_ATTEMPTS):
             code = generate_code(config.ROOM_CODE_LENGTH)
             if code not in self._rooms:
-                room = Room(code=code)
+                room = Room(code=code, deck=deck)
                 self._rooms[code] = room
                 return room
         raise RuntimeError("could not allocate a unique room code")

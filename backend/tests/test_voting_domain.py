@@ -6,6 +6,7 @@ independently of any transport (S6). Reveal, reset, and results stats are S4.
 
 import pytest
 from app import config
+from app.rooms.deck import parse_deck
 from app.rooms.errors import (
     HostNotVoting,
     InvalidCard,
@@ -22,9 +23,21 @@ def _room_with(*names: str) -> tuple[Room, list[str]]:
     return room, ids
 
 
-def test_deck_is_exactly_fibonacci():
-    # Guards D-8: numbers only, no 40/100, no special cards.
-    assert config.FIBONACCI_DECK == ("0", "1", "2", "3", "5", "8", "13", "21")
+def test_default_deck_is_exactly_fibonacci():
+    # Guards D-8: numbers only, no 40/100, no special cards. Since V4 (D-48) this
+    # is the *default* rather than the constraint — a room whose host named no card
+    # values gets exactly this, and `Room.deck` defaults to it. No leading 0 since
+    # D-49 raised the floor to 1.
+    assert config.FIBONACCI_DECK == ("1", "2", "3", "5", "8", "13", "21")
+    assert Room(code="ROOM01").deck == config.FIBONACCI_DECK
+
+
+def test_the_default_deck_is_a_deck_a_host_could_have_typed():
+    # The default is a *suggestion* — `CreateRoomForm` prints it as what leaving the
+    # field blank gives you — so it has to survive the same rules a typed deck does.
+    # Nothing else pins that: `Room.deck` takes any tuple, so a default that drifted
+    # outside the bounds would only surface as a 422 on a host copying the hint.
+    assert parse_deck(", ".join(config.FIBONACCI_DECK)) == config.FIBONACCI_DECK
 
 
 # --- item -------------------------------------------------------------------
@@ -71,6 +84,45 @@ def test_invalid_card_rejected(bad):
     with pytest.raises(InvalidCard):
         room.cast_vote(alice, bad)
     assert alice not in room.votes
+
+
+# --- a host-chosen deck (FR-22/D-48) ----------------------------------------
+
+
+def _custom_room(deck: tuple[str, ...]) -> tuple[Room, str]:
+    """A two-person room on ``deck``; returns the room and the non-host's id."""
+    room = Room(code="ROOM01", deck=deck)
+    room.add_participant("Host")
+    return room, room.add_participant("Alice").id
+
+
+def test_a_custom_deck_card_is_accepted():
+    room, alice = _custom_room(("1", "2", "4", "8", "12", "16"))
+    room.cast_vote(alice, "12")
+    assert room.votes[alice] == "12"
+
+
+def test_a_fibonacci_card_absent_from_a_custom_deck_is_rejected():
+    # The proof that `cast_vote` validates against `self.deck` and not the global
+    # constant: 13 is a perfectly good Fibonacci card and not in this room.
+    room, alice = _custom_room(("1", "2", "4", "8", "12", "16"))
+    with pytest.raises(InvalidCard):
+        room.cast_vote(alice, "13")
+    assert alice not in room.votes
+
+
+def test_a_decimal_card_is_votable():
+    room, alice = _custom_room(("1", "1.5", "2", "3"))
+    room.cast_vote(alice, "1.5")
+    assert room.votes[alice] == "1.5"
+
+
+def test_a_card_matching_only_before_normalization_is_rejected():
+    # Deck membership is exact string matching, which is why the boundary
+    # normalizes: this room holds "1.5", so "1.50" is not one of its cards.
+    room, alice = _custom_room(("1", "1.5", "2", "3"))
+    with pytest.raises(InvalidCard):
+        room.cast_vote(alice, "1.50")
 
 
 def test_unknown_participant_cannot_vote():

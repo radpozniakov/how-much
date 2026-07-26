@@ -11,6 +11,7 @@ def test_create_room_returns_201_and_expected_shape(client):
     assert set(body) == {"participant_id", "room", "link"}
     assert set(body["room"]) == {
         "code",
+        "deck",
         "host_id",
         "participants",
         "current_item",
@@ -60,3 +61,60 @@ def test_created_room_is_retrievable_from_store(client):
     room = store.get(body["room"]["code"])
     assert room is not None
     assert room.host_id == body["participant_id"]
+
+
+# --- host-chosen card values (FR-22/D-48) ------------------------------------
+#
+# The rules themselves live in test_deck.py; these pin the *wiring* — that the
+# create route parses `cards`, that the deck reaches the room and the snapshot,
+# and that a rejection is a 422 rather than a broken room.
+
+
+def test_create_without_cards_gets_the_fibonacci_default(client):
+    body = client.post("/rooms", json={"name": "Alice"}).json()
+    assert body["room"]["deck"] == list(config.FIBONACCI_DECK)
+
+
+def test_create_with_cards_sets_the_rooms_deck(client):
+    from app.rooms.store import store
+
+    body = client.post(
+        "/rooms", json={"name": "Alice", "cards": "1, 2, 4, 8, 12, 16"}
+    ).json()
+    assert body["room"]["deck"] == ["1", "2", "4", "8", "12", "16"]
+    # ...and it is the room's own state, not just something in the response.
+    assert store.get(body["room"]["code"]).deck == ("1", "2", "4", "8", "12", "16")
+
+
+def test_a_blank_cards_field_is_the_same_as_omitting_it(client):
+    body = client.post("/rooms", json={"name": "Alice", "cards": "   "}).json()
+    assert body["room"]["deck"] == list(config.FIBONACCI_DECK)
+
+
+def test_an_invalid_deck_is_a_422_and_creates_no_room(client):
+    from app.rooms.store import store
+
+    resp = client.post("/rooms", json={"name": "Alice", "cards": "1, 1, 2"})
+    assert resp.status_code == 422
+    assert "repeat" in resp.json()["detail"][0]["msg"]
+    # The point of validating at the boundary: no half-built room survives it.
+    assert len(store) == 0
+
+
+def test_the_deck_rides_the_room_view_for_joiners_too(client):
+    # It reaches every client on every snapshot (D-36), so a participant who never
+    # saw the create response still knows what they are voting into.
+    created = client.post("/rooms", json={"name": "Alice", "cards": "1,2,3"}).json()
+    code = created["room"]["code"]
+    joined = client.post(f"/rooms/{code}/participants", json={"name": "Bob"}).json()
+    assert joined["room"]["deck"] == ["1", "2", "3"]
+
+
+def test_a_vote_outside_the_custom_deck_is_rejected_over_http(client):
+    created = client.post("/rooms", json={"name": "Alice", "cards": "1,2,3"}).json()
+    code = created["room"]["code"]
+    resp = client.put(
+        f"/rooms/{code}/vote",
+        json={"participant_id": created["participant_id"], "card": "8"},
+    )
+    assert resp.status_code == 422  # InvalidCard

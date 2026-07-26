@@ -20,10 +20,13 @@ import {
 // The host opts out of voting in each scenario so the vote set is exactly the
 // two participants — deterministic average/consensus assertions.
 
-async function setupRoom(browser: Parameters<Parameters<typeof test>[2]>[0]['browser']) {
+async function setupRoom(
+  browser: Parameters<Parameters<typeof test>[2]>[0]['browser'],
+  cards?: string,
+) {
   const hostCtx = await browser.newContext()
   const host = await hostCtx.newPage()
-  const code = await createRoom(host, 'Host')
+  const code = await createRoom(host, 'Host', cards)
   await setHostVoting(host, false) // facilitator only
   // Voting and revealing are both gated on an estimation subject existing, so
   // every scenario here needs a topic before anyone can cast a card.
@@ -133,12 +136,96 @@ test.describe('Voting & reveal', () => {
     await cleanup()
   })
 
-  test('the deck offers exactly the Fibonacci cards (FR-9)', async ({
+  test('a room created with no card values offers the Fibonacci deck (FR-9)', async ({
     browser,
   }) => {
+    // Fibonacci is the default rather than the constraint since V4 (D-48), and
+    // this is what "left the field blank" gets you. Spelled out on purpose: this
+    // is the one place the default's actual values are checked against the real
+    // server, so the backend constant and the client's hint mirror cannot drift
+    // apart unnoticed. No leading 0 since the card floor became 1 (D-49).
     const { a, cleanup } = await setupRoom(browser)
     const deck = voteDeck(a).getByRole('button')
-    await expect(deck).toHaveText(['0', '1', '2', '3', '5', '8', '13', '21'])
+    await expect(deck).toHaveText(['1', '2', '3', '5', '8', '13', '21'])
     await cleanup()
+  })
+
+  test('a host-chosen deck reaches every client, votes, and reveals (FR-22)', async ({
+    browser,
+  }) => {
+    // The whole slice end to end: the host names the cards at creation, they ride
+    // the snapshot to participants who never saw the create form, and a round runs
+    // on values the Fibonacci deck does not contain.
+    const { host, a, b, cleanup } = await setupRoom(browser, '1, 2, 4, 8, 12, 16')
+
+    // The host opted out of voting in setupRoom, so they have no deck to inspect;
+    // the two participants are the ones who received it over the socket.
+    for (const p of [a, b] as Page[]) {
+      await expect(voteDeck(p).getByRole('button')).toHaveText([
+        '1',
+        '2',
+        '4',
+        '8',
+        '12',
+        '16',
+      ])
+      // 13 is a Fibonacci card this room does not hold.
+      await expect(voteDeck(p).getByRole('button', { name: '13' })).toHaveCount(0)
+    }
+
+    await voteCard(a, '12').click()
+    await voteCard(b, '4').click()
+    await revealButton(host).click()
+
+    await showStats(host)
+    await expect(resultEntry(host, 'Ann')).toContainText('12')
+    await expect(resultEntry(host, 'Ben')).toContainText('4')
+    // (12 + 4) / 2 = 8, formatted to one decimal place.
+    await expect(card(host, 'Results')).toContainText('8.0')
+
+    await cleanup()
+  })
+
+  test('a deck with decimal cards reveals and averages (FR-22)', async ({
+    browser,
+  }) => {
+    // The V4 landmine through the real stack: `results()` parsed cards with
+    // `int()`, so a room holding a half-point card looked fine until the first
+    // reveal, then 500'd. Only an actual reveal over the socket proves the fix.
+    // The half card is `1.5` rather than `0.5` since the floor became 1 (D-49):
+    // the rule bounds how small a card is, not how round.
+    const { host, a, b, cleanup } = await setupRoom(browser, '1, 1.5, 2, 3')
+
+    await voteCard(a, '1.5').click()
+    await voteCard(b, '2').click()
+    await revealButton(host).click()
+
+    await showStats(host)
+    await expect(resultEntry(host, 'Ann')).toContainText('1.5')
+    await expect(resultEntry(host, 'Ben')).toContainText('2')
+    // (1.5 + 2) / 2 = 1.75, which Results formats to one decimal place.
+    await expect(card(host, 'Results')).toContainText('1.8')
+
+    await cleanup()
+  })
+
+  test('a rejected deck keeps the host on the landing page with the reason', async ({
+    browser,
+  }) => {
+    // The one V4 failure an ordinary host can reach: a duplicate no input
+    // attribute can prevent, so the 422 has to land as a readable sentence.
+    const ctx = await browser.newContext()
+    const page = await ctx.newPage()
+    await page.goto('/')
+    const create = card(page, 'Create a room')
+    await create.getByLabel('Your name').fill('Host')
+    await create.getByLabel('Card values').fill('1, 1, 2')
+    await create.getByRole('button', { name: 'Create', exact: true }).click()
+
+    await expect(create.getByRole('alert')).toContainText(
+      'card values must not repeat',
+    )
+    await expect(page).toHaveURL(/\/$/)
+    await ctx.close()
   })
 })

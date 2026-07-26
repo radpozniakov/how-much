@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { Results } from './Results'
+import { FIBONACCI_DECK } from '../../lib/deck'
 import { makeParticipant, makeResults } from '../../test/fixtures'
 
 const alice = makeParticipant({ id: 'p1', name: 'Alice' })
@@ -30,7 +31,7 @@ describe('Results', () => {
     )
     const carolRow = screen.getByText('Carol').closest('li')
     expect(carolRow).toHaveTextContent('—')
-    for (const value of ['0', '1', '2', '3', '5', '8', '13', '21']) {
+    for (const value of FIBONACCI_DECK) {
       expect(carolRow).not.toHaveTextContent(value)
     }
   })
@@ -100,7 +101,7 @@ describe('Results', () => {
     )
     expect(screen.getByText('Alice').closest('li')).toHaveTextContent('—')
     expect(screen.getByText('Bob').closest('li')).toHaveTextContent('—')
-    for (const value of ['0', '1', '2', '3', '5', '8', '13', '21']) {
+    for (const value of FIBONACCI_DECK) {
       expect(screen.queryByText(value)).not.toBeInTheDocument()
     }
     expect(screen.queryByText('Consensus')).not.toBeInTheDocument()

@@ -226,6 +226,9 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
               values move to the stats view (S18), not a separate bottom panel. */}
           {canVote && (
             <VoteDeck
+              // The room's own cards (FR-22/D-48) — the snapshot is the only
+              // source, so this client can never offer a card the room lacks.
+              deck={room.deck}
               hasVoted={me?.has_voted ?? false}
               revealed={room.revealed}
               onVote={castVote}

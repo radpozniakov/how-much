@@ -2,11 +2,22 @@ import { useState } from 'react'
 import type { FC, SyntheticEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { createRoom, requestErrorMessage } from '../../lib/api'
+import { FIBONACCI_DECK } from '../../lib/deck'
+import { MAX_DECK_INPUT_LENGTH } from '../../lib/limits'
 import { saveSession } from '../../lib/session'
+
+// What "leave it blank" gets you, spelled out rather than described. This is the
+// one place the default deck is still named client-side (lib/deck.ts) — the room
+// itself votes from the snapshot.
+const DEFAULT_DECK_HINT = FIBONACCI_DECK.join(', ')
 
 export const CreateRoomForm: FC = () => {
   const navigate = useNavigate()
   const [name, setName] = useState('')
+  // The host's card values as typed, sent raw (FR-22/D-48). Deliberately not
+  // parsed or pre-validated here: the server owns the deck rules, so a second
+  // implementation on this side could only drift from the one that decides.
+  const [cards, setCards] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -15,7 +26,7 @@ export const CreateRoomForm: FC = () => {
     setError('')
     setBusy(true)
     try {
-      const { participantId, room } = await createRoom(name)
+      const { participantId, room } = await createRoom(name, cards)
       saveSession(room.code, participantId)
       navigate(`/room/${room.code}`)
     } catch (err) {
@@ -38,6 +49,23 @@ export const CreateRoomForm: FC = () => {
             required
           />
         </label>
+        {/* The room's one creation-time option (FR-22/D-48). Optional, and fixed
+            once the room exists — there is no later chance to change it, which is
+            why it sits here and nowhere in the room UI. S22 owns the wording. */}
+        <label className="field">
+          <span className="field__label">Card values</span>
+          <input
+            aria-describedby="create-cards-hint"
+            value={cards}
+            onChange={(e) => setCards(e.target.value)}
+            maxLength={MAX_DECK_INPUT_LENGTH}
+            autoComplete="off"
+          />
+        </label>
+        <span id="create-cards-hint" className="field__hint">
+          Comma-separated numbers, fixed for the room. Leave blank for{' '}
+          {DEFAULT_DECK_HINT}.
+        </span>
         <button type="submit" className="primary" disabled={busy}>
           {busy ? 'Creating…' : 'Create'}
         </button>

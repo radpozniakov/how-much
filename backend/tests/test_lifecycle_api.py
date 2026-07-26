@@ -41,6 +41,7 @@ def test_leave_returns_200_and_room_view(client):
     body = resp.json()
     assert set(body) == {
         "code",
+        "deck",
         "host_id",
         "participants",
         "current_item",

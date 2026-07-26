@@ -17,6 +17,7 @@ from pydantic import BaseModel, field_validator
 
 from app import config
 from app.rooms.connection import apply_and_broadcast, broadcast_room_state
+from app.rooms.deck import parse_deck
 from app.rooms.models import Room
 from app.rooms.store import store
 from app.rooms.views import RoomView, room_view
@@ -40,6 +41,39 @@ class JoinRequest(BaseModel):
                 f"name must be at most {config.MAX_DISPLAY_NAME_LENGTH} characters"
             )
         return value
+
+
+class CreateRoomRequest(JoinRequest):
+    """Creating a room: a display name, plus the host's optional card values.
+
+    The one creation-time option a room has (FR-22/D-48). It arrives as the raw
+    comma-separated string the host typed, under ``cards``, and is parsed into the
+    room's canonical ``deck`` here at the boundary — so a bad deck is a ``422`` on
+    creation rather than a room that is already broken. Omitted, null, or blank
+    means the Fibonacci default.
+
+    Join does **not** get this field, and cannot: the deck is fixed for the room's
+    life, so only the creator ever chooses one.
+    """
+
+    # Sent as the raw comma-separated string; **held as the parsed deck**, because
+    # the validator below runs `mode="before"` and returns the canonical tuple. So
+    # the route reads a deck rather than re-parsing one, and there is exactly one
+    # place that turns host input into card values.
+    cards: tuple[str, ...] = config.FIBONACCI_DECK
+
+    @field_validator("cards", mode="before")
+    @classmethod
+    def _parse_cards(cls, value: object) -> object:
+        # `mode="before"` so this sees the host's string rather than pydantic's
+        # attempt to coerce it into a tuple. An omitted field never arrives here —
+        # defaults are not validated — so the default deck is reached two ways: by
+        # omission, and by `parse_deck` resolving a blank string.
+        if value is None:
+            return config.FIBONACCI_DECK
+        if not isinstance(value, str):
+            raise ValueError("card values must be a comma-separated string")
+        return parse_deck(value)
 
 
 class SetItemRequest(BaseModel):
@@ -107,13 +141,15 @@ def _require_room(code: str) -> Room:
 
 
 @router.post("", status_code=201, response_model=CreateRoomResponse)
-async def create_room(body: JoinRequest) -> CreateRoomResponse:
-    """Create a room and join it as the host (FR-1, FR-2a).
+async def create_room(body: CreateRoomRequest) -> CreateRoomResponse:
+    """Create a room and join it as the host (FR-1, FR-2a, FR-22).
 
     Creation and the creator's join are one step, so the creator is
-    unambiguously the host (D-32) — no participant-less room to race over.
+    unambiguously the host (D-32) — no participant-less room to race over. It is
+    also the only moment the room's deck is chosen (D-48); ``body.cards`` is
+    already the parsed, normalized deck — see ``CreateRoomRequest``.
     """
-    room = store.create()
+    room = store.create(deck=body.cards)
     host = room.add_participant(body.name)
     return CreateRoomResponse(
         participant_id=host.id,

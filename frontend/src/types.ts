@@ -19,6 +19,11 @@ export interface ResultsView {
 
 export interface RoomView {
   code: string
+  // The room's card values in the host's order (FR-22/D-48), chosen at creation
+  // and fixed for the room's life. Riding the snapshot is how it reaches clients:
+  // VoteDeck renders this, not the lib/deck.ts constant, and a reconnecting
+  // participant gets it for free — session.ts persists nothing new.
+  deck: string[]
   // Null during the transient empty / host-transfer window.
   host_id: string | null
   participants: Participant[]
@@ -39,8 +44,10 @@ export type ServerFrame =
 // messages.py), so the server attributes the action to the connection.
 export interface CastVoteFrame {
   type: 'cast_vote'
-  // A Fibonacci card as a string (e.g. '5'), matching the backend frame. The
-  // deck is FIBONACCI_DECK (lib/deck.ts); validated server-side (InvalidCard).
+  // A card as a string (e.g. '5'), matching the backend frame. It must be one of
+  // the values in the snapshot's `RoomView.deck` — which since V4 is the room's
+  // own, host-chosen deck, not a client-side constant. Validated server-side
+  // against `Room.deck` (InvalidCard).
   card: string
 }
 

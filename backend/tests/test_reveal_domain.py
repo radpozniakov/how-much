@@ -210,3 +210,44 @@ def test_results_snapshot_carries_cards_and_stats():
     assert results.votes == {a: "3", b: "5"}
     assert results.average == 4.0
     assert results.consensus is False
+
+
+# --- decimal decks (FR-22/D-48) ---------------------------------------------
+
+
+def _decimal_room() -> tuple[Room, list[str]]:
+    """A room on a deck with a half-point card; the first member is the host."""
+    room = Room(code="ROOM01", deck=("1", "1.5", "2", "3"))
+    return room, [room.add_participant(n).id for n in ("Host", "A", "B")]
+
+
+def test_revealing_a_decimal_round_does_not_raise():
+    # The V4 landmine, pinned: `results()` parsed cards with `int()`, so the first
+    # reveal in a room holding `1.5` raised ValueError — a 500, not a domain error,
+    # and only on reveal, so such a room looked fine right up until it wasn't.
+    room, (host, a, b) = _decimal_room()
+    room.cast_vote(a, "1.5")
+    room.cast_vote(b, "2")
+    room.reveal(host)
+    results = room.results()
+    assert results is not None
+    assert results.votes == {a: "1.5", b: "2"}
+
+
+def test_average_over_decimal_cards():
+    room, (host, a, b) = _decimal_room()
+    room.cast_vote(a, "1.5")
+    room.cast_vote(b, "1")
+    assert _reveal(room, host).average == 1.25
+
+
+def test_consensus_holds_over_decimal_cards():
+    # Consensus compares the card strings, not the parsed floats. That is exact
+    # here precisely because the create boundary normalized the deck, so a room can
+    # never hold two spellings of one number for two agreeing voters to split over.
+    room, (host, a, b) = _decimal_room()
+    room.cast_vote(a, "1.5")
+    room.cast_vote(b, "1.5")
+    results = _reveal(room, host)
+    assert results.consensus is True
+    assert results.average == 1.5

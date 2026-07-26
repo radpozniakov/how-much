@@ -21,7 +21,12 @@ class RoomFull(RoomError):
 
 
 class InvalidCard(RoomError):
-    """A vote carried a value that is not in the Fibonacci deck (D-8)."""
+    """A vote carried a value that is not in the room's deck (D-8/D-48).
+
+    The room's own deck, not a global constant: since V4 the host may choose the
+    card values at creation, so what counts as valid is per-room state
+    (``Room.deck``) even though the default is still Fibonacci.
+    """
 
     def __init__(self, card: str) -> None:
         self.card = card
