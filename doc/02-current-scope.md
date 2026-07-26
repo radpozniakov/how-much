@@ -1,13 +1,15 @@
 # 02 — Current Scope
 
 > **Living doc — what the app does today.** The MVP is complete and working
-> end-to-end (build history: `archive/phase1-mvp-backlog.md`; rationale:
+> end-to-end, and the UX/UI redesign has shipped (build history:
+> `archive/phase1-mvp-backlog.md` and `archive/ux-phase-backlog.md`; rationale:
 > [03-decisions.md](03-decisions.md)). Keep this updated as scope changes. The
-> current [UX/UI phase](05-ux-phase.md) polishes look and feel without changing
-> the behavior below.
+> current [v0.1 phase](07-v0.1-phase.md) **does** add behavior — host handover and
+> removing a participant — so expect the table below to move with it.
 >
-> Known gap not yet done: **deployment polish (S10)** — tighten CORS, finalize
-> Docker/compose, run docs — tracked in [05-ux-phase.md](05-ux-phase.md).
+> Known gaps, all tracked in [07-v0.1-phase.md](07-v0.1-phase.md): **deployment
+> polish (S10)** — tighten CORS, finalize Docker/compose, run docs; **interaction
+> polish (S20)**, **accessibility (S21)**, and **copy (S22)**.
 
 The smallest set that makes a real estimation session usable.
 
@@ -18,6 +20,7 @@ The smallest set that makes a real estimation session usable.
 | Room creation | Create room → become host; get short code + shareable link |
 | Joining | Join via link or code; enter display name only (no auth) |
 | Identity | Name only, non-unique, internal ID distinguishes participants |
+| Rename | A participant can rename themselves at any time; everyone sees it live |
 | Capacity | Up to 30 participants per room |
 | Deck | Fibonacci numbers only (`0,1,2,3,5,8,13,21`), no special cards |
 | Item | Single current item with optional free-text topic |
@@ -31,6 +34,14 @@ The smallest set that makes a real estimation session usable.
 | Room cleanup | In-memory; discarded after grace period when empty |
 | Reconnection | Rejoin as a new participant; in-round vote is lost |
 
+## Planned — in the current phase, not built yet
+
+Listed separately from "Out of scope" because they are committed work, not
+exclusions. See [07-v0.1-phase.md](07-v0.1-phase.md).
+
+- **Host handover** — the host gives the host role to another participant (V1)
+- **Removing a participant** — host-only, and not a ban (V2)
+
 ## Out of scope
 
 - Accounts / authentication / authorization
@@ -38,7 +49,8 @@ The smallest set that makes a real estimation session usable.
 - Backlog or multi-ticket management; integrations (Jira, etc.)
 - Multiple / custom decks, T-shirt sizing, special cards
 - Vote-value distribution charts (only average + consensus for now)
-- Manual host transfer, kicking participants, spectators as a distinct role
+- Spectators as a distinct role
+- Banning a removed participant (removal is not a ban — the code still works)
 - Reconnection state restore, timers, per-round history
 - Mobile-native apps; i18n
 
