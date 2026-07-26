@@ -20,8 +20,9 @@ describe('ViewSwitcher', () => {
 
   it('reflects the stats view as active', () => {
     render(<ViewSwitcher view="stats" onViewChange={() => {}} />)
-    expect(
-      screen.getByRole('tab', { name: 'Graph view' }),
-    ).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Graph view' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
   })
 })

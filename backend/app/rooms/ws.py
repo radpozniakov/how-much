@@ -3,8 +3,11 @@
 One endpoint, ``/ws/rooms/{code}``, wraps the S1-S5 domain in live delivery:
 connect, identify (a new ``join`` or an existing ``attach``), appear to everyone
 via a broadcast, then run a full estimation round in real time — ``set_item``,
-``cast_vote``, ``set_host_voting``, ``reveal``, ``reset`` frames dispatch to the
-matching ``Room`` method and rebroadcast the new snapshot (S6b). The moment the
+``set_name``, ``cast_vote``, ``set_host_voting``, ``transfer_host``, ``reveal``,
+``reset`` frames dispatch to the matching ``Room`` method and rebroadcast the new
+snapshot (S6b). ``transfer_host`` (FR-20/D-45) is the first frame that moves
+authority durably rather than mutating a round, so it is also the first that
+**logs** — both outcomes, see ``_transfer_host_logged``. The moment the
 socket drops, it leaves through the same S5 ``store.leave`` path (drop
 participant + vote, host auto-transfer per D-13, empty-room grace per D-18) and
 rebroadcasts.
@@ -22,6 +25,7 @@ from __future__ import annotations
 import contextlib
 import functools
 import json
+import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -37,6 +41,7 @@ from app.rooms.messages import (
     SetHostVotingFrame,
     SetItemFrame,
     SetNameFrame,
+    TransferHostFrame,
     error_frame,
     parse_handshake_frame,
     parse_round_frame,
@@ -46,6 +51,48 @@ from app.rooms.models import Room
 from app.rooms.store import store
 
 ws_router = APIRouter()
+
+logger = logging.getLogger(__name__)
+
+
+def _transfer_host_logged(room: Room, actor_id: str, target_id: str) -> None:
+    """Apply a handover and log its outcome, both ways (S23 constraint 4).
+
+    The log lives here rather than in the domain because this is the one point that
+    holds all four required fields — the socket's actor identity, the frame's
+    target, the room, and the outcome — and because keeping ``models.py``
+    logger-free preserves the domain's transport-free, synchronously-testable
+    property (see ``errors.py``).
+
+    Wrapped rather than logged at the generic ``except RoomError`` in the receive
+    loop: that handler is shared by all seven round frames, so logging there would
+    need an isinstance check duplicated across the success and failure branches.
+    One wrapper keeps both outcomes of one action in one readable place.
+
+    A handover is the first frame that moves authority durably — everything else
+    the tool exposes is undone by a reset — which is why this is the only action
+    that logs at all, and why the rejected case logs too: "who tried" is as much of
+    the session's history as "who succeeded".
+    """
+    try:
+        room.transfer_host(actor_id, target_id)
+    except RoomError as exc:
+        logger.info(
+            "host handover rejected: room=%s actor=%s target=%s reason=%s",
+            room.code,
+            actor_id,
+            target_id,
+            type(exc).__name__,
+        )
+        # Bare re-raise: the receive loop owns turning this into an error frame, and
+        # the original traceback is worth keeping for the defensive `internal` slug.
+        raise
+    logger.info(
+        "host handover: room=%s actor=%s target=%s outcome=ok",
+        room.code,
+        actor_id,
+        target_id,
+    )
 
 
 def _apply_round(room: Room, participant_id: str, frame: RoundFrame) -> None:
@@ -63,11 +110,14 @@ def _apply_round(room: Room, participant_id: str, frame: RoundFrame) -> None:
         room.cast_vote(participant_id, frame.card)
     elif isinstance(frame, SetHostVotingFrame):
         room.set_host_voting(participant_id, frame.voting)
+    elif isinstance(frame, TransferHostFrame):
+        # Via the logging wrapper — the only action that logs (constraint 4).
+        _transfer_host_logged(room, participant_id, frame.target_id)
     elif isinstance(frame, RevealFrame):
         room.reveal(participant_id)
     elif isinstance(frame, ResetFrame):
         room.reset_round(participant_id)
-    else:  # unreachable: parse_round_frame only yields the six frames above
+    else:  # unreachable: parse_round_frame only yields the seven frames above
         raise AssertionError(f"unhandled round frame: {frame!r}")
 
 

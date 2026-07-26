@@ -236,3 +236,86 @@ at the time. Build log: [archive/ux-phase-backlog.md](archive/ux-phase-backlog.m
   pre-redesign vertical stack, but in the redesigned layout the deck's absence left
   the bottom of the room empty and the grid jumping on every reveal. Fixed layout
   beat conditional layout.
+
+## v0.1 phase
+
+Entries land **per slice as the phase is built**, not retrospectively. Live build
+log: [07-v0.1-phase.md](07-v0.1-phase.md) — append there and here as each slice
+closes.
+
+- **D-45 Host handover is a *move*, not a grant — and legal at any point in a
+  round.** `Room.transfer_host(actor, target)` is one assignment plus
+  `host_voting = True`. `Room` holds a single `host_id`, so exactly one host exists
+  at any moment: no co-hosts, no residue, repeatable indefinitely. Unlike the
+  disconnect-driven auto-transfer (D-13) there is **no** transient `host_id: null`,
+  so the host UI never flickers through an unowned state.
+  `host_voting` resets to `True` for the incoming host's sake, exactly as
+  `remove_participant` does on the D-13 path: an inherited opt-out they never chose
+  would silently leave them with no deck and outside the vote-progress denominator.
+  The outgoing host keeps any vote already cast and becomes an ordinary voter — with
+  no new code, because `cast_vote`'s guard keys on `participant_id == self.host_id`,
+  so the instant the role moves they stop matching it. The opt-out was a privilege of
+  the role, not of the person.
+  **Not locked after reveal.** `RoundRevealed` guards the *inputs* to
+  `Room.results()`, which reads only `revealed` and `votes`; a handover writes
+  neither, so a revealed round's votes/average/consensus survive it byte for byte.
+  Locking it would force a host who reveals and then needs to leave to `reset` —
+  destroying the results the room is reading — as the price of handing over, which
+  inverts the guard's purpose.
+  The frame carries `target_id` and **no actor id**: the actor is the socket's
+  handshake identity, extending the anti-spoofing property D-42 documents for
+  `set_name` to an action that moves authority. Authorization is `_require_host` in
+  the domain (the frontend's `isHost` is a rendering affordance, never the boundary).
+  A self-target raises its own `CannotTargetSelf`/`cannot_target_self` rather than
+  reusing `UnknownParticipant`, whose message — "Participant is not in this room" —
+  would be false about the host; an unknown target is a genuine race and keeps
+  `not_in_room`. WS-only, with no HTTP counterpart: D-35's dual-transport period is
+  spent and S10 retires those routes. It is also the first action that **logs**
+  (actor/target/room/outcome, both outcomes, at `info`), which required the app's
+  first logging configuration — see `_configure_logging` and D-45's note below.
+  **Consequences:**
+  - The mid-round denominator grows as the outgoing host rejoins the voter pool
+    (`5/6 → 5/7`). Accepted at [07-v0.1-phase.md](07-v0.1-phase.md) lines 110-113;
+    nothing is blocked, since `reveal` is unconditional in the domain (D-12).
+  - **The denominator can also move *after* reveal** (`5/5 → 5/6`), when the outgoing
+    host had opted out. doc/07 sanctioned only the mid-round case, so this decision
+    **extends** it, on its own argument: the counter reports the *current* voter
+    roster, so freezing it would make the display lie about the room. And post-reveal
+    roster movement already ships in a **more** destructive form — a leave after
+    reveal drops the leaver *and their vote*, rewriting `results` itself, and does so
+    deliberately (`models.py` `remove_participant`) and under test
+    (`test_leave_mid_reveal_flips_consensus`, `test_leave_mid_reveal_empties_revealed_round`).
+    A handover moves the denominator without touching a single vote, so it is
+    strictly less surprising than behavior already shipped. The alternative —
+    snapshotting the voter set at reveal — would reintroduce the
+    `expected_voter_ids()` state D-43 records as *deliberately deleted*.
+  - A post-reveal handover puts a dashed `?` card in a revealed grid. Partial reveals
+    already produce that (D-12), and `ParticipantCard.resolveState` anticipates it in
+    so many words ("an abstainer falls back to the not-voted glyph") — designed for,
+    not tolerated.
+- **D-46 The roster panel stays `role="group"`; row actions are buttons in a list.**
+  The participants panel gains a per-row "Make host" action with an inline two-step
+  confirm, and **does not** become a `role="menu"`. `menuitem` is not a valid
+  container for interactive descendants, so a row holding both a Confirm and a Cancel
+  control would be invalid; and the menu pattern contracts that activating an item
+  *closes* the menu, which a two-step confirm breaks by design. Assistive tech
+  implements that contract, so the role would mislead exactly the users it exists
+  for. The host's own row (never actionable) and the title-plus-count line are not
+  menuitems either.
+  **The trigger keeps no `aria-haspopup`.** `"true"` is synonymous with `"menu"`, and
+  `"dialog"` would promise dialog semantics; the panel is neither. `aria-expanded` +
+  `aria-controls` remain the honest description — the existing comment at
+  `ParticipantsMenu.tsx` explaining the omission gets *stronger*, not obsolete.
+  The panel's keyboard model is deliberately **richer** than `group` implies: arrow
+  keys move across row buttons. ARIA forbids claiming a role you do not implement, not
+  adding affordances beyond one.
+  Two alternatives were weighed and rejected: a **submenu** (valid ARIA, but
+  reintroduces the second popup layer the inline confirm exists to avoid) and a
+  **non-modal `role="dialog"`** panel (fits mixed content and would earn a truthful
+  `aria-haspopup="dialog"`, but is heavier than a list of names warrants and invites
+  focus-trap expectations this panel deliberately does not implement — it dismisses
+  on tab-out, which a dialog contradicts).
+  This **supersedes** the `role="menu"` upgrade promised in
+  `ParticipantsMenu.tsx`'s own comment and assigned to S21 in
+  [07-v0.1-phase.md](07-v0.1-phase.md). S21 keeps the panel in the rest of its scope
+  — keyboard, focus-visible, contrast, semantics — only the role change is retired.

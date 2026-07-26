@@ -20,7 +20,12 @@ describe('Stage', () => {
 
   it('shows a waiting message to non-hosts when no topic is set', () => {
     render(
-      <Stage currentItem={null} revealed={false} votesCast={0} totalVoters={0} />,
+      <Stage
+        currentItem={null}
+        revealed={false}
+        votesCast={0}
+        totalVoters={0}
+      />,
     )
     expect(screen.getByText(/Waiting for the host/i)).toBeInTheDocument()
   })
@@ -43,7 +48,12 @@ describe('Stage', () => {
 
   it('shows the waiting-for-subject status and hides the counter when no topic', () => {
     render(
-      <Stage currentItem={null} revealed={false} votesCast={0} totalVoters={2} />,
+      <Stage
+        currentItem={null}
+        revealed={false}
+        votesCast={0}
+        totalVoters={2}
+      />,
     )
     expect(
       screen.getByText('Waiting for the estimation subject'),
@@ -55,7 +65,13 @@ describe('Stage', () => {
 
   it('gives the host an editable title seeded from the current item', () => {
     render(
-      <Stage currentItem="Login page" revealed={false} votesCast={0} totalVoters={0} isHost />,
+      <Stage
+        currentItem="Login page"
+        revealed={false}
+        votesCast={0}
+        totalVoters={0}
+        isHost
+      />,
     )
     expect(screen.getByRole('textbox', { name: /topic/i })).toHaveValue(
       'Login page',
@@ -64,9 +80,17 @@ describe('Stage', () => {
 
   it('shows the host a "set a topic" placeholder when empty', () => {
     render(
-      <Stage currentItem={null} revealed={false} votesCast={0} totalVoters={0} isHost />,
+      <Stage
+        currentItem={null}
+        revealed={false}
+        votesCast={0}
+        totalVoters={0}
+        isHost
+      />,
     )
-    expect(screen.getByPlaceholderText(/Set a topic to start/i)).toBeInTheDocument()
+    expect(
+      screen.getByPlaceholderText(/Set a topic to start/i),
+    ).toBeInTheDocument()
   })
 
   it('commits the typed topic when Enter is pressed', async () => {
@@ -82,7 +106,10 @@ describe('Stage', () => {
         onSetTopic={onSetTopic}
       />,
     )
-    await user.type(screen.getByRole('textbox', { name: /topic/i }), 'New topic{Enter}')
+    await user.type(
+      screen.getByRole('textbox', { name: /topic/i }),
+      'New topic{Enter}',
+    )
     expect(onSetTopic).toHaveBeenCalledWith('New topic')
   })
 
@@ -102,7 +129,10 @@ describe('Stage', () => {
         <button type="button">elsewhere</button>
       </>,
     )
-    await user.type(screen.getByRole('textbox', { name: /topic/i }), 'New topic')
+    await user.type(
+      screen.getByRole('textbox', { name: /topic/i }),
+      'New topic',
+    )
     await user.click(screen.getByRole('button', { name: /elsewhere/i }))
     expect(onSetTopic).toHaveBeenCalledWith('New topic')
   })
@@ -226,7 +256,13 @@ describe('Stage', () => {
 
   it('caps the editor at MAX_TOPIC_LENGTH', () => {
     render(
-      <Stage currentItem={null} revealed={false} votesCast={0} totalVoters={0} isHost />,
+      <Stage
+        currentItem={null}
+        revealed={false}
+        votesCast={0}
+        totalVoters={0}
+        isHost
+      />,
     )
     expect(screen.getByRole('textbox', { name: /topic/i })).toHaveAttribute(
       'maxLength',
@@ -251,14 +287,26 @@ describe('Stage', () => {
   it('resyncs the editor when currentItem changes (submit echo)', async () => {
     const user = userEvent.setup()
     const { rerender } = render(
-      <Stage currentItem={null} revealed={false} votesCast={0} totalVoters={0} isHost />,
+      <Stage
+        currentItem={null}
+        revealed={false}
+        votesCast={0}
+        totalVoters={0}
+        isHost
+      />,
     )
     const input = screen.getByRole('textbox', { name: /topic/i })
     await user.type(input, 'abc')
 
     // The server echoes the submitted topic back as the new currentItem.
     rerender(
-      <Stage currentItem="abc" revealed={false} votesCast={0} totalVoters={0} isHost />,
+      <Stage
+        currentItem="abc"
+        revealed={false}
+        votesCast={0}
+        totalVoters={0}
+        isHost
+      />,
     )
     expect(input).toHaveValue('abc')
 

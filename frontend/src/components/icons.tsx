@@ -1,4 +1,13 @@
-import { Home, Copy, LogOut, CircleCheck, Users } from 'lucide-react'
+import {
+  Home,
+  Copy,
+  LogOut,
+  Check,
+  CircleCheck,
+  Crown,
+  Users,
+  X,
+} from 'lucide-react'
 import type { LucideProps } from 'lucide-react'
 
 // Central icon module. We use lucide-react for consistent, battle-tested outline
@@ -13,5 +22,16 @@ export const CopyIcon = (props: IconProps) => <Copy size={18} {...props} />
 export const ExitIcon = (props: IconProps) => <LogOut size={18} {...props} />
 export const UsersIcon = (props: IconProps) => <Users size={18} {...props} />
 
+// Roster row actions (FR-20): a crown for "make host", and the bare check / cross
+// for the two-step confirm. Distinct from CheckIcon below, which is the 28px
+// card-face glyph — these are icon-button sized.
+export const CrownIcon = (props: IconProps) => <Crown size={18} {...props} />
+export const CheckMarkIcon = (props: IconProps) => (
+  <Check size={18} {...props} />
+)
+export const CloseIcon = (props: IconProps) => <X size={18} {...props} />
+
 // The participant "voted" state uses a larger check-in-circle glyph.
-export const CheckIcon = (props: IconProps) => <CircleCheck size={28} {...props} />
+export const CheckIcon = (props: IconProps) => (
+  <CircleCheck size={28} {...props} />
+)

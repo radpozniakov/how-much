@@ -906,6 +906,60 @@ form button {
     font-size: 11px;
     color: var(--ink-muted);
   }
+
+  // Per-row host handover (FR-20/D-45). Deliberately NO wrapper element around the
+  // two buttons: they are direct flex children of the row. A wrapper that rendered
+  // only in confirm state would displace the action button's position, and React
+  // would then replace the DOM node instead of reusing it — dropping focus to
+  // document.body with no blur event to notice, i.e. a silent keyboard trap. If a
+  // wrapper is ever wanted here, it must render in BOTH states (see §D/§E of the
+  // V1 plan). margin-left: auto pins the pair right; the row's own
+  // justify-content: space-between handles the rest.
+  // Whichever button comes first absorbs the free space, so the pair always sits
+  // hard right: the action alone when idle, Cancel-then-action when armed.
+  &__row-action,
+  &__row-cancel {
+    margin-left: auto;
+  }
+
+  // …and the action then follows Cancel tightly, overriding its own auto. The row's
+  // own `gap` is sized for name-to-badge spacing and is too wide between buttons.
+  &__row-cancel + &__row-action {
+    margin-left: calc(var(--space-1) - var(--space-3));
+  }
+}
+
+// Roster row actions (FR-20). Written flat and panel-scoped rather than nested,
+// because it has to out-specify `.room-header .icon-btn` (0,2,0) — the header
+// deliberately makes its icon buttons borderless and transparent, filling with
+// --surface on hover. This panel *lives* in the header, so the row actions inherit
+// that, and a --surface hover fill is invisible against the panel's own --surface
+// background: the buttons would look like static glyphs with no feedback at all.
+// So they opt back into the default icon-button treatment — a hairline that says
+// "control", and inversion on hover. Monochrome per doc/06: the check and cross
+// carry no colour, and the armed state reads from the glyph plus that inversion.
+.participants-menu__panel .participants-menu__row-action,
+.participants-menu__panel .participants-menu__row-cancel {
+  flex: none;
+  // The row is 14px text; shrink the 32px icon button so a roster row does not
+  // grow taller than its own name.
+  width: 26px;
+  height: 26px;
+  border: var(--hairline);
+  border-radius: 6px;
+  background: var(--surface);
+
+  &:hover:not(:disabled) {
+    background: var(--ink);
+    color: var(--surface);
+  }
+}
+
+// Cancel is secondary: no border until hovered, so the armed row has exactly one
+// emphasised control and the eye lands on the consequential press.
+.participants-menu__panel .participants-menu__row-cancel {
+  border-color: transparent;
+  color: var(--ink-muted);
 }
 
 // Topic display + host editor.

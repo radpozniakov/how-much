@@ -42,7 +42,9 @@ export const ParticipantCard: FC<ParticipantCardProps> = ({
       data-state={state}
     >
       <div className="participant-card__face" aria-hidden="true">
-        {state === 'not-voted' && <span className="participant-card__mark">?</span>}
+        {state === 'not-voted' && (
+          <span className="participant-card__mark">?</span>
+        )}
         {state === 'voted' && <CheckIcon />}
         {state === 'revealed' && (
           <span className="participant-card__value">{value}</span>
