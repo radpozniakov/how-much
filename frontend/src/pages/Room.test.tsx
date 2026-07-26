@@ -47,7 +47,9 @@ describe('Room (S9 wiring)', () => {
         participants: [makeParticipant({ id: 'pid-1', name: 'Alice' })],
       }),
     )
-    expect(screen.getByRole('button', { name: 'Reveal cards' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Reveal cards' }),
+    ).toBeInTheDocument()
   })
 
   it('hides host controls from a non-host', () => {
@@ -132,7 +134,9 @@ describe('Room (S9 wiring)', () => {
       screen.queryByRole('region', { name: 'Your vote' }),
     ).not.toBeInTheDocument()
     // ...but the host reveal control is still there (Bob can vote).
-    expect(screen.getByRole('button', { name: 'Reveal cards' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Reveal cards' }),
+    ).toBeInTheDocument()
   })
 
   it('disables voting and revealing until an estimation subject is set', () => {
@@ -171,9 +175,7 @@ describe('Room (S9 wiring)', () => {
         ],
       }),
     )
-    expect(
-      screen.getByRole('button', { name: 'Reveal cards' }),
-    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Reveal cards' })).toBeDisabled()
   })
 
   it('disables the reveal control until at least one vote is cast', () => {
