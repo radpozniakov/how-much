@@ -1,42 +1,75 @@
-import { useState } from 'react'
-import type { FC } from 'react'
+import { useRef, useState } from 'react'
+import type { FC, KeyboardEvent } from 'react'
 import type { ConnectionStatus } from '../../lib/roomSocket'
+import { MAX_DISPLAY_NAME_LENGTH } from '../../lib/limits'
 import { StatusIndicator } from '../StatusIndicator/StatusIndicator'
-
-// The two participant-view modes swapped by the header segment control. The
-// stats view content itself is S18; here the control only owns the toggle.
-export type RoomView = 'cards' | 'stats'
+import { CopyIcon, ExitIcon } from '../icons'
 
 export interface RoomHeaderProps {
   // The room code — DN-D: the spec's "Room ID" is the room code, no separate id.
   code: string
-  // The current participant's display name, shown bold top-right.
+  // The current participant's display name, shown bold top-right. Clicking it
+  // (when live) turns it into an inline rename input.
   participantName: string
-  view: RoomView
-  onViewChange: (view: RoomView) => void
+  // Commit a self-rename. The new name reaches the header + participant board via
+  // the server snapshot echo, so this component holds no post-commit name state.
+  onRename: (name: string) => void
   // Leave the room (clear the per-tab identity + navigate home).
   onExit: () => void
   status: ConnectionStatus
 }
 
-// Placeholder labels ("View 1 (cards)" / "View 2 (stats)") are finalized in S22.
-const SEGMENTS: { value: RoomView; label: string }[] = [
-  { value: 'cards', label: 'View 1 (cards)' },
-  { value: 'stats', label: 'View 2 (stats)' },
-]
-
 // The room header band (spec §Room page/Header): room code + copy/exit icon
-// buttons top-left, a centered segment control, and the current participant name
-// top-right. Monochrome, ghost icon buttons distinguished by content only.
+// buttons top-left, and the current participant name + status top-right. The
+// participant-view segment control lives in its own section above the stage
+// (ViewSwitcher). Monochrome, ghost icon buttons distinguished by content only.
 export const RoomHeader: FC<RoomHeaderProps> = ({
   code,
   participantName,
-  view,
-  onViewChange,
+  onRename,
   onExit,
   status,
 }) => {
   const [copied, setCopied] = useState(false)
+
+  // Rename is only offered on a live socket (RoomSocket.send no-ops otherwise),
+  // mirroring how the Stage topic editor is disabled off-live.
+  const canRename = status === 'live'
+  const [isEditing, setIsEditing] = useState(false)
+  const [draft, setDraft] = useState(participantName)
+  // Set by Escape so the blur it triggers reverts instead of committing (the
+  // same pattern as the Stage editor). A ref because the blur handler runs in
+  // the same event, before a keydown state update would be visible.
+  const cancelRef = useRef(false)
+
+  function beginEdit() {
+    if (!canRename) return
+    setDraft(participantName)
+    setIsEditing(true)
+  }
+
+  // Commit the draft unless it's an Escape cancel, blank, or unchanged. The
+  // display name updates from the server echo, so we only leave edit mode here.
+  function commit() {
+    setIsEditing(false)
+    if (cancelRef.current) {
+      cancelRef.current = false
+      return
+    }
+    const trimmed = draft.trim()
+    if (trimmed === '' || trimmed === participantName) return
+    onRename(trimmed)
+  }
+
+  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      e.currentTarget.blur() // blur runs commit
+    } else if (e.key === 'Escape') {
+      cancelRef.current = true
+      e.currentTarget.blur()
+    }
+  }
 
   async function copyLink() {
     // The shareable deep link for this room (FR-2a); the code is embedded in it.
@@ -65,7 +98,7 @@ export const RoomHeader: FC<RoomHeaderProps> = ({
   return (
     <header className="room-header">
       <div className="room-header__lead">
-        <h1 className="room-header__code">Room {code}</h1>
+        <h1 className="room-header__code">{code}</h1>
         <button
           type="button"
           className="icon-btn"
@@ -89,65 +122,31 @@ export const RoomHeader: FC<RoomHeaderProps> = ({
         </span>
       </div>
 
-      <div
-        className="segment"
-        role="tablist"
-        aria-label="Participant view"
-      >
-        {SEGMENTS.map((seg) => (
-          <button
-            key={seg.value}
-            type="button"
-            role="tab"
-            aria-selected={view === seg.value}
-            className={`segment__item ${view === seg.value ? 'segment__item--active' : ''}`}
-            onClick={() => onViewChange(seg.value)}
-          >
-            {seg.label}
-          </button>
-        ))}
-      </div>
-
       <div className="room-header__trail">
-        <span className="room-header__name">{participantName}</span>
+        {isEditing ? (
+          <input
+            className="room-header__name room-header__name--edit"
+            aria-label="Your display name"
+            value={draft}
+            maxLength={MAX_DISPLAY_NAME_LENGTH}
+            autoFocus
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={commit}
+          />
+        ) : (
+          <button
+            type="button"
+            className="room-header__name"
+            onClick={beginEdit}
+            disabled={!canRename}
+            title={canRename ? 'Rename yourself' : undefined}
+          >
+            {participantName}
+          </button>
+        )}
         <StatusIndicator status={status} />
       </div>
     </header>
   )
 }
-
-// Minimal outline glyphs (spec §Icon buttons); currentColor keeps them monochrome.
-const CopyIcon: FC = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <rect x="9" y="9" width="11" height="11" rx="2" />
-    <path d="M5 15V5a2 2 0 0 1 2-2h10" />
-  </svg>
-)
-
-const ExitIcon: FC = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-    <path d="M16 17l5-5-5-5" />
-    <path d="M21 12H9" />
-  </svg>
-)

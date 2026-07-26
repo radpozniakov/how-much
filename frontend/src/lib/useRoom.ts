@@ -12,6 +12,7 @@ import { clearSession } from './session'
 export interface RoomController extends RoomState {
   castVote: (card: string) => void
   setItem: (topic: string | null) => void
+  setName: (name: string) => void
   setHostVoting: (voting: boolean) => void
   reveal: () => void
   reset: () => void
@@ -48,6 +49,13 @@ export function useRoom(code: string, participantId: string): RoomController {
     [socket],
   )
 
+  const setName = useCallback(
+    (name: string) => {
+      socket.send({ type: 'set_name', name })
+    },
+    [socket],
+  )
+
   const setHostVoting = useCallback(
     (voting: boolean) => {
       socket.send({ type: 'set_host_voting', voting })
@@ -75,5 +83,5 @@ export function useRoom(code: string, participantId: string): RoomController {
     }
   }, [state.status, state.error])
 
-  return { ...state, castVote, setItem, setHostVoting, reveal, reset }
+  return { ...state, castVote, setItem, setName, setHostVoting, reveal, reset }
 }

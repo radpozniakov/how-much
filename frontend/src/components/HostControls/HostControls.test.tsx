@@ -1,50 +1,51 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import { HostControls } from './HostControls'
+import { HostVotingToggle, RevealButton } from './HostControls'
 
-const reveal = () => screen.getByRole('button', { name: /reveal/i })
-const reset = () => screen.getByRole('button', { name: /reset/i })
+const revealBtn = () => screen.getByRole('button')
 const hostVotingCheckbox = () =>
   screen.getByRole('checkbox', { name: /i'm voting/i })
 
-describe('HostControls', () => {
-  it('calls onReveal when Reveal is clicked', () => {
+describe('RevealButton', () => {
+  it('shows "Reveal cards" and calls onReveal when not revealed', () => {
     const onReveal = vi.fn()
     render(
-      <HostControls
-        revealed={false}
-        hostVoting={false}
-        onReveal={onReveal}
-        onReset={() => {}}
-        onSetHostVoting={() => {}}
-      />,
+      <RevealButton revealed={false} onReveal={onReveal} onReset={() => {}} />,
     )
-    fireEvent.click(reveal())
+    expect(revealBtn()).toHaveTextContent(/reveal cards/i)
+    fireEvent.click(revealBtn())
     expect(onReveal).toHaveBeenCalled()
   })
 
-  it('calls onReset when Reset is clicked', () => {
+  it('shows "New voting" and calls onReset when revealed', () => {
     const onReset = vi.fn()
     render(
-      <HostControls
-        revealed={false}
-        hostVoting={false}
-        onReveal={() => {}}
-        onReset={onReset}
-        onSetHostVoting={() => {}}
-      />,
+      <RevealButton revealed={true} onReveal={() => {}} onReset={onReset} />,
     )
-    fireEvent.click(reset())
+    expect(revealBtn()).toHaveTextContent(/new voting/i)
+    fireEvent.click(revealBtn())
     expect(onReset).toHaveBeenCalled()
   })
 
-  it('reflects hostVoting as checked', () => {
+  it('is disabled when the socket is not live', () => {
     render(
-      <HostControls
+      <RevealButton
         revealed={false}
-        hostVoting={true}
+        disabled
         onReveal={() => {}}
         onReset={() => {}}
+      />,
+    )
+    expect(revealBtn()).toBeDisabled()
+  })
+})
+
+describe('HostVotingToggle', () => {
+  it('reflects hostVoting as checked', () => {
+    render(
+      <HostVotingToggle
+        revealed={false}
+        hostVoting={true}
         onSetHostVoting={() => {}}
       />,
     )
@@ -53,11 +54,9 @@ describe('HostControls', () => {
 
   it('reflects hostVoting as unchecked', () => {
     render(
-      <HostControls
+      <HostVotingToggle
         revealed={false}
         hostVoting={false}
-        onReveal={() => {}}
-        onReset={() => {}}
         onSetHostVoting={() => {}}
       />,
     )
@@ -67,11 +66,9 @@ describe('HostControls', () => {
   it('toggles hostVoting with the negation (true -> false)', () => {
     const onSetHostVoting = vi.fn()
     render(
-      <HostControls
+      <HostVotingToggle
         revealed={false}
         hostVoting={true}
-        onReveal={() => {}}
-        onReset={() => {}}
         onSetHostVoting={onSetHostVoting}
       />,
     )
@@ -82,11 +79,9 @@ describe('HostControls', () => {
   it('toggles hostVoting with the negation (false -> true)', () => {
     const onSetHostVoting = vi.fn()
     render(
-      <HostControls
+      <HostVotingToggle
         revealed={false}
         hostVoting={false}
-        onReveal={() => {}}
-        onReset={() => {}}
         onSetHostVoting={onSetHostVoting}
       />,
     )
@@ -94,34 +89,26 @@ describe('HostControls', () => {
     expect(onSetHostVoting).toHaveBeenCalledWith(true)
   })
 
-  it('disables Reveal and the checkbox but not Reset once revealed', () => {
+  it('disables the checkbox once revealed', () => {
     render(
-      <HostControls
+      <HostVotingToggle
         revealed={true}
         hostVoting={false}
-        onReveal={() => {}}
-        onReset={() => {}}
         onSetHostVoting={() => {}}
       />,
     )
-    expect(reveal()).toBeDisabled()
     expect(hostVotingCheckbox()).toBeDisabled()
-    expect(reset()).not.toBeDisabled()
   })
 
-  it('disables Reveal, Reset, and the checkbox when disabled (socket not live)', () => {
+  it('disables the checkbox when the socket is not live', () => {
     render(
-      <HostControls
+      <HostVotingToggle
         revealed={false}
         hostVoting={false}
         disabled
-        onReveal={() => {}}
-        onReset={() => {}}
         onSetHostVoting={() => {}}
       />,
     )
-    expect(reveal()).toBeDisabled()
-    expect(reset()).toBeDisabled()
     expect(hostVotingCheckbox()).toBeDisabled()
   })
 })

@@ -3,13 +3,19 @@ import type { FC } from 'react'
 import { useNavigate } from 'react-router'
 import { clearSession, loadSession } from '../lib/session'
 import { useRoom } from '../lib/useRoom'
-import { HostControls } from '../components/HostControls/HostControls'
+import {
+  HostVotingToggle,
+  RevealButton,
+} from '../components/HostControls/HostControls'
 import { JoinPrompt } from '../components/JoinPrompt/JoinPrompt'
 import { ParticipantGrid } from '../components/ParticipantGrid/ParticipantGrid'
-import { RoomHeader, type RoomView } from '../components/RoomHeader/RoomHeader'
+import { RoomHeader } from '../components/RoomHeader/RoomHeader'
 import { Stage } from '../components/Stage/Stage'
 import { StatsView } from '../components/StatsView/StatsView'
-import { Topic } from '../components/Topic/Topic'
+import {
+  ViewSwitcher,
+  type RoomView,
+} from '../components/ViewSwitcher/ViewSwitcher'
 import { VoteDeck } from '../components/VoteDeck/VoteDeck'
 
 interface ConnectedRoomProps {
@@ -32,6 +38,7 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
     error,
     castVote,
     setItem,
+    setName,
     setHostVoting,
     reveal,
     reset,
@@ -78,6 +85,9 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
   // are excluded from the vote-progress denominator (FR-17).
   const canVote = !isHost || (room?.host_voting ?? false)
   const notLive = status !== 'live'
+  // No estimation subject set yet: voting and revealing are blocked until the
+  // host names one (the stage shows a "waiting for the subject" status).
+  const noTopic = !room?.current_item?.trim()
 
   const voters =
     room?.participants.filter(
@@ -90,8 +100,7 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
       <RoomHeader
         code={code}
         participantName={me?.name ?? ''}
-        view={view}
-        onViewChange={setView}
+        onRename={setName}
         onExit={exitRoom}
         status={status}
       />
@@ -104,17 +113,35 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
 
       {room ? (
         <>
+          {/* Dedicated section above the stage: swap cards ↔ graph view. */}
+          <ViewSwitcher view={view} onViewChange={setView} />
+
           <Stage
             currentItem={room.current_item}
             revealed={room.revealed}
             votesCast={votesCast}
             totalVoters={voters.length}
             isHost={isHost}
+            disabled={notLive || room.revealed}
+            onSetTopic={setItem}
+            // Host "I'm voting" opt-in, directly below the stage status line.
+            statusControl={
+              isHost ? (
+                <HostVotingToggle
+                  revealed={room.revealed}
+                  hostVoting={room.host_voting}
+                  disabled={notLive}
+                  onSetHostVoting={setHostVoting}
+                />
+              ) : undefined
+            }
           />
 
           {view === 'cards' ? (
             <ParticipantGrid
-              participants={room.participants}
+              // Only eligible voters get a card: an opted-out host (host_voting
+              // false) is a facilitator and is excluded from the grid (FR-17).
+              participants={voters}
               revealed={room.revealed}
               results={room.results}
             />
@@ -127,22 +154,18 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
             />
           )}
 
-          {isHost && (
-            <Topic
-              currentItem={room.current_item}
-              disabled={notLive || room.revealed}
-              onSetTopic={setItem}
-            />
-          )}
-
-          {isHost && (
-            <HostControls
+          {/* Single host action below the participant cards: reveal → reset.
+              Only shown when someone can actually vote (FR-17). */}
+          {isHost && voters.length > 0 && (
+            <RevealButton
               revealed={room.revealed}
-              hostVoting={room.host_voting}
-              disabled={notLive}
+              // Revealing needs at least one cast vote; the reset ("New voting")
+              // action stays enabled so the host can always start a new round.
+              disabled={
+                notLive || noTopic || (!room.revealed && votesCast === 0)
+              }
               onReveal={reveal}
               onReset={reset}
-              onSetHostVoting={setHostVoting}
             />
           )}
 
@@ -154,7 +177,7 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
               hasVoted={me?.has_voted ?? false}
               revealed={room.revealed}
               onVote={castVote}
-              disabled={notLive}
+              disabled={notLive || noTopic}
             />
           )}
         </>

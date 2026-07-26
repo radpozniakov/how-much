@@ -59,6 +59,17 @@ export interface SetHostVotingFrame {
   voting: boolean
 }
 
+// Self-service rename (not host-gated). Like the other round frames it carries
+// NO participant_id — the socket fixed the caller's identity at handshake, so the
+// server renames the connected participant, never someone else. Mirrors the
+// authoritative backend SetNameFrame in messages.py.
+export interface SetNameFrame {
+  type: 'set_name'
+  // The new display name. Bounded to MAX_DISPLAY_NAME_LENGTH (lib/limits.ts)
+  // client-side; trimmed + validated server-side (messages.py SetNameFrame).
+  name: string
+}
+
 export interface RevealFrame {
   type: 'reveal'
 }
@@ -73,6 +84,7 @@ export type ClientFrame =
   | { type: 'attach'; participant_id: string }
   | CastVoteFrame
   | SetItemFrame
+  | SetNameFrame
   | SetHostVotingFrame
   | RevealFrame
   | ResetFrame

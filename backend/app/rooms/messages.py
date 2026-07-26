@@ -129,6 +129,29 @@ class SetItemFrame(BaseModel):
         return value
 
 
+class SetNameFrame(BaseModel):
+    """Change the caller's own display name (self-service, not host-gated).
+
+    Trimmed and bounded exactly like the handshake ``JoinFrame`` — ``Room.set_name``
+    trusts the passed name, so without this a socket could set an unbounded/blank
+    name the join path would reject (join/rename parity)."""
+
+    type: Literal["set_name"]
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def _clean_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("name must not be blank")
+        if len(value) > config.MAX_DISPLAY_NAME_LENGTH:
+            raise ValueError(
+                f"name must be at most {config.MAX_DISPLAY_NAME_LENGTH} characters"
+            )
+        return value
+
+
 class CastVoteFrame(BaseModel):
     """Cast or change the caller's vote. The card is validated against the deck
     in the domain (``Room.cast_vote``), which raises ``InvalidCard`` (FR-9)."""
@@ -157,7 +180,12 @@ class ResetFrame(BaseModel):
 
 
 RoundFrame = (
-    SetItemFrame | CastVoteFrame | SetHostVotingFrame | RevealFrame | ResetFrame
+    SetItemFrame
+    | SetNameFrame
+    | CastVoteFrame
+    | SetHostVotingFrame
+    | RevealFrame
+    | ResetFrame
 )
 
 _HANDSHAKE_TYPES: dict[str, type[BaseModel]] = {
@@ -167,6 +195,7 @@ _HANDSHAKE_TYPES: dict[str, type[BaseModel]] = {
 
 _ROUND_TYPES: dict[str, type[BaseModel]] = {
     "set_item": SetItemFrame,
+    "set_name": SetNameFrame,
     "cast_vote": CastVoteFrame,
     "set_host_voting": SetHostVotingFrame,
     "reveal": RevealFrame,

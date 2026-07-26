@@ -154,6 +154,21 @@ class Room:
         topic = topic.strip() if topic else ""
         self.current_item = topic or None
 
+    def set_name(self, participant_id: str, name: str) -> None:
+        """Change a participant's own display name (self-service).
+
+        Names are non-unique by design (D-10), so there is no collision check.
+        Like ``add_participant``, the domain trusts the passed name — trimming
+        and length are enforced at the transport boundary (the ``set_name``
+        frame validator), which keeps this parity with the join path.
+
+        Raises:
+            UnknownParticipant: if ``participant_id`` is not in the room.
+        """
+        if participant_id not in self.participants:
+            raise UnknownParticipant()
+        self.participants[participant_id].name = name
+
     def cast_vote(self, participant_id: str, card: str) -> None:
         """Record ``participant_id``'s vote, overwriting any prior one (FR-11).
 

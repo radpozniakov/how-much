@@ -1,4 +1,5 @@
 import type { FC } from 'react'
+import { CheckIcon } from '../icons'
 
 // The three color-free card states (spec §Participant card). Distinguished by
 // border style + inner content ONLY — never color (spec §Notes for regeneration).
@@ -51,21 +52,3 @@ export const ParticipantCard: FC<ParticipantCardProps> = ({
     </li>
   )
 }
-
-// Checkmark-in-circle for the voted/hidden state (spec §Participant card).
-const CheckIcon: FC = () => (
-  <svg
-    width="28"
-    height="28"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <circle cx="12" cy="12" r="9" />
-    <path d="M8.5 12.5l2.5 2.5 4.5-5" />
-  </svg>
-)

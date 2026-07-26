@@ -36,6 +36,7 @@ from app.rooms.messages import (
     RoundFrame,
     SetHostVotingFrame,
     SetItemFrame,
+    SetNameFrame,
     error_frame,
     parse_handshake_frame,
     parse_round_frame,
@@ -56,6 +57,8 @@ def _apply_round(room: Room, participant_id: str, frame: RoundFrame) -> None:
     into an ``error`` frame for the sender alone."""
     if isinstance(frame, SetItemFrame):
         room.set_item(participant_id, frame.topic)
+    elif isinstance(frame, SetNameFrame):
+        room.set_name(participant_id, frame.name)
     elif isinstance(frame, CastVoteFrame):
         room.cast_vote(participant_id, frame.card)
     elif isinstance(frame, SetHostVotingFrame):
@@ -64,7 +67,7 @@ def _apply_round(room: Room, participant_id: str, frame: RoundFrame) -> None:
         room.reveal(participant_id)
     elif isinstance(frame, ResetFrame):
         room.reset_round(participant_id)
-    else:  # unreachable: parse_round_frame only yields the five frames above
+    else:  # unreachable: parse_round_frame only yields the six frames above
         raise AssertionError(f"unhandled round frame: {frame!r}")
 
 

@@ -189,7 +189,7 @@ form button {
   padding: 0 var(--space-5);
   text-align: left;
 }
-
+.room
 // Room header row (title + status).
 .room-head {
   display: flex;
@@ -295,6 +295,31 @@ form button {
   }
 }
 
+// Deep-link join prompt (/room/:id with no identity): a single main-page card,
+// centered in the .landing shell and width-matched to one landing card.
+.join-card {
+  width: 100%;
+  max-width: 368px;
+  // .landing centers text; match the main-page cards' left-aligned content.
+  text-align: left;
+}
+
+// Home button pinned to the top-left of the join screen (matches the room
+// header's 24px edge offset). Borderless + transparent, filling surface on
+// hover — same ghost style as the room header's action buttons.
+.icon-btn.join-home {
+  position: fixed;
+  top: var(--space-5);
+  left: var(--space-5);
+  border: none;
+  background: transparent;
+
+  &:hover:not(:disabled) {
+    background: var(--surface);
+    color: var(--ink);
+  }
+}
+
 // Room-code input on the join form.
 .join-form {
   &__code {
@@ -310,9 +335,9 @@ form button {
 
 // Room screen shell: centered column, wide enough for the stage footprint.
 .room {
-  max-width: 940px;
+  min-height: 100vh;
   margin: 0 auto;
-  padding: var(--space-5) var(--space-5) var(--space-8);
+  padding: var(--space-5) var(--space-5);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -323,28 +348,36 @@ form button {
 // participant name + status (right). 24px edge offset comes from .room padding.
 .room-header {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: var(--space-4);
 
   &__lead {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: 3px;
     justify-self: start;
   }
 
-  // Room code, bold Inter — overrides the global mono h1 (spec §Header).
-  &__code {
-    font-family: var(--font-sans);
-    font-weight: 700;
-    font-size: 24px;
-    letter-spacing: -0.4px;
-    margin: 0;
+  // Header action buttons (copy/exit): borderless + transparent, filling white
+  // on hover rather than inverting to solid ink like the default ghost button.
+  .icon-btn {
+    border: none;
+    background: transparent;
 
-    @media (max-width: 1024px) {
-      font-size: 20px;
+    &:hover:not(:disabled) {
+      background: var(--surface);
+      color: var(--ink);
     }
+  }
+
+  // Room code, mono — overrides the global h1 sizing (spec §Header).
+  &__code {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.4px;
+    margin: 0 8px 0 0;
   }
 
   &__copied {
@@ -356,14 +389,60 @@ form button {
   &__trail {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-2);
     justify-self: end;
   }
 
+  // The current participant's name is a click-to-edit control: a button in
+  // display mode, an input in edit mode. Strip native chrome from both so they
+  // read as the bold heading, then layer hover/focus affordances. Monochrome —
+  // no color; state shows as a faint ink wash (mirrors .stage__title--edit).
   &__name {
-    font-family: var(--font-sans);
+    // Match the room code's typography (&__code): mono, tight tracking, so the
+    // two header ends read as one type system.
+    font-family: var(--font-mono);
     font-weight: 700;
     font-size: 16px;
+    letter-spacing: -0.4px;
+    appearance: none;
+    margin: 0;
+    padding: 2px var(--space-2);
+    color: inherit;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+    transition: background-color 0.12s ease;
+
+    // Display mode (button): hover hints the name is editable; disabled (not
+    // live) reads as plain text.
+    &:is(button) {
+      cursor: pointer;
+
+      &:hover:not(:disabled) {
+        // Keep the ink text on hover (override the global button invert to a
+        // white-on-ink fill); the affordance is the faint wash, not a flip.
+        color: var(--ink);
+        background: color-mix(in srgb, var(--ink) 4%, transparent);
+      }
+
+      &:disabled {
+        cursor: default;
+      }
+    }
+
+    // Edit mode (input): visually indistinguishable from the display name.
+    &--edit {
+      cursor: text;
+
+      &:hover:not(:focus) {
+        background: color-mix(in srgb, var(--ink) 4%, transparent);
+      }
+
+      &:focus {
+        outline: none;
+        background: color-mix(in srgb, var(--ink) 4%, transparent);
+      }
+    }
   }
 
   @media (max-width: 720px) {
@@ -402,19 +481,24 @@ form button {
   }
 }
 
+// Dedicated view-switcher section above the stage: centers the segment control.
+.view-switcher {
+  display: flex;
+  justify-content: center;
+}
+
 // Two-item segment control (spec §Segment control): active bold, inactive muted.
 .segment {
   display: inline-flex;
-  gap: var(--space-4);
-  justify-self: center;
+  gap: 4px;
 
   &__item {
     font-family: var(--font-sans);
     font-size: 14px;
     font-weight: 400;
-    padding: var(--space-1) var(--space-2);
+    padding: 6px 12px;
     border: none;
-    border-radius: 0;
+    border-radius: 8px;
     background: transparent;
     color: var(--ink-muted);
 
@@ -423,9 +507,15 @@ form button {
       color: var(--ink);
     }
 
+    // Active tab: white fill, no border; inactive stays transparent + borderless.
     &--active {
-      font-weight: 700;
       color: var(--ink);
+      background: var(--surface);
+    }
+
+    // Keep the active tab's white fill on hover (don't drop back to transparent).
+    &--active:hover:not(:disabled) {
+      background: var(--surface);
     }
   }
 }
@@ -437,7 +527,7 @@ form button {
   margin: 0 auto;
   box-sizing: border-box;
   background: var(--surface);
-  border: var(--hairline);
+  border: solid 1px #c6c6c6;
   border-radius: var(--radius-container);
   padding: var(--space-6);
   text-align: center;
@@ -459,20 +549,65 @@ form button {
       font-weight: 400;
       color: var(--ink-muted);
     }
+
+    // Host inline editor: a textarea that reads as the title itself. Strip the
+    // native chrome so it is visually indistinguishable from the read-only
+    // heading, then layer on hover/focus affordances (S9 → merged into Stage).
+    &--edit {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      appearance: none;
+      background: transparent;
+      border: 0;
+      border-radius: var(--radius-card);
+      padding: 2px var(--space-2);
+      padding-bottom: 4px;
+      padding-top: 4px;
+      color: inherit;
+      text-align: center;
+      resize: none;
+      overflow: hidden;
+      cursor: text;
+      transition: background-color 0.12s ease;
+
+      &::placeholder {
+        font-weight: 400;
+        color: var(--ink-muted);
+        opacity: 1;
+      }
+
+      &:hover:not(:disabled):not(:focus) {
+        background: color-mix(in srgb, var(--ink) 4%, transparent);
+      }
+
+      &:focus {
+        outline: none;
+        background: color-mix(in srgb, var(--ink) 4%, transparent);
+      }
+
+      // Locked (reconnecting or revealed): read as plain, non-editable text.
+      &:disabled {
+        cursor: default;
+        opacity: 1;
+      }
+    }
   }
 
   &__meta {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: var(--space-4);
-    margin-top: var(--space-4);
+    margin-top: 28px;
   }
 
   &__status {
     font-family: var(--font-sans);
     font-size: 14px;
-    color: var(--ink-muted);
+    color: #000;
+    font-weight: 600;
   }
 
   &__counter {
@@ -480,6 +615,8 @@ form button {
     padding: 2px 8px;
     border: var(--hairline);
     border-radius: 999px;
+    background-color: var(--ink);
+    color: var(--surface);
   }
 }
 
@@ -496,20 +633,24 @@ form button {
   width: 100%;
   max-width: 900px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  // Fixed-width tracks (not 1fr) so leftover row space goes to the sides:
+  // justify-content: center then centers any number of cards, including a
+  // partial final row or a grid that does not fill one row.
+  grid-template-columns: repeat(auto-fill, 110px);
+  justify-content: center;
   gap: var(--space-4);
 
   @media (max-width: 1024px) {
-    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    grid-template-columns: repeat(auto-fill, 96px);
   }
 
   @media (max-width: 640px) {
-    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    grid-template-columns: repeat(auto-fill, 84px);
     gap: var(--space-3);
   }
 
   @media (max-width: 400px) {
-    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    grid-template-columns: repeat(auto-fill, 72px);
   }
 }
 
@@ -568,19 +709,67 @@ form button {
 }
 
 // Host controls.
-.host-controls {
-  &__row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.75rem;
+// Host "I'm voting" opt-in, centered just below the stage status line.
+.host-voting {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+// Custom checkbox following the monochrome theme: white fill + solid black
+// border when unchecked, black fill + white tick when checked.
+.checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  // Reset the global input padding — with border-box it would otherwise exceed
+  // the 18px width and force the box to grow (making it non-square).
+  padding: 0;
+  box-sizing: border-box;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: var(--surface);
+  cursor: pointer;
+  position: relative;
+
+  &:checked {
+    background: var(--ink);
   }
 
-  &__checkbox {
-    flex-direction: row;
-    align-items: center;
-    gap: 0.4rem;
+  // White tick drawn from the corner of a rotated box (right + bottom borders).
+  &:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid var(--surface);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
   }
+
+  &:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+// The single reveal/reset host action, centered below the participant cards.
+.host-reveal {
+  display: flex;
+  justify-content: center;
 }
 
 // Connection status pill. Monochrome (spec §Notes for regeneration): states are
@@ -625,6 +814,17 @@ form button {
 // Fibonacci vote deck (spec §Voting cards): a horizontal row of rounded-square
 // cards. Selected card is filled black with a white number; the rest are
 // outlined black-on-white. State is border + fill only — no color coding.
+// Voting deck pinned to the bottom of the room (spec §Voting cards). No panel
+// chrome — the bar carries no border and blends into the page so only the
+// cards read as visible elements; it stays in view as the room scrolls.
+.vote-bar {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  padding: var(--space-4) 0;
+  background: var(--bg);
+}
+
 .vote-deck {
   display: flex;
   flex-wrap: wrap;

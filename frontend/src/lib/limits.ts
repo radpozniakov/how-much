@@ -5,3 +5,10 @@
 // `set_item` can never be rejected `bad_request` (parallels lib/deck.ts making
 // `invalid_card` unreachable from the fixed deck).
 export const MAX_TOPIC_LENGTH = 200
+
+// The display-name length bound, client-side. Mirrors the backend source of truth
+// `config.MAX_DISPLAY_NAME_LENGTH` (backend/app/config.py) — the same value the
+// `set_name` frame validator enforces in messages.py. The rename input and the
+// JoinPrompt `maxLength` to this, so an over-long name can't be produced and
+// `set_name` can never be rejected `bad_request` (parallels MAX_TOPIC_LENGTH).
+export const MAX_DISPLAY_NAME_LENGTH = 40

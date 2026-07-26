@@ -40,8 +40,7 @@ export const VoteDeck: FC<VoteDeckProps> = ({
   const locked = revealed || disabled
 
   return (
-    <section className="card">
-      <h2>Your vote</h2>
+    <section className="vote-bar" aria-label="Your vote">
       <div className="vote-deck">
         {FIBONACCI_DECK.map((card) => (
           <button

@@ -47,7 +47,7 @@ describe('Room (S9 wiring)', () => {
         participants: [makeParticipant({ id: 'pid-1', name: 'Alice' })],
       }),
     )
-    expect(screen.getByRole('button', { name: 'Reveal' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reveal cards' })).toBeInTheDocument()
   })
 
   it('hides host controls from a non-host', () => {
@@ -62,7 +62,7 @@ describe('Room (S9 wiring)', () => {
       }),
     )
     expect(
-      screen.queryByRole('button', { name: 'Reveal' }),
+      screen.queryByRole('button', { name: 'Reveal cards' }),
     ).not.toBeInTheDocument()
   })
 
@@ -73,15 +73,108 @@ describe('Room (S9 wiring)', () => {
         host_id: 'pid-1',
         host_voting: false,
         revealed: false,
-        participants: [makeParticipant({ id: 'pid-1', name: 'Alice' })],
+        participants: [
+          makeParticipant({ id: 'pid-1', name: 'Alice' }),
+          makeParticipant({ id: 'pid-2', name: 'Bob' }),
+        ],
       }),
     )
     // No voting deck for the facilitator...
     expect(
-      screen.queryByRole('heading', { name: 'Your vote' }),
+      screen.queryByRole('region', { name: 'Your vote' }),
     ).not.toBeInTheDocument()
-    // ...but the host controls are still there.
-    expect(screen.getByRole('button', { name: 'Reveal' })).toBeInTheDocument()
+    // ...but the host reveal control is still there (Bob can vote).
+    expect(screen.getByRole('button', { name: 'Reveal cards' })).toBeInTheDocument()
+  })
+
+  it('disables voting and revealing until an estimation subject is set', () => {
+    renderRoomAs('pid-2') // a non-host voter
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        current_item: null, // no subject yet
+        revealed: false,
+        participants: [
+          makeParticipant({ id: 'pid-1', name: 'Alice' }),
+          makeParticipant({ id: 'pid-2', name: 'Bob' }),
+        ],
+      }),
+    )
+    // Every vote card is inactive...
+    for (const card of FIBONACCI_DECK) {
+      expect(screen.getByRole('button', { name: card })).toBeDisabled()
+    }
+    // ...and the stage announces the waiting state.
+    expect(
+      screen.getByText('Waiting for the estimation subject'),
+    ).toBeInTheDocument()
+  })
+
+  it('disables the reveal control until an estimation subject is set', () => {
+    renderRoomAs('pid-1') // the host
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        current_item: null,
+        revealed: false,
+        participants: [
+          makeParticipant({ id: 'pid-1', name: 'Alice' }),
+          makeParticipant({ id: 'pid-2', name: 'Bob' }),
+        ],
+      }),
+    )
+    expect(
+      screen.getByRole('button', { name: 'Reveal cards' }),
+    ).toBeDisabled()
+  })
+
+  it('disables the reveal control until at least one vote is cast', () => {
+    renderRoomAs('pid-1') // the host
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        current_item: 'Estimate the login page',
+        revealed: false,
+        participants: [
+          makeParticipant({ id: 'pid-1', name: 'Alice' }),
+          makeParticipant({ id: 'pid-2', name: 'Bob', has_voted: false }),
+        ],
+      }),
+    )
+    expect(screen.getByRole('button', { name: 'Reveal cards' })).toBeDisabled()
+  })
+
+  it('enables the reveal control once a vote is cast', () => {
+    renderRoomAs('pid-1') // the host
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        current_item: 'Estimate the login page',
+        revealed: false,
+        participants: [
+          makeParticipant({ id: 'pid-1', name: 'Alice' }),
+          makeParticipant({ id: 'pid-2', name: 'Bob', has_voted: true }),
+        ],
+      }),
+    )
+    expect(
+      screen.getByRole('button', { name: 'Reveal cards' }),
+    ).not.toBeDisabled()
+  })
+
+  it('hides the reveal control when no one can vote (opted-out host alone)', () => {
+    renderRoomAs('pid-1')
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        host_voting: false,
+        revealed: false,
+        participants: [makeParticipant({ id: 'pid-1', name: 'Alice' })],
+      }),
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Reveal cards' }),
+    ).not.toBeInTheDocument()
   })
 
   it('keeps the deck locked and moves results to the stats view once revealed', async () => {
@@ -107,7 +200,7 @@ describe('Room (S9 wiring)', () => {
     // §Voting cards) but is locked — every card disabled post-reveal. Results
     // are NOT rendered here; they live in the stats view now (S18).
     expect(
-      screen.getByRole('heading', { name: 'Your vote' }),
+      screen.getByRole('region', { name: 'Your vote' }),
     ).toBeInTheDocument()
     for (const card of FIBONACCI_DECK) {
       expect(screen.getByRole('button', { name: card })).toBeDisabled()
@@ -117,7 +210,7 @@ describe('Room (S9 wiring)', () => {
     ).not.toBeInTheDocument()
 
     // Switching to the stats view surfaces the Results dashboard (S18).
-    await user.click(screen.getByRole('tab', { name: 'View 2 (stats)' }))
+    await user.click(screen.getByRole('tab', { name: 'Graph view' }))
     expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument()
   })
 
@@ -136,6 +229,8 @@ describe('Room (S9 wiring)', () => {
     })
     const base = {
       host_id: 'pid-1' as const,
+      // A subject is set so voting is enabled (empty subject locks the deck).
+      current_item: 'Estimate the login page',
       revealed: false,
       participants: [
         makeParticipant({ id: 'pid-1', name: 'Alice' }),
@@ -169,7 +264,7 @@ describe('Room (S9 wiring)', () => {
     connect(makeRoom(base))
 
     expect(
-      screen.getByRole('heading', { name: 'Your vote' }),
+      screen.getByRole('region', { name: 'Your vote' }),
     ).toBeInTheDocument()
     for (const card of FIBONACCI_DECK) {
       expect(screen.getByRole('button', { name: card })).toHaveAttribute(

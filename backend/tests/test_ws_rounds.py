@@ -239,6 +239,82 @@ def test_action_after_http_delete_errors_not_in_room(client):
     assert host_id in store.get(code).participants  # host untouched
 
 
+def test_set_name_over_ws_fans_out_to_other_socket(client):
+    """A participant renames itself over the socket; the new name appears in the
+    room_state snapshot every connected client receives (self-service rename)."""
+    code, host_id = _create(client, "Alice")
+    bob_id = _join_http(client, code, "Bob")
+    with client.websocket_connect(f"/ws/rooms/{code}") as host_ws:
+        host_ws.send_json({"type": "attach", "participant_id": host_id})
+        host_ws.receive_json()  # own snapshot
+        with client.websocket_connect(f"/ws/rooms/{code}") as bob_ws:
+            bob_ws.send_json({"type": "attach", "participant_id": bob_id})
+            bob_ws.receive_json()  # bob snapshot
+            host_ws.receive_json()  # host sees bob attach
+
+            bob_ws.send_json({"type": "set_name", "name": "Bobby"})
+            bob_ws.receive_json()  # bob's own rename broadcast
+            host_frame = host_ws.receive_json()  # host sees the rename too
+            # Assert while still connected — closing a socket drops its participant.
+            bob = next(
+                p for p in host_frame["room"]["participants"] if p["id"] == bob_id
+            )
+            assert host_frame["type"] == "room_state" and bob["name"] == "Bobby"
+            assert store.get(code).participants[bob_id].name == "Bobby"
+
+
+def test_set_name_uses_connection_identity_not_payload(client):
+    """set_name carries no participant_id; a spoofed one is ignored — the rename
+    applies to the connected socket's own identity, never someone else's."""
+    code, host_id = _create(client, "Alice")
+    bob_id = _join_http(client, code, "Bob")
+    with client.websocket_connect(f"/ws/rooms/{code}") as bob_ws:
+        bob_ws.send_json({"type": "attach", "participant_id": bob_id})
+        bob_ws.receive_json()
+        # A bogus participant_id must not redirect the rename to the host.
+        bob_ws.send_json(
+            {"type": "set_name", "name": "Hacker", "participant_id": host_id}
+        )
+        bob_ws.receive_json()
+        room = store.get(code)
+        assert room.participants[bob_id].name == "Hacker"  # the socket's own id
+        assert room.participants[host_id].name == "Alice"  # host untouched
+
+
+def test_set_name_trims_and_bounds_over_ws(client):
+    """The set_name frame trims like JoinFrame; a blank/whitespace name is a
+    bad_request and does not disconnect the socket."""
+    code, host_id = _create(client, "Alice")
+    with client.websocket_connect(f"/ws/rooms/{code}") as ws:
+        ws.send_json({"type": "attach", "participant_id": host_id})
+        ws.receive_json()
+
+        ws.send_json({"type": "set_name", "name": "   "})  # blank after trim
+        err = ws.receive_json()
+        assert err["type"] == "error" and err["reason"] == "bad_request"
+
+        ws.send_json({"type": "set_name", "name": "  Ada  "})  # trimmed
+        ok = ws.receive_json()
+    me = next(p for p in ok["room"]["participants"] if p["id"] == host_id)
+    assert me["name"] == "Ada"
+
+
+def test_over_long_name_over_ws_is_bad_request(client):
+    """The set_name frame enforces MAX_DISPLAY_NAME_LENGTH; an over-long name is
+    rejected as bad_request and the socket stays usable."""
+    code, host_id = _create(client, "Alice")
+    with client.websocket_connect(f"/ws/rooms/{code}") as ws:
+        ws.send_json({"type": "attach", "participant_id": host_id})
+        ws.receive_json()
+        ws.send_json({"type": "set_name", "name": "x" * 5000})
+        err = ws.receive_json()
+        assert err["type"] == "error" and err["reason"] == "bad_request"
+        ws.send_json({"type": "set_name", "name": "ok"})  # still usable
+        ok = ws.receive_json()
+    me = next(p for p in ok["room"]["participants"] if p["id"] == host_id)
+    assert me["name"] == "ok"
+
+
 def test_action_after_room_swept_errors_room_not_found(client):
     """If the room is gone mid-session, a round action is answered room_not_found
     rather than dispatching on None (risk R1)."""

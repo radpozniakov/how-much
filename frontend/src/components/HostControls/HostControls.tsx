@@ -1,41 +1,58 @@
 import type { FC } from 'react'
 
-export interface HostControlsProps {
-  revealed: boolean
+export interface HostVotingToggleProps {
   hostVoting: boolean
-  // The socket is not live (connecting / reconnecting) — controls are unusable.
+  // Locked once the round is revealed (host can't opt in/out mid-reveal).
+  revealed: boolean
+  // The socket is not live (connecting / reconnecting) — control is unusable.
   disabled?: boolean
-  onReveal: () => void
-  onReset: () => void
   onSetHostVoting: (voting: boolean) => void
 }
 
-export const HostControls: FC<HostControlsProps> = ({
-  revealed,
+// The host's "I'm voting" opt-in. Shown directly below the stage status line
+// ("Voting in progress").
+export const HostVotingToggle: FC<HostVotingToggleProps> = ({
   hostVoting,
+  revealed,
+  disabled = false,
+  onSetHostVoting,
+}) => (
+  <label className="host-voting">
+    <input
+      type="checkbox"
+      className="checkbox"
+      checked={hostVoting}
+      disabled={revealed || disabled}
+      onChange={() => onSetHostVoting(!hostVoting)}
+    />
+    I&apos;m voting
+  </label>
+)
+
+export interface RevealButtonProps {
+  revealed: boolean
+  // The socket is not live (connecting / reconnecting) — control is unusable.
+  disabled?: boolean
+  onReveal: () => void
+  onReset: () => void
+}
+
+// A single host action below the participant cards: it reveals the round, then
+// flips to resetting it once revealed.
+export const RevealButton: FC<RevealButtonProps> = ({
+  revealed,
   disabled = false,
   onReveal,
   onReset,
-  onSetHostVoting,
 }) => (
-  <section className="card">
-    <h2>Host controls</h2>
-    <div className="host-controls__row">
-      <button type="button" disabled={revealed || disabled} onClick={onReveal}>
-        Reveal
-      </button>
-      <button type="button" disabled={disabled} onClick={onReset}>
-        Reset
-      </button>
-      <label className="host-controls__checkbox">
-        <input
-          type="checkbox"
-          checked={hostVoting}
-          disabled={revealed || disabled}
-          onChange={() => onSetHostVoting(!hostVoting)}
-        />
-        I'm voting
-      </label>
-    </div>
-  </section>
+  <div className="host-reveal">
+    <button
+      type="button"
+      className="host-reveal__btn"
+      disabled={disabled}
+      onClick={revealed ? onReset : onReveal}
+    >
+      {revealed ? 'New voting' : 'Reveal cards'}
+    </button>
+  </div>
 )
