@@ -41,6 +41,7 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
     setItem,
     setName,
     setHostVoting,
+    transferHost,
     reveal,
     reset,
   } = useRoom(code, participantId)
@@ -81,7 +82,8 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
 
   const me = room?.participants.find((p) => p.id === participantId)
   // host_id can be null during a transfer/empty window — never match null.
-  const isHost = !!room && room.host_id !== null && room.host_id === participantId
+  const isHost =
+    !!room && room.host_id !== null && room.host_id === participantId
   // An opted-out host is a facilitator, not a voter (D-14): no deck, and they
   // are excluded from the vote-progress denominator (FR-17).
   const canVote = !isHost || (room?.host_voting ?? false)
@@ -105,13 +107,18 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
         onExit={exitRoom}
         status={status}
         // Host-only roster beside the name. Gated here rather than inside the
-        // header so the header stays a dumb band; the host actions this anchors
-        // next (delegate, kick) are host-only too, so the whole control is.
+        // header so the header stays a dumb band. It now carries the handover
+        // action (FR-20/D-45); removing a participant is still V2. Note the gate
+        // is a rendering affordance only — the domain's _require_host is the
+        // boundary, so hiding this control is not what makes it host-only.
         participantsMenu={
           isHost && room ? (
             <ParticipantsMenu
               participants={room.participants}
               currentParticipantId={participantId}
+              hostId={room.host_id ?? ''}
+              onTransferHost={transferHost}
+              disabled={notLive}
             />
           ) : undefined
         }

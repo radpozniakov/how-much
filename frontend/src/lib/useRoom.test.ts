@@ -102,6 +102,30 @@ describe('useRoom', () => {
     expect(result.current.setHostVoting).toBe(first)
   })
 
+  it('transferHost sends a transfer_host frame once live', () => {
+    const { result } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    act(() => {
+      result.current.transferHost('p2')
+    })
+    const sent = lastSocket().sent.map((s) => JSON.parse(s))
+    // target_id, and deliberately no actor id — the server attributes the handover
+    // to this socket's handshake identity (D-45).
+    expect(sent).toContainEqual({ type: 'transfer_host', target_id: 'p2' })
+  })
+
+  it('keeps a stable transferHost reference across renders', () => {
+    const { result, rerender } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    const first = result.current.transferHost
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    rerender()
+    expect(result.current.transferHost).toBe(first)
+  })
+
   it('reveal sends a reveal frame once live', () => {
     const { result } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
     act(() => {

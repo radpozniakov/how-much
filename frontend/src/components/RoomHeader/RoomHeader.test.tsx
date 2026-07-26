@@ -5,7 +5,9 @@ import { RoomHeader } from './RoomHeader'
 
 const noop = () => {}
 
-function renderHeader(overrides: Partial<Parameters<typeof RoomHeader>[0]> = {}) {
+function renderHeader(
+  overrides: Partial<Parameters<typeof RoomHeader>[0]> = {},
+) {
   const props = {
     code: 'ABCDEF',
     participantName: 'Alice',
@@ -20,9 +22,7 @@ function renderHeader(overrides: Partial<Parameters<typeof RoomHeader>[0]> = {})
 describe('RoomHeader', () => {
   it('shows the room code and the current participant name', () => {
     renderHeader()
-    expect(
-      screen.getByRole('heading', { name: 'ABCDEF' }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'ABCDEF' })).toBeInTheDocument()
     expect(screen.getByText('Alice')).toBeInTheDocument()
   })
 
@@ -35,6 +35,34 @@ describe('RoomHeader', () => {
     it('renders the injected control beside the name', () => {
       renderHeader({ participantsMenu: <span data-testid="slot">roster</span> })
       expect(screen.getByTestId('slot')).toBeInTheDocument()
+    })
+
+    it('recovers focus when the control vanishes from under the user', async () => {
+      const user = userEvent.setup()
+      const { rerender } = renderHeader({
+        participantsMenu: <button type="button">Make host</button>,
+      })
+
+      // Focus must start INSIDE the control. Driving this from an already-`body`
+      // state would pass against an implementation that does nothing at all.
+      await user.click(screen.getByRole('button', { name: 'Make host' }))
+      expect(screen.getByRole('button', { name: 'Make host' })).toHaveFocus()
+
+      // A successful handover unmounts the whole host-only control, including the
+      // button just activated. Removing a focused element fires no blur, so without
+      // recovery focus falls silently to document.body and a keyboard user is
+      // stranded at the document root.
+      rerender(
+        <RoomHeader
+          code="ABCDEF"
+          participantName="Alice"
+          onRename={noop}
+          onExit={noop}
+          status="live"
+        />,
+      )
+
+      expect(screen.getByRole('button', { name: 'Alice' })).toHaveFocus()
     })
 
     it('keeps the control mounted while the name is being edited', async () => {

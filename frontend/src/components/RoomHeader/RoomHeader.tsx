@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FC, KeyboardEvent, ReactNode } from 'react'
 import type { ConnectionStatus } from '../../lib/roomSocket'
 import { MAX_DISPLAY_NAME_LENGTH } from '../../lib/limits'
@@ -36,6 +36,24 @@ export const RoomHeader: FC<RoomHeaderProps> = ({
   participantsMenu,
 }) => {
   const [copied, setCopied] = useState(false)
+  const nameRef = useRef<HTMLButtonElement>(null)
+
+  // Recover focus when the participants menu disappears from under the user.
+  //
+  // What breaks without this: the menu is host-only, so the snapshot confirming a
+  // handover unmounts the whole control — including the button the outgoing host
+  // just activated to trigger it. Removing a focused element fires no blur or
+  // focusout, so nothing notices; focus silently falls to document.body and a
+  // keyboard user is stranded at the document root, mid-header, with no way back
+  // but Tab from the top. This slice causes that, so this slice fixes it.
+  //
+  // The guard is deliberately narrow: only reclaim focus when it was genuinely
+  // lost. A host whose role is moved out from under them while they are typing
+  // elsewhere must not have the caret yanked into the header.
+  useEffect(() => {
+    if (participantsMenu) return
+    if (document.activeElement === document.body) nameRef.current?.focus()
+  }, [participantsMenu])
 
   // Rename is only offered on a live socket (RoomSocket.send no-ops otherwise),
   // mirroring how the Stage topic editor is disabled off-live.
@@ -147,6 +165,7 @@ export const RoomHeader: FC<RoomHeaderProps> = ({
         ) : (
           <button
             type="button"
+            ref={nameRef}
             className="room-header__name"
             onClick={beginEdit}
             disabled={!canRename}

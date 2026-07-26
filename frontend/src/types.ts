@@ -70,6 +70,21 @@ export interface SetNameFrame {
   name: string
 }
 
+// Hand the host role to another participant (FR-20/D-45). Like every other round
+// frame it carries NO actor id — the socket fixed the caller's identity at
+// handshake, so the server attributes the handover to whoever is connected. That is
+// the same anti-spoofing property D-42 documents for set_name, and it matters more
+// here: this frame moves authority durably rather than mutating a round.
+//
+// The field is `target_id`, not `participant_id`, so it can never be misread as the
+// actor id that round frames pointedly omit. Mirrors the backend TransferHostFrame.
+export interface TransferHostFrame {
+  type: 'transfer_host'
+  // A participant id from the current snapshot. Validated server-side against
+  // room.participants (not_in_room) and against self-targeting (cannot_target_self).
+  target_id: string
+}
+
 export interface RevealFrame {
   type: 'reveal'
 }
@@ -86,6 +101,7 @@ export type ClientFrame =
   | SetItemFrame
   | SetNameFrame
   | SetHostVotingFrame
+  | TransferHostFrame
   | RevealFrame
   | ResetFrame
 

@@ -8,12 +8,14 @@ import type { RoomState } from './roomSocket'
 import { clearSession } from './session'
 
 // The read-only snapshot (RoomState) plus the actions a page can dispatch. S8
-// added castVote; S9 adds the host controls (setItem/setHostVoting/reveal/reset).
+// added castVote; S9 added the host controls (setItem/setHostVoting/reveal/reset);
+// the UX phase added setName (D-42); V1 adds transferHost (FR-20/D-45).
 export interface RoomController extends RoomState {
   castVote: (card: string) => void
   setItem: (topic: string | null) => void
   setName: (name: string) => void
   setHostVoting: (voting: boolean) => void
+  transferHost: (targetId: string) => void
   reveal: () => void
   reset: () => void
 }
@@ -63,6 +65,15 @@ export function useRoom(code: string, participantId: string): RoomController {
     [socket],
   )
 
+  // The target comes from the rendered snapshot, so it is always a live id at click
+  // time — but the domain re-checks it anyway (the target may have left in between).
+  const transferHost = useCallback(
+    (targetId: string) => {
+      socket.send({ type: 'transfer_host', target_id: targetId })
+    },
+    [socket],
+  )
+
   const reveal = useCallback(() => {
     socket.send({ type: 'reveal' })
   }, [socket])
@@ -83,5 +94,14 @@ export function useRoom(code: string, participantId: string): RoomController {
     }
   }, [state.status, state.error])
 
-  return { ...state, castVote, setItem, setName, setHostVoting, reveal, reset }
+  return {
+    ...state,
+    castVote,
+    setItem,
+    setName,
+    setHostVoting,
+    transferHost,
+    reveal,
+    reset,
+  }
 }
