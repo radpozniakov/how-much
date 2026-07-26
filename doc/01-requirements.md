@@ -3,9 +3,11 @@
 ## Actors
 
 - **Host** — the participant who created the room. Controls the round (reveal,
-  reset), may toggle whether they personally vote, and may hand the role to another
-  participant (FR-20). See [Host role](03-decisions.md).
+  reset), may toggle whether they personally vote, and holds the room-control actions:
+  handing the role to another participant (FR-20) and removing one (FR-21). See
+  [Host role](03-decisions.md).
 - **Participant** — anyone else in the room. Always votes; cannot control the round.
+  May be removed from the room by the host (FR-21).
 
 ## Functional requirements
 
@@ -58,6 +60,12 @@ Host actions taken on *another* participant, as distinct from controlling the ro
 - **FR-20** The host can hand the host role to another participant in the room. The
   role **moves**: the former host becomes an ordinary participant and votes, and the
   new host votes by default. There is exactly one host at any moment.
+- **FR-21** The host can remove another participant from the room. The removed
+  participant is dropped from the room along with their vote, is told that the host
+  removed them, and their connection ends. Removal is **not a ban**: the room code
+  still works, so they may rejoin at once as a new participant (FR-18). The host
+  cannot remove themselves — a host who wants to leave hands the role over first
+  (FR-20). Removal frees a seat against the FR-5 capacity limit.
 
 ## Non-functional requirements
 

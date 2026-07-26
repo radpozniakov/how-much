@@ -58,11 +58,19 @@ class CannotTargetSelf(RoomError):
     ship a message that lies. The split is also diagnostic: an unknown target is a
     real race (the target left between the snapshot and the click), while a
     self-target can only be a client bug, since ``room_view`` tells every client
-    which id is the host. V2 reuses this for self-removal (D-15).
+    which id is the host.
+
+    **The message is the caller's, not this class's** — the one deviation from
+    every sibling above, and the direct consequence of a second action reusing this
+    error (V2, FR-21/D-47). A shared wording would have to be something like "you
+    cannot target yourself", which is exactly the vagueness this class was split
+    off to avoid: it exists *because* a message that does not describe the actual
+    action is a defect. Two callers, two precise sentences, one slug
+    (``cannot_target_self``), so the wire protocol is unchanged.
     """
 
-    def __init__(self) -> None:
-        super().__init__("You cannot hand the host role to yourself")
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
 
 
 class RoundRevealed(RoomError):
@@ -86,6 +94,19 @@ class RoundRevealed(RoomError):
     nothing needed it, so the guard was never split. A handover reaches only the
     ``True`` case, which is why it can skip the lock without inconsistency — do
     not "fix" the apparent asymmetry.
+
+    **Membership changes are outside this guard entirely** (D-47), and unlike the
+    handover that is *not* because they leave ``results()``'s inputs alone —
+    removing someone drops their vote, so it rewrites a revealed round outright.
+    The reason is that this exception's jurisdiction is re-estimation: a late vote,
+    a moved topic, a host opting out. Who is *in the room* is a different axis, and
+    the leave path already rewrites revealed results by design and under test
+    (``remove_participant``; ``test_leave_mid_reveal_flips_consensus``). A
+    host-initiated removal is that same operation reached by a deliberate trigger,
+    so locking it would make the guard mean two different things depending on which
+    trigger fired — and would force a host who needs someone out of a revealed room
+    to ``reset`` first, destroying the results the room is reading, which is the
+    very trade this guard exists to prevent.
     """
 
     def __init__(self) -> None:

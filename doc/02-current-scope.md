@@ -32,6 +32,7 @@ The smallest set that makes a real estimation session usable.
 | Presence | Real-time who's-in / who-voted over WebSocket |
 | Host auto-handoff | Auto-transfer host if the current host disconnects |
 | Host handover | Host hands the role to another participant; the former host becomes an ordinary voter |
+| Remove participant | Host removes another participant; they are told why and dropped with their vote, and may rejoin (not a ban) |
 | Room cleanup | In-memory; discarded after grace period when empty |
 | Reconnection | Rejoin as a new participant; in-round vote is lost |
 
@@ -40,14 +41,17 @@ The smallest set that makes a real estimation session usable.
 Listed separately from "Out of scope" because they are committed work, not
 exclusions. See [07-v0.1-phase.md](07-v0.1-phase.md).
 
-- **Removing a participant** — host-only, and not a ban (V2)
+- **Host-chosen card values** — the host sets the room's cards when creating it;
+  numbers only, fixed for the room's life, and blank means Fibonacci (V4)
 
 ## Out of scope
 
 - Accounts / authentication / authorization
 - Persistent storage, history, or result export
 - Backlog or multi-ticket management; integrations (Jira, etc.)
-- Multiple / custom decks, T-shirt sizing, special cards
+- T-shirt sizing and special cards (`?`, coffee) — custom decks are numbers-only
+  (V4); also out: named or saved decks, more than one deck per room, and changing
+  the deck after the room is created
 - Vote-value distribution charts (only average + consensus for now)
 - Spectators as a distinct role
 - Banning a removed participant (removal is not a ban — the code still works)

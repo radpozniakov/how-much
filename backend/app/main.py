@@ -99,10 +99,11 @@ _ROOM_ERROR_STATUS: dict[type[RoomError], int] = {
     InvalidCard: 422,
     UnknownParticipant: 404,
     NotHost: 403,
-    # Unreachable over HTTP today — handover is WS-only (there is no HTTP route for
-    # it, and D-35's dual-transport period is spent). Mapped anyway so this table
-    # stays a complete statement of how domain errors translate, rather than one a
-    # future HTTP route would silently fall through to 500.
+    # Unreachable over HTTP today — both actions that raise it, handover (D-45) and
+    # removal (D-47), are WS-only (there is no HTTP route for either, and D-35's
+    # dual-transport period is spent). Mapped anyway so this table stays a complete
+    # statement of how domain errors translate, rather than one a future HTTP route
+    # would silently fall through to 500.
     CannotTargetSelf: 422,
 }
 

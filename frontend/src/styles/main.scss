@@ -907,29 +907,31 @@ form button {
     color: var(--ink-muted);
   }
 
-  // Per-row host handover (FR-20/D-45). Deliberately NO wrapper element around the
-  // two buttons: they are direct flex children of the row. A wrapper that rendered
-  // only in confirm state would displace the action button's position, and React
-  // would then replace the DOM node instead of reusing it — dropping focus to
-  // document.body with no blur event to notice, i.e. a silent keyboard trap. If a
-  // wrapper is ever wanted here, it must render in BOTH states (see §D/§E of the
-  // V1 plan). margin-left: auto pins the pair right; the row's own
-  // justify-content: space-between handles the rest.
-  // Whichever button comes first absorbs the free space, so the pair always sits
-  // hard right: the action alone when idle, Cancel-then-action when armed.
-  &__row-action,
-  &__row-cancel {
+  // Per-row host handover (FR-20/D-45) and removal (FR-21/D-47). Deliberately NO
+  // wrapper element around the buttons: they are direct flex children of the row. A
+  // wrapper that rendered only in confirm state would displace an action button's
+  // position, and React would then replace the DOM node instead of reusing it —
+  // dropping focus to document.body with no blur event to notice, i.e. a silent
+  // keyboard trap. If a wrapper is ever wanted here, it must render in BOTH states
+  // (see §D/§E of the V1 plan).
+  //
+  // A row has exactly TWO slots in every state — Make host and Remove, either of
+  // which becomes Confirm or Cancel — so the group's width never changes and no
+  // count-dependent selector is needed. The leading button absorbs the free space,
+  // pinning the pair hard right; the row's own justify-content handles the rest, and
+  // it is the (ellipsizing) name that gives up the width.
+  &__row-action {
     margin-left: auto;
   }
 
-  // …and the action then follows Cancel tightly, overriding its own auto. The row's
-  // own `gap` is sized for name-to-badge spacing and is too wide between buttons.
-  &__row-cancel + &__row-action {
+  // …and the second follows the first tightly, overriding its own auto. The row's own
+  // `gap` is sized for name-to-badge spacing and is too wide between two buttons.
+  &__row-action + &__row-action {
     margin-left: calc(var(--space-1) - var(--space-3));
   }
 }
 
-// Roster row actions (FR-20). Written flat and panel-scoped rather than nested,
+// Roster row actions (FR-20, FR-21). Written flat and panel-scoped rather than nested,
 // because it has to out-specify `.room-header .icon-btn` (0,2,0) — the header
 // deliberately makes its icon buttons borderless and transparent, filling with
 // --surface on hover. This panel *lives* in the header, so the row actions inherit
@@ -938,8 +940,7 @@ form button {
 // So they opt back into the default icon-button treatment — a hairline that says
 // "control", and inversion on hover. Monochrome per doc/06: the check and cross
 // carry no colour, and the armed state reads from the glyph plus that inversion.
-.participants-menu__panel .participants-menu__row-action,
-.participants-menu__panel .participants-menu__row-cancel {
+.participants-menu__panel .participants-menu__row-action {
   flex: none;
   // The row is 14px text; shrink the 32px icon button so a roster row does not
   // grow taller than its own name.
@@ -953,10 +954,22 @@ form button {
     background: var(--ink);
     color: var(--surface);
   }
+
+  // The base .icon-btn has no disabled treatment at all, so off-live these read as
+  // live controls that simply ignore the pointer. Opacity + no hover, per the primary
+  // button's precedent at the top of this file, and no colour, per doc/06. (Off-live
+  // is now the ONLY disabled state a row action has: while a confirm is pending the
+  // other slot is Cancel, which stays pressable.)
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
 }
 
-// Cancel is secondary: no border until hovered, so the armed row has exactly one
-// emphasised control and the eye lands on the consequential press.
+// The slot acting as Cancel is secondary: no border until hovered, so an armed row has
+// exactly one emphasised control and the eye lands on the press that counts. Layered
+// after the shared rule above — same specificity (0,2,0), later wins — because every
+// Cancel is also a `__row-action` and takes that treatment first.
 .participants-menu__panel .participants-menu__row-cancel {
   border-color: transparent;
   color: var(--ink-muted);

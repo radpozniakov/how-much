@@ -96,3 +96,78 @@ def test_broadcast_unknown_room_is_noop():
     m = ConnectionManager()
     asyncio.run(m.broadcast("NOPE", {"x": 1}))  # no room, no error
     assert m.has_room("NOPE") is False
+
+
+# --- detach: removing a participant's socket, whichever one it is (FR-21/D-47) ---
+
+
+def test_detach_returns_the_socket_and_takes_it_out_of_the_fanout():
+    m = ConnectionManager()
+    a, b = FakeSocket(), FakeSocket()
+    asyncio.run(m.register("R", "a", a))
+    asyncio.run(m.register("R", "b", b))
+
+    assert m.detach("R", "a") is a
+    asyncio.run(m.broadcast("R", {"n": 1}))
+
+    assert a.sent == []  # detached before the fan-out, so it saw nothing
+    assert b.sent == [{"n": 1}]  # everyone else is untouched
+
+
+def test_detach_does_not_close_the_socket_it_returns():
+    """Deliberately synchronous and transport-only: the caller decides what to say on
+    the way out (a removal notice, in apply_and_evict's case)."""
+    m = ConnectionManager()
+    a = FakeSocket()
+    asyncio.run(m.register("R", "a", a))
+
+    m.detach("R", "a")
+
+    assert a.closed is False
+
+
+def test_detach_drops_the_empty_per_room_map():
+    m = ConnectionManager()
+    a = FakeSocket()
+    asyncio.run(m.register("R", "a", a))
+
+    m.detach("R", "a")
+
+    assert m.has_room("R") is False  # same cleanup unregister does
+
+
+def test_detach_is_identity_blind_unlike_unregister():
+    """The one behavioral difference, and the reason both exist. ``unregister`` is a
+    handler retiring its OWN socket and must not touch a newer one; ``detach`` is a
+    host removing a participant, where whichever socket represents them right now is
+    the one that has to go — including a second one opened by the `attach`
+    impersonation this phase accepts as a known limitation."""
+    m = ConnectionManager()
+    old, new = FakeSocket(), FakeSocket()
+    asyncio.run(m.register("R", "p", old))
+    asyncio.run(m.register("R", "p", new))  # new supersedes old
+
+    assert m.unregister("R", "p", old) is False  # identity check refuses
+    assert m.detach("R", "p") is new  # detach takes the live one regardless
+
+
+def test_detach_after_detach_returns_none():
+    """Idempotent, so a removal racing a disconnect cannot raise."""
+    m = ConnectionManager()
+    a = FakeSocket()
+    asyncio.run(m.register("R", "a", a))
+
+    assert m.detach("R", "a") is a
+    assert m.detach("R", "a") is None
+
+
+def test_detach_unknown_participant_or_room_returns_none():
+    """A member who joined over HTTP and never attached a socket is a legitimate
+    state, not an error — the host must still be able to remove them."""
+    m = ConnectionManager()
+    a = FakeSocket()
+    asyncio.run(m.register("R", "a", a))
+
+    assert m.detach("R", "never-attached") is None
+    assert m.detach("NOPE", "a") is None
+    assert m.has_room("R") is True  # and nothing else was disturbed

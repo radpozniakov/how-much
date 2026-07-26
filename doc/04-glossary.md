@@ -6,11 +6,18 @@
 - **Room ID** — System-generated unique identifier for a room. Not user-editable.
 - **Room code** — Short identifier used to join a room; also embedded in the
   shareable link.
-- **Host** — The room creator. The only actor who can reveal and reset a round,
-  set the current item, and toggle their own voting. Auto-transfers to another
+- **Host** — The room creator, or whoever the role has since been handed to. The
+  only actor who can reveal and reset a round, set the current item, toggle their own
+  voting, hand the role on, and remove another participant. Auto-transfers to another
   participant if the host disconnects.
 - **Participant** — Any non-host member of a room. Always votes; cannot control
-  the round.
+  the round; may be removed from the room by the host.
+- **Handover** — Host action that moves the host role to another participant. The
+  former host becomes an ordinary participant and votes. Distinct from the
+  disconnect-driven auto-transfer, which nobody chooses.
+- **Removal** — Host action that puts another participant out of the room, dropping
+  their vote with them. Not a ban: the room code still works, so they can rejoin as a
+  new participant.
 - **Voter** — A participant who casts a card in the current round. All participants
   are voters; the host is a voter only if they've enabled their own voting.
 - **Display name** — The free-text name a user enters when joining. Not unique;

@@ -4,8 +4,8 @@ Every frame is a flat ``{"type": ..., ...payload}`` object. This module defines
 the two server->client frames (``room_state`` and ``error``), the inbound
 handshake frames (``join`` / ``attach``), and the round-action frames
 (``set_item`` / ``set_name`` / ``cast_vote`` / ``set_host_voting`` /
-``transfer_host`` / ``reveal`` / ``reset``), plus parsers that turn a raw decoded
-object into a validated frame.
+``transfer_host`` / ``remove_participant`` / ``reveal`` / ``reset``), plus parsers
+that turn a raw decoded object into a validated frame.
 
 The handshake and round phases have **separate** frame registries: the first
 frame on a socket must be a handshake frame, and every frame after it must be a
@@ -77,6 +77,28 @@ _ERROR_REASONS: dict[type[RoomError], str] = {
 def room_error_reason(exc: RoomError) -> str:
     """Map a domain error to its stable WS ``error`` slug (default ``internal``)."""
     return _ERROR_REASONS.get(type(exc), "internal")
+
+
+# The one ``error`` frame that is nobody's rejection (FR-21/D-47). Every other slug
+# above answers a frame the recipient sent; this one is *unsolicited* — it tells a
+# participant why the socket they are about to lose is going away. It therefore has
+# no domain error to map from and cannot appear in ``_ERROR_REASONS``.
+#
+# It also occupies a category the client did not previously have: an error that
+# arrives mid-session (so the socket already has a snapshot) and is nonetheless
+# terminal. Handshake rejections are terminal because no snapshot ever arrived;
+# round rejections are non-terminal because the socket stays open. This is neither,
+# which is why the frontend's ``roomSocket`` has to name the slug explicitly rather
+# than infer terminality from the connection phase.
+REMOVED_REASON = "removed"
+REMOVED_MESSAGE = "The host removed you from this room"
+
+
+def removed_frame() -> dict[str, Any]:
+    """The notice sent to a removed participant, immediately before their socket is
+    closed (FR-21/D-47). Wording lives here, beside the slug it travels with; S22
+    owns the final copy and can change it without touching the protocol."""
+    return error_frame(REMOVED_REASON, REMOVED_MESSAGE)
 
 
 class JoinFrame(BaseModel):
@@ -189,6 +211,24 @@ class TransferHostFrame(BaseModel):
     target_id: str
 
 
+class RemoveParticipantFrame(BaseModel):
+    """Remove another participant from the room (host-only, FR-21/D-47).
+
+    ``target_id`` for the same reason ``TransferHostFrame`` uses it: an actor id is
+    what every round frame pointedly omits, so the field name has to say which end
+    of the action it is. The two frames are deliberately the same shape — they are
+    the room-control pair, host-on-participant rather than host-on-round.
+
+    The one way it is *not* like its sibling: this frame's effect on the transport
+    exceeds a broadcast, because the removed participant's own socket has to go. So
+    it is the one round frame ``ws._apply_round`` does not dispatch — see the
+    ``apply_and_evict`` seam in ``connection.py``.
+    """
+
+    type: Literal["remove_participant"]
+    target_id: str
+
+
 class RevealFrame(BaseModel):
     """Reveal the round (host-only, FR-12)."""
 
@@ -207,6 +247,7 @@ RoundFrame = (
     | CastVoteFrame
     | SetHostVotingFrame
     | TransferHostFrame
+    | RemoveParticipantFrame
     | RevealFrame
     | ResetFrame
 )
@@ -222,6 +263,7 @@ _ROUND_TYPES: dict[str, type[BaseModel]] = {
     "cast_vote": CastVoteFrame,
     "set_host_voting": SetHostVotingFrame,
     "transfer_host": TransferHostFrame,
+    "remove_participant": RemoveParticipantFrame,
     "reveal": RevealFrame,
     "reset": ResetFrame,
 }

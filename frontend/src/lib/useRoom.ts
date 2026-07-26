@@ -9,13 +9,15 @@ import { clearSession } from './session'
 
 // The read-only snapshot (RoomState) plus the actions a page can dispatch. S8
 // added castVote; S9 added the host controls (setItem/setHostVoting/reveal/reset);
-// the UX phase added setName (D-42); V1 adds transferHost (FR-20/D-45).
+// the UX phase added setName (D-42); V1 adds transferHost (FR-20/D-45) and V2
+// removeParticipant (FR-21/D-47).
 export interface RoomController extends RoomState {
   castVote: (card: string) => void
   setItem: (topic: string | null) => void
   setName: (name: string) => void
   setHostVoting: (voting: boolean) => void
   transferHost: (targetId: string) => void
+  removeParticipant: (targetId: string) => void
   reveal: () => void
   reset: () => void
 }
@@ -74,6 +76,15 @@ export function useRoom(code: string, participantId: string): RoomController {
     [socket],
   )
 
+  // Same contract as transferHost: the target is a live id from the snapshot at click
+  // time, and the domain re-checks it anyway (they may have left in between).
+  const removeParticipant = useCallback(
+    (targetId: string) => {
+      socket.send({ type: 'remove_participant', target_id: targetId })
+    },
+    [socket],
+  )
+
   const reveal = useCallback(() => {
     socket.send({ type: 'reveal' })
   }, [socket])
@@ -84,11 +95,18 @@ export function useRoom(code: string, participantId: string): RoomController {
 
   // A terminal rejection for a stale identity means the persisted id is no
   // longer valid — drop it so the caller can fall back to a fresh join (D-39).
+  //
+  // `removed` (FR-21/D-47) belongs in this list on exactly the same grounds: the
+  // host dropped that participant from the room, so the id is as dead as a swept
+  // one. It is only the *page* that treats it differently — Room shows a notice
+  // rather than a rejoin prompt, which it can only do if the id is already gone from
+  // storage, or a stray remount would re-attach with it and reconnect into a refusal.
   useEffect(() => {
     if (
       state.status === 'rejected' &&
       (state.error?.reason === 'not_in_room' ||
-        state.error?.reason === 'room_not_found')
+        state.error?.reason === 'room_not_found' ||
+        state.error?.reason === 'removed')
     ) {
       clearSession()
     }
@@ -101,6 +119,7 @@ export function useRoom(code: string, participantId: string): RoomController {
     setName,
     setHostVoting,
     transferHost,
+    removeParticipant,
     reveal,
     reset,
   }

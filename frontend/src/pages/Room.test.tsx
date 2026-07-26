@@ -323,4 +323,135 @@ describe('Room (S9 wiring)', () => {
       )
     }
   })
+
+  // --- Removal (FR-21/D-47): the host's wiring, and what the removed person sees.
+
+  it('wires both room-control actions into the roster', async () => {
+    const user = userEvent.setup()
+    renderRoomAs('pid-1')
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        participants: [
+          makeParticipant({ id: 'pid-1', name: 'Alice' }),
+          makeParticipant({ id: 'pid-2', name: 'Bob' }),
+        ],
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Room participants' }))
+    await user.click(screen.getByRole('button', { name: 'Remove from room' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm removal' }))
+
+    // The frame reaches the socket with the target id and no actor id. Asserted here
+    // rather than only in the panel's own tests, because the callback Room passes is
+    // what turns a press into a frame — a panel wired to the wrong prop would pass
+    // every ParticipantsMenu test and do nothing here.
+    const sent = lastSocket().sent.map((raw) => JSON.parse(raw))
+    expect(sent).toContainEqual({
+      type: 'remove_participant',
+      target_id: 'pid-2',
+    })
+  })
+
+  it('tells a removed participant what happened instead of a rejoin prompt', () => {
+    renderRoomAs('pid-2')
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        participants: [
+          makeParticipant({ id: 'pid-1', name: 'Alice' }),
+          makeParticipant({ id: 'pid-2', name: 'Bob' }),
+        ],
+      }),
+    )
+
+    act(() => {
+      deliver(lastSocket(), {
+        type: 'error',
+        reason: 'removed',
+        message: 'The host removed you from this room',
+      })
+    })
+
+    // Its own terminal screen, not the JoinPrompt a stale id gets: a removal is a
+    // thing that happened to someone, and a rejoin form neither says so nor is the
+    // right default (though nothing stops them — removal is not a ban, D-15).
+    expect(
+      screen.getByText('The host removed you from this room'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Back to start' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: `Join room ${CODE}` }),
+    ).not.toBeInTheDocument()
+    // And distinct from the swept-room copy, which would be the wrong explanation.
+    expect(screen.queryByText('This room no longer exists.')).toBeNull()
+  })
+
+  it('drops the room UI entirely once removed', () => {
+    renderRoomAs('pid-2')
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        current_item: 'Login page',
+        participants: [
+          makeParticipant({ id: 'pid-1', name: 'Alice' }),
+          makeParticipant({ id: 'pid-2', name: 'Bob' }),
+        ],
+      }),
+    )
+    expect(
+      screen.getByRole('region', { name: 'Your vote' }),
+    ).toBeInTheDocument()
+
+    act(() => {
+      deliver(lastSocket(), {
+        type: 'error',
+        reason: 'removed',
+        message: 'gone',
+      })
+    })
+
+    // The last snapshot this client holds still shows them in the room, so rendering
+    // it alongside the notice would offer a live deck for a room they are out of.
+    expect(
+      screen.queryByRole('region', { name: 'Your vote' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: CODE })).toBeNull()
+  })
+
+  it('keeps a non-host in the room when someone else is removed', () => {
+    renderRoomAs('pid-3')
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        current_item: 'Login page',
+        participants: [
+          makeParticipant({ id: 'pid-1', name: 'Alice' }),
+          makeParticipant({ id: 'pid-2', name: 'Bob' }),
+          makeParticipant({ id: 'pid-3', name: 'Carol' }),
+        ],
+      }),
+    )
+
+    // Bob's removal reaches Carol as an ordinary snapshot — the notice goes to the
+    // removed socket alone, so a bystander must see membership change and nothing else.
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        current_item: 'Login page',
+        participants: [
+          makeParticipant({ id: 'pid-1', name: 'Alice' }),
+          makeParticipant({ id: 'pid-3', name: 'Carol' }),
+        ],
+      }),
+    )
+
+    expect(
+      screen.getByRole('region', { name: 'Your vote' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/removed you/)).toBeNull()
+  })
 })
