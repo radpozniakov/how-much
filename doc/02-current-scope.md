@@ -32,15 +32,9 @@ The smallest set that makes a real estimation session usable.
 | Presence | Real-time who's-in / who-voted over WebSocket |
 | Host auto-handoff | Auto-transfer host if the current host disconnects |
 | Host handover | Host hands the role to another participant; the former host becomes an ordinary voter |
+| Remove participant | Host removes another participant; they are told why and dropped with their vote, and may rejoin (not a ban) |
 | Room cleanup | In-memory; discarded after grace period when empty |
 | Reconnection | Rejoin as a new participant; in-round vote is lost |
-
-## Planned — in the current phase, not built yet
-
-Listed separately from "Out of scope" because they are committed work, not
-exclusions. See [07-v0.1-phase.md](07-v0.1-phase.md).
-
-- **Removing a participant** — host-only, and not a ban (V2)
 
 ## Out of scope
 

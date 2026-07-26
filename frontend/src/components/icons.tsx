@@ -5,6 +5,7 @@ import {
   Check,
   CircleCheck,
   Crown,
+  UserMinus,
   Users,
   X,
 } from 'lucide-react'
@@ -22,10 +23,17 @@ export const CopyIcon = (props: IconProps) => <Copy size={18} {...props} />
 export const ExitIcon = (props: IconProps) => <LogOut size={18} {...props} />
 export const UsersIcon = (props: IconProps) => <Users size={18} {...props} />
 
-// Roster row actions (FR-20): a crown for "make host", and the bare check / cross
-// for the two-step confirm. Distinct from CheckIcon below, which is the 28px
-// card-face glyph — these are icon-button sized.
+// Roster row actions (FR-20, FR-21): a crown for "make host", a person-minus for
+// "remove from room", and the bare check / cross for the two-step confirm. Distinct
+// from CheckIcon below, which is the 28px card-face glyph — these are icon-button
+// sized.
 export const CrownIcon = (props: IconProps) => <Crown size={18} {...props} />
+// UserMinus rather than a trash can: removal takes someone out of *this room* and
+// deletes nothing — they keep the code and can rejoin (D-15). A trash glyph would
+// promise the ban that V2 explicitly is not.
+export const UserMinusIcon = (props: IconProps) => (
+  <UserMinus size={18} {...props} />
+)
 export const CheckMarkIcon = (props: IconProps) => (
   <Check size={18} {...props} />
 )

@@ -319,3 +319,116 @@ closes.
   `ParticipantsMenu.tsx`'s own comment and assigned to S21 in
   [07-v0.1-phase.md](07-v0.1-phase.md). S21 keeps the panel in the rest of its scope
   — keyboard, focus-visible, contrast, semantics — only the role change is retired.
+- **D-47 Removing a participant is the leave path under host authority, and it ends
+  their connection.** `Room.remove_participant_by_host(actor, target)` guards
+  (`_require_host`, then self-target, then membership) and delegates to the existing
+  `remove_participant` primitive, which the disconnect path already uses. Same effect,
+  different authority — so a removal drops the target *and their vote*, exactly as a
+  leave does. The delegate's D-13 host-auto-transfer branch is unreachable from here,
+  and provably rather than incidentally: it fires only when the removed id is
+  `host_id`, and the self-target guard rejects precisely that id, since the actor is
+  already established as the host. A removal therefore never moves the role and can
+  never empty the room, which is why it needs no `empty_since` stamp and stays in the
+  domain rather than routing through `store.leave`.
+  Like the handover, the frame carries `target_id` and **no actor id** (the socket's
+  handshake identity is the actor), authorization is in the domain, and both outcomes
+  **log** actor/target/room/outcome. V1's `_transfer_host_logged` is generalized to a
+  `_logged` wrapper over both, distinguished by a label: the two records are the same
+  four fields by requirement, not coincidence, and a second copy would have duplicated
+  the reasoning rather than the four lines of logging.
+  **Not locked after reveal — and for a different reason than the handover.** D-45
+  could argue a handover writes no input to `results()`. A removal writes `votes`, so
+  it genuinely rewrites a revealed round's average and consensus. It is unlocked
+  anyway, because `RoundRevealed`'s jurisdiction is *re-estimation* — a late vote, a
+  moved topic, a host opting out — and membership is a different axis, on which the
+  leave path already rewrites revealed results deliberately and under test
+  (`test_leave_mid_reveal_flips_consensus`). Locking it would make the guard mean two
+  different things depending on which trigger fired, and would force a host who needs
+  someone out of a revealed room to `reset` first — destroying the results the room is
+  reading, which is the exact trade that guard exists to prevent.
+  **Not a ban** (D-15), and nothing is added to make it one: with no accounts there is
+  no durable per-room state to ban against, the code still works, and a rejoin is a
+  fresh participant with a new id. Explicitly out of scope in
+  [02-current-scope.md](02-current-scope.md), so it is pinned by test as *decided*
+  rather than left as a gap someone later files as a bug. No cooldown either.
+  `CannotTargetSelf` is reused as `errors.py` anticipated, but its **message becomes
+  the caller's** — the one deviation from every sibling error. That class exists
+  *because* reusing `UnknownParticipant` would have shipped a message ("Participant is
+  not in this room") that is false about the host; a single shared wording across two
+  actions would have to be something like "you cannot target yourself", reintroducing
+  the same vagueness one layer down. Two callers, two precise sentences, one slug, so
+  the wire protocol is unchanged.
+  **Consequences:**
+  - **Socket teardown reuses the single-owner property (MF1) rather than working
+    around it.** `apply_and_evict` mutates the domain, then takes the target's socket
+    out of the `ConnectionManager` map via a new identity-blind `detach`, then
+    broadcasts, then sends the notice and closes. Because the map entry is already
+    gone, the removed socket's own handler finds `unregister` returning `False` and
+    correctly skips a domain leave for someone already removed — no duplicate
+    broadcast, no `UnknownParticipant` to suppress. `detach` is identity-blind where
+    `unregister` checks, deliberately: a handler must not retire a socket newer than
+    itself, but a host removing a participant means whichever socket represents them
+    right now — including a second one opened via the `attach` impersonation this phase
+    accepts as a known limitation.
+  - **Detach precedes the broadcast, and that order is load-bearing.** Otherwise the
+    removed client's last frame would be a snapshot of a room it is not in, which its
+    UI would render — a header with no name, a grid missing its own card — for the tick
+    before the notice arrived. Nothing in that state is true, so it never reaches a
+    screen. Pinned by a test that asserts the notice is the *first* frame, not merely
+    some frame.
+  - **Removal is the first action whose effect exceeds a broadcast**, so it is the one
+    round frame `ws._apply_round` does not dispatch: that function is synchronous by
+    contract (it is a `Room` method) and closing a socket is not. The branch lives in
+    the receive loop, where a reader looks to see what a frame does.
+  - **A new terminal error slug, `removed`, and the first mid-session error that is
+    terminal.** `roomSocket`'s terminality was phase-based — a close before any
+    snapshot is a handshake rejection, a close after one is retryable — and this frame
+    breaks that correspondence. Left to the phase rule, the removed client would spend
+    a second "reconnecting", `attach` with an id the server no longer knows, and have
+    the honest "the host removed you" overwritten by a misleading `not_in_room`. So the
+    slug is named explicitly and the state is set on the **frame**, not the close
+    behind it, which also means the reason survives a close that is delayed or lost and
+    that `send` stops accepting frames for a room the client has left.
+  - **The removed participant gets a terminal notice, not the rejoin prompt** a stale
+    identity produces, even though `useRoom` clears the session for both. A stale id is
+    a non-event and the prompt is the message; a removal is something that happened to
+    someone, and a rejoin form would neither say so nor be the right default. The
+    string is the server's, kept beside the slug it travels with, so S22 can settle the
+    copy without touching the protocol.
+  - **The roster row becomes two fixed button positions, and the confirm controls
+    never change sides: Cancel first, Confirm second.** Idle, the positions hold Make
+    host and Remove from room; arming either action replaces both, so a pending confirm
+    hides the actions entirely rather than disabling one — the action the host did not
+    arm cannot be pressed instead, and the two confirm controls are always in the same
+    place whichever action is pending.
+    **What this preserves.** The row is two buttons wide in every state, so neither
+    button ever moves: geometry is identical idle, handover-armed and removal-armed
+    (pinned by an E2E assertion, since jsdom has no layout). Both positions are
+    `button` elements at fixed child indices in every state, so React reuses the nodes
+    across a relabel and nothing is ever detached from under the caret — D-46's
+    DOM-shape constraint satisfied outright rather than narrowly. Positions are
+    rendered by a plain function returning an element, deliberately not a component:
+    one declared inside the render would be a fresh type each pass and remount the node
+    mid-confirm.
+    **What it costs, knowingly.** Confirm shares the second position with Remove, so a
+    removal is a double-press in place — but Make host owns the *first* position, so its
+    Confirm moves away and a second click there lands on Cancel. The mouse and keyboard
+    therefore disagree for the handover, which is the property V1's Cancel-before-action
+    ordering existed to protect. Accepted because it fails **safe**: a stray second
+    click calls the handover off rather than performing it, and the destructive action
+    is the one that stays a press-twice-in-place. Both halves are pinned by E2E so
+    neither is rediscovered as a bug.
+    **It also forces real focus management**, which is not optional. Because the
+    handover's Confirm is not the button just activated, a keyboard user's second Enter
+    would land on Cancel and the handover could never be completed from the keyboard.
+    So focus follows the *action* across the swap: arming moves focus to the Confirm,
+    and cancelling returns it to the slot that action occupies when idle — without the
+    latter, Escape from an armed "Make host" would strand the caret on "Remove from
+    room", one Enter from the destructive action. Confirming deliberately does *not*
+    restore, because the row is usually about to vanish (a removal drops it, a handover
+    unmounts this host-only panel); focus goes to the panel, and if the panel goes too,
+    `RoomHeader`'s existing `activeElement === body` guard catches it.
+    Two smaller consequences: V1's bare `Confirm` becomes `Confirm handover`, because
+    with two irreversible actions on one row "Confirm" tells a screen-reader user that
+    *something* will happen but not which; and the row actions gain the `:disabled`
+    treatment `.icon-btn` never had, off-live now being their only disabled state.

@@ -85,6 +85,19 @@ export interface TransferHostFrame {
   target_id: string
 }
 
+// Remove another participant from the room (FR-21/D-47). The same shape as
+// TransferHostFrame, deliberately: they are the room-control pair, host-on-
+// participant rather than host-on-round, and both carry a target and no actor id.
+//
+// Not a ban (D-15) — the removed person still holds the room code and may rejoin as
+// a fresh participant. Validated server-side against room.participants
+// (not_in_room) and against self-targeting (cannot_target_self); a host who wants
+// out hands over instead. Mirrors the backend RemoveParticipantFrame.
+export interface RemoveParticipantFrame {
+  type: 'remove_participant'
+  target_id: string
+}
+
 export interface RevealFrame {
   type: 'reveal'
 }
@@ -102,6 +115,7 @@ export type ClientFrame =
   | SetNameFrame
   | SetHostVotingFrame
   | TransferHostFrame
+  | RemoveParticipantFrame
   | RevealFrame
   | ResetFrame
 

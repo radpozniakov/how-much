@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { useRoom } from './useRoom'
+import { clearSession, loadSession, saveSession } from './session'
 import type { RoomView } from '../types'
 import { MockWebSocket, deliver, lastSocket } from '../test/mockWebSocket'
 
@@ -21,6 +22,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  clearSession() // sessionStorage is shared across tests in this file
 })
 
 describe('useRoom', () => {
@@ -124,6 +126,72 @@ describe('useRoom', () => {
     })
     rerender()
     expect(result.current.transferHost).toBe(first)
+  })
+
+  it('removeParticipant sends a remove_participant frame once live', () => {
+    const { result } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    act(() => {
+      result.current.removeParticipant('p2')
+    })
+    const sent = lastSocket().sent.map((s) => JSON.parse(s))
+    // target_id, and deliberately no actor id — the server attributes the removal to
+    // this socket's handshake identity (D-47), exactly as for the handover.
+    expect(sent).toContainEqual({ type: 'remove_participant', target_id: 'p2' })
+  })
+
+  it('keeps a stable removeParticipant reference across renders', () => {
+    const { result, rerender } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    const first = result.current.removeParticipant
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    rerender()
+    expect(result.current.removeParticipant).toBe(first)
+  })
+
+  it('clears the persisted session when this client is removed', () => {
+    const { result } = renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    saveSession('ABCDEF', 'pid-1')
+
+    act(() => {
+      deliver(lastSocket(), {
+        type: 'error',
+        reason: 'removed',
+        message: 'gone',
+      })
+    })
+
+    // The id is as dead as a swept one, so it must not survive in storage: a remount
+    // would otherwise re-attach with it and reconnect into a refusal, replacing the
+    // notice Room is showing.
+    expect(result.current.status).toBe('rejected')
+    expect(loadSession()).toBeNull()
+  })
+
+  it('leaves the session alone for a non-terminal mid-session error', () => {
+    renderHook(() => useRoom('ABCDEF', 'pid-1'))
+    act(() => {
+      deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    })
+    saveSession('ABCDEF', 'pid-1')
+
+    act(() => {
+      deliver(lastSocket(), {
+        type: 'error',
+        reason: 'not_host',
+        message: 'nope',
+      })
+    })
+
+    // The guard is `status === 'rejected'` AND the slug, not the slug alone — a
+    // rejected action must not log the acting client out of its own room.
+    expect(loadSession()).not.toBeNull()
   })
 
   it('reveal sends a reveal frame once live', () => {

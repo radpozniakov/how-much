@@ -3,14 +3,19 @@
 One endpoint, ``/ws/rooms/{code}``, wraps the S1-S5 domain in live delivery:
 connect, identify (a new ``join`` or an existing ``attach``), appear to everyone
 via a broadcast, then run a full estimation round in real time — ``set_item``,
-``set_name``, ``cast_vote``, ``set_host_voting``, ``transfer_host``, ``reveal``,
-``reset`` frames dispatch to the matching ``Room`` method and rebroadcast the new
-snapshot (S6b). ``transfer_host`` (FR-20/D-45) is the first frame that moves
-authority durably rather than mutating a round, so it is also the first that
-**logs** — both outcomes, see ``_transfer_host_logged``. The moment the
-socket drops, it leaves through the same S5 ``store.leave`` path (drop
-participant + vote, host auto-transfer per D-13, empty-room grace per D-18) and
-rebroadcasts.
+``set_name``, ``cast_vote``, ``set_host_voting``, ``transfer_host``,
+``remove_participant``, ``reveal``, ``reset`` frames dispatch to the matching
+``Room`` method and rebroadcast the new snapshot (S6b). The moment the socket drops,
+it leaves through the same S5 ``store.leave`` path (drop participant + vote, host
+auto-transfer per D-13, empty-room grace per D-18) and rebroadcasts.
+
+``transfer_host`` (FR-20/D-45) and ``remove_participant`` (FR-21/D-47) are the
+room-control pair: host-on-participant rather than host-on-round, and the only two
+actions with durable effects a ``reset`` does not undo. Both therefore **log** both
+outcomes (see ``_logged``). Removal is additionally the only frame whose effect
+reaches past the domain into the transport — it closes the removed participant's
+socket — so it alone is dispatched through ``apply_and_evict`` rather than
+``_apply_round``.
 
 The domain stays the single source of truth (D-36): this module only calls into
 ``store``/``Room`` and fans out the resulting ``RoomView`` snapshot. A round frame
@@ -26,15 +31,22 @@ import contextlib
 import functools
 import json
 import logging
+from collections.abc import Callable
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.rooms.connection import apply_and_broadcast, broadcast_room_state, manager
+from app.rooms.connection import (
+    apply_and_broadcast,
+    apply_and_evict,
+    broadcast_room_state,
+    manager,
+)
 from app.rooms.errors import RoomError, RoomFull, UnknownParticipant
 from app.rooms.messages import (
     BadFrame,
     CastVoteFrame,
     JoinFrame,
+    RemoveParticipantFrame,
     ResetFrame,
     RevealFrame,
     RoundFrame,
@@ -55,8 +67,11 @@ ws_router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _transfer_host_logged(room: Room, actor_id: str, target_id: str) -> None:
-    """Apply a handover and log its outcome, both ways (S23 constraint 4).
+def _logged(
+    label: str, room: Room, actor_id: str, target_id: str, action: Callable[[], None]
+) -> None:
+    """Apply a host-on-participant action and log its outcome, both ways (S23
+    constraint 4).
 
     The log lives here rather than in the domain because this is the one point that
     holds all four required fields — the socket's actor identity, the frame's
@@ -65,20 +80,27 @@ def _transfer_host_logged(room: Room, actor_id: str, target_id: str) -> None:
     property (see ``errors.py``).
 
     Wrapped rather than logged at the generic ``except RoomError`` in the receive
-    loop: that handler is shared by all seven round frames, so logging there would
+    loop: that handler is shared by all eight round frames, so logging there would
     need an isinstance check duplicated across the success and failure branches.
     One wrapper keeps both outcomes of one action in one readable place.
 
-    A handover is the first frame that moves authority durably — everything else
-    the tool exposes is undone by a reset — which is why this is the only action
-    that logs at all, and why the rejected case logs too: "who tried" is as much of
-    the session's history as "who succeeded".
+    Only the room-control pair logs — a handover and a removal. Everything else the
+    tool exposes is undone by a reset; these two are not, and a session should be
+    explicable after the fact. The rejected case logs too, because "who tried" is as
+    much of the session's history as "who succeeded".
+
+    Generalized over ``label`` and ``action`` when the removal arrived (V2). The
+    handover shipped as its own ``_transfer_host_logged``, which was right for one
+    caller; a second copy of that body and its docstring would have duplicated the
+    reasoning above rather than the four lines of logging, and the two records are
+    the same four fields by requirement, not by coincidence.
     """
     try:
-        room.transfer_host(actor_id, target_id)
+        action()
     except RoomError as exc:
         logger.info(
-            "host handover rejected: room=%s actor=%s target=%s reason=%s",
+            "%s rejected: room=%s actor=%s target=%s reason=%s",
+            label,
             room.code,
             actor_id,
             target_id,
@@ -88,10 +110,39 @@ def _transfer_host_logged(room: Room, actor_id: str, target_id: str) -> None:
         # the original traceback is worth keeping for the defensive `internal` slug.
         raise
     logger.info(
-        "host handover: room=%s actor=%s target=%s outcome=ok",
+        "%s: room=%s actor=%s target=%s outcome=ok",
+        label,
         room.code,
         actor_id,
         target_id,
+    )
+
+
+def _transfer_host(room: Room, actor_id: str, target_id: str) -> None:
+    """A logged handover (FR-20/D-45)."""
+    _logged(
+        "host handover",
+        room,
+        actor_id,
+        target_id,
+        functools.partial(room.transfer_host, actor_id, target_id),
+    )
+
+
+def _remove_participant(room: Room, actor_id: str, target_id: str) -> None:
+    """The synchronous half of a logged removal (FR-21/D-47) — guard, drop, record.
+
+    The other half is ``apply_and_evict``'s: cutting the removed participant's socket
+    and telling them why. Split along the sync/async line rather than by concern,
+    because that is the line ``apply_and_evict`` needs — it must be able to run this
+    part and have it raise *before* it detaches anything.
+    """
+    _logged(
+        "participant removal",
+        room,
+        actor_id,
+        target_id,
+        functools.partial(room.remove_participant_by_host, actor_id, target_id),
     )
 
 
@@ -101,7 +152,14 @@ def _apply_round(room: Room, participant_id: str, frame: RoundFrame) -> None:
     Frames carry no ``participant_id`` — the caller passes the socket's own
     identity, so a client can only act as itself. Synchronous, like every ``Room``
     method; a rejected action raises the domain ``RoomError``, which the loop turns
-    into an ``error`` frame for the sender alone."""
+    into an ``error`` frame for the sender alone.
+
+    Handles seven of the eight round frames. ``remove_participant`` is the exception,
+    and *because* of this function's synchronous contract rather than in spite of it:
+    its transport effect includes closing the removed participant's socket, which is
+    async, so it is dispatched through ``apply_and_evict`` in the receive loop
+    instead. Reaching it here would be a routing bug, which is what the final
+    ``AssertionError`` now also guards."""
     if isinstance(frame, SetItemFrame):
         room.set_item(participant_id, frame.topic)
     elif isinstance(frame, SetNameFrame):
@@ -111,13 +169,13 @@ def _apply_round(room: Room, participant_id: str, frame: RoundFrame) -> None:
     elif isinstance(frame, SetHostVotingFrame):
         room.set_host_voting(participant_id, frame.voting)
     elif isinstance(frame, TransferHostFrame):
-        # Via the logging wrapper — the only action that logs (constraint 4).
-        _transfer_host_logged(room, participant_id, frame.target_id)
+        # Via the logging wrapper — one of the two actions that log (constraint 4).
+        _transfer_host(room, participant_id, frame.target_id)
     elif isinstance(frame, RevealFrame):
         room.reveal(participant_id)
     elif isinstance(frame, ResetFrame):
         room.reset_round(participant_id)
-    else:  # unreachable: parse_round_frame only yields the seven frames above
+    else:  # a handshake frame can't reach here; RemoveParticipantFrame must not
         raise AssertionError(f"unhandled round frame: {frame!r}")
 
 
@@ -200,12 +258,31 @@ async def room_socket(websocket: WebSocket, code: str) -> None:
                 continue
 
             # Dispatch to the domain using THIS socket's identity (frames carry no
-            # participant_id). apply_and_broadcast fans out only on success; a
-            # domain error goes back to this socket alone.
+            # participant_id). Both seams fan out only on success; a domain error
+            # goes back to this socket alone.
+            #
+            # Removal is branched here rather than inside _apply_round because its
+            # transport effect exceeds a broadcast — the removed participant's socket
+            # has to be cut, which is async, and _apply_round is synchronous by
+            # contract. Putting the branch in the loop keeps that visible at the one
+            # place a reader looks to see what a frame does.
             try:
-                await apply_and_broadcast(
-                    room, functools.partial(_apply_round, room, participant_id, frame)
-                )
+                if isinstance(frame, RemoveParticipantFrame):
+                    await apply_and_evict(
+                        room,
+                        functools.partial(
+                            _remove_participant,
+                            room,
+                            participant_id,
+                            frame.target_id,
+                        ),
+                        frame.target_id,
+                    )
+                else:
+                    await apply_and_broadcast(
+                        room,
+                        functools.partial(_apply_round, room, participant_id, frame),
+                    )
             except RoomError as exc:
                 await websocket.send_json(error_frame(room_error_reason(exc), str(exc)))
     except WebSocketDisconnect:

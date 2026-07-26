@@ -42,6 +42,7 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
     setName,
     setHostVoting,
     transferHost,
+    removeParticipant,
     reveal,
     reset,
   } = useRoom(code, participantId)
@@ -59,6 +60,14 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
 
   // A stale-identity rejection: the hook has cleared the session; drop back to
   // the name prompt so the user rejoins fresh (D-39).
+  //
+  // Deliberately keyed on `not_in_room` alone and NOT on `removed`, even though the
+  // hook clears the session for both. A stale id is a non-event to explain — the room
+  // is fine and rejoining is the obvious next step, so the prompt IS the message. A
+  // removal is a thing that happened to someone, and dropping them straight onto a
+  // rejoin form would both fail to tell them and invite an immediate rejoin as the
+  // path of least resistance. Nothing stops that rejoin (removal is not a ban, D-15);
+  // it just should not be the default.
   useEffect(() => {
     if (status === 'rejected' && error?.reason === 'not_in_room') {
       onIdentityLost()
@@ -67,6 +76,29 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
 
   if (status === 'rejected') {
     if (error?.reason === 'not_in_room') return null // parent swaps in JoinPrompt
+    // Removed by the host (FR-21/D-47). The message is the server's, kept in one
+    // place beside the slug it travels with, so S22 can settle the wording without
+    // touching this branch — the same reason the error banner below renders
+    // `error.message` verbatim rather than mapping slugs to local copy.
+    if (error?.reason === 'removed') {
+      return (
+        // Structurally identical to the swept-room branch below, deliberately: no
+        // role="status" or aria-live on the message. A live region created *with* its
+        // content already in it does not reliably announce, so it would claim a
+        // behaviour it does not deliver. What this view actually needs is focus moved
+        // into it on the swap — real work, and S21's, alongside the same gap on the
+        // branch below. Flagged there rather than half-solved here.
+        <main className="page">
+          <h1>Room {code}</h1>
+          <section className="card">
+            <p>{error.message}</p>
+            <button type="button" onClick={() => navigate('/')}>
+              Back to start
+            </button>
+          </section>
+        </main>
+      )
+    }
     return (
       <main className="page">
         <h1>Room {code}</h1>
@@ -107,9 +139,9 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
         onExit={exitRoom}
         status={status}
         // Host-only roster beside the name. Gated here rather than inside the
-        // header so the header stays a dumb band. It now carries the handover
-        // action (FR-20/D-45); removing a participant is still V2. Note the gate
-        // is a rendering affordance only — the domain's _require_host is the
+        // header so the header stays a dumb band. It carries both room-control
+        // actions: the handover (FR-20/D-45) and the removal (FR-21/D-47). Note the
+        // gate is a rendering affordance only — the domain's _require_host is the
         // boundary, so hiding this control is not what makes it host-only.
         participantsMenu={
           isHost && room ? (
@@ -118,6 +150,7 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
               currentParticipantId={participantId}
               hostId={room.host_id ?? ''}
               onTransferHost={transferHost}
+              onRemoveParticipant={removeParticipant}
               disabled={notLive}
             />
           ) : undefined

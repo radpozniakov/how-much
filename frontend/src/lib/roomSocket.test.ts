@@ -176,4 +176,97 @@ describe('RoomSocket', () => {
       JSON.stringify({ type: 'set_item', topic: null }),
     )
   })
+
+  // --- `removed`: a mid-session error that is nonetheless terminal (FR-21/D-47).
+
+  it('rejects on a removed frame without waiting for the close', () => {
+    const socket = openSocket()
+    deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+
+    deliver(lastSocket(), {
+      type: 'error',
+      reason: 'removed',
+      message: 'The host removed you from this room',
+    })
+
+    // Rejected on the FRAME. Everything else terminal in this class waits for the
+    // close; this does not, so the reason still reaches the screen if the close is
+    // delayed or lost.
+    const state = socket.getSnapshot()
+    expect(state.status).toBe('rejected')
+    expect(state.error?.reason).toBe('removed')
+    expect(state.error?.message).toBe('The host removed you from this room')
+  })
+
+  it('does not reconnect after the close that follows a removed frame', () => {
+    const socket = openSocket()
+    deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    const count = MockWebSocket.instances.length
+
+    deliver(lastSocket(), { type: 'error', reason: 'removed', message: 'gone' })
+    lastSocket().onclose?.()
+
+    // The whole point of naming the slug. Phase-based terminality would see a
+    // snapshot on this connection, call the close a retryable drop, and reconnect —
+    // then overwrite "the host removed you" with the `not_in_room` the server owes a
+    // non-member. Asserted on all three: no timer, no new socket, reason intact.
+    expect(vi.getTimerCount()).toBe(0)
+    expect(MockWebSocket.instances.length).toBe(count)
+    expect(socket.getSnapshot().status).toBe('rejected')
+    expect(socket.getSnapshot().error?.reason).toBe('removed')
+  })
+
+  it('is terminal on a removed frame even during the handshake', () => {
+    const socket = openSocket()
+
+    // No snapshot on this connection, so the phase rule would already call it
+    // terminal — but via `pendingError`, which only reports on close. This asserts
+    // the slug check wins in both phases, so the state does not depend on when the
+    // frame lands.
+    deliver(lastSocket(), { type: 'error', reason: 'removed', message: 'gone' })
+
+    expect(socket.getSnapshot().status).toBe('rejected')
+    expect(socket.getSnapshot().error?.reason).toBe('removed')
+  })
+
+  it('drops sends once removed', () => {
+    const socket = openSocket()
+    deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    const ws = lastSocket()
+    const before = ws.sent.length
+
+    deliver(ws, { type: 'error', reason: 'removed', message: 'gone' })
+    socket.send({ type: 'cast_vote', card: '5' })
+
+    // `send` gates on status === 'live', so rejecting on the frame also stops this
+    // client acting on a room it is no longer in — without a second guard.
+    expect(ws.sent).toHaveLength(before)
+  })
+
+  it('a reopen after a removal starts clean', () => {
+    const socket = openSocket()
+    deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    deliver(lastSocket(), { type: 'error', reason: 'removed', message: 'gone' })
+    lastSocket().onclose?.()
+
+    // Rejoining the same room as a fresh participant must not inherit the terminal
+    // flag — otherwise a removed person could never come back in this tab, which is
+    // not what "removal is not a ban" (D-15) means.
+    socket.open('ABCDEF', 'pid-2')
+    deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    expect(socket.getSnapshot().status).toBe('live')
+
+    lastSocket().onclose?.() // and a plain drop is retryable again
+    expect(socket.getSnapshot().status).toBe('reconnecting')
+    expect(vi.getTimerCount()).toBe(1)
+  })
+
+  it('sends a remove_participant frame once live', () => {
+    const socket = openSocket()
+    deliver(lastSocket(), { type: 'room_state', room: fakeRoom })
+    socket.send({ type: 'remove_participant', target_id: 'pid-2' })
+    expect(lastSocket().sent).toContainEqual(
+      JSON.stringify({ type: 'remove_participant', target_id: 'pid-2' }),
+    )
+  })
 })

@@ -115,6 +115,12 @@ class Room:
         re-estimate, so it is allowed post-reveal and results recompute over
         whoever remains (`results()` is defined over cast votes only).
 
+        **Unauthorized by design**, and the only membership mutation that is: the
+        actor here is the departing participant, so there is nobody to authorize
+        against. The host-initiated removal that shares this effect is
+        :meth:`remove_participant_by_host`, which guards first and then delegates
+        here (FR-21/D-47).
+
         Raises:
             UnknownParticipant: if ``participant_id`` is not in the room.
         """
@@ -245,11 +251,57 @@ class Room:
         # Self-target first: it would otherwise pass the membership check below and
         # surface as a confusing success, or as an error whose message is false.
         if target_id == participant_id:
-            raise CannotTargetSelf()
+            raise CannotTargetSelf("You cannot hand the host role to yourself")
         if target_id not in self.participants:
             raise UnknownParticipant()
         self.host_id = target_id
         self.host_voting = True
+
+    def remove_participant_by_host(self, participant_id: str, target_id: str) -> None:
+        """Remove another participant from the room (host-only, FR-21/D-47).
+
+        The name says the one thing that distinguishes this from
+        :meth:`remove_participant`, which it delegates to: same effect, host
+        authority. The primitive stays unauthorized because it also serves the leave
+        path, where the departing participant *is* the actor and there is nobody to
+        authorize against.
+
+        Not a ban (D-15). With no accounts there is nothing durable to ban: the
+        removed person still holds the room code and may rejoin immediately as a
+        fresh participant, which is out of scope by
+        [02-current-scope.md](../../../doc/02-current-scope.md) and deliberate, not
+        an oversight.
+
+        The delegate's host-auto-transfer branch is **unreachable from here**, and
+        provably so rather than incidentally: it fires only when the removed id is
+        ``host_id``, and the self-target guard below rejects exactly that id, since
+        the actor has already been established as the host. So a removal never moves
+        the role — a host who wants out hands over first (``transfer_host``) and then
+        leaves. Nor can it empty the room, because the actor remains in it, which is
+        why this needs no ``empty_since`` stamp and can stay in the domain rather
+        than routing through ``store.leave``.
+
+        The target's vote goes with them, as on the leave path. That happens even
+        after reveal, rewriting the round's average and consensus — deliberately;
+        see ``RoundRevealed`` for why membership sits outside that guard.
+
+        Raises:
+            NotHost: if the caller is not the host. This also enforces the actor's
+                membership, since a non-member is never the host.
+            CannotTargetSelf: if the host targets themselves.
+            UnknownParticipant: if the target is not in the room.
+        """
+        self._require_host(participant_id)
+        # Self-target first, for the same reason as in transfer_host: it would
+        # otherwise reach the delegate as a plain, authorized-looking leave.
+        if target_id == participant_id:
+            raise CannotTargetSelf("You cannot remove yourself from the room")
+        # Explicit, though the delegate raises the same error: this keeps the two
+        # host-on-participant actions structurally identical, and keeps the guard
+        # order (authority, then self, then membership) readable in one place.
+        if target_id not in self.participants:
+            raise UnknownParticipant()
+        self.remove_participant(target_id)
 
     def reveal(self, participant_id: str) -> None:
         """Reveal the round so every vote becomes visible (host-only, FR-12).
