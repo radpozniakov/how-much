@@ -162,6 +162,7 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
             />
           ) : (
             <StatsView
+              deck={room.deck}
               participants={room.participants}
               results={room.results}
               revealed={room.revealed}

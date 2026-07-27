@@ -1088,14 +1088,21 @@ form button {
     border-bottom: 1px solid var(--border);
   }
 
+  // doc/06:63-66 conformance, not alias hygiene: the Graph card above puts its
+  // numbers in mono, so without these the same average renders in two typefaces
+  // 24px apart. Only the numbers move — the "Average:" label and both badges
+  // are text and stay in Inter (the badges together, so the host badge and the
+  // consensus badge, one rule apart, cannot diverge).
   &__value {
     margin-left: auto;
+    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
     font-weight: 700;
     color: var(--text-h);
   }
 
   &__badge {
+    font-family: var(--font-sans);
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -1117,5 +1124,124 @@ form button {
     margin-top: 0.75rem;
     padding-top: 0.75rem;
     border-top: 1px solid var(--border);
+    font-family: var(--font-mono);
+
+    strong {
+      font-family: var(--font-sans);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Graph view (V8) — the post-reveal analysis card, above the results list.
+// Monochrome throughout: the extreme columns are marked by border weight, not
+// by inversion, which the two .results__badge rules already spend in this tab.
+// ---------------------------------------------------------------------------
+.graph {
+  &__histogram {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-2);
+    margin-bottom: var(--space-5);
+  }
+
+  // Equal-width columns so the axis is even, including the zero-count ones
+  // that make a gap read as a gap.
+  &__column {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  // Discrete units, one per vote, growing upward from the axis.
+  &__stack {
+    display: flex;
+    flex-direction: column-reverse;
+    justify-content: flex-start;
+    align-items: stretch;
+    align-self: stretch;
+    gap: var(--space-1);
+  }
+
+  &__unit {
+    height: var(--space-3);
+    border: var(--hairline);
+    background: var(--surface);
+  }
+
+  &__axis {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-muted);
+    padding-top: var(--space-1);
+    border-top: var(--hairline);
+    align-self: stretch;
+    text-align: center;
+  }
+
+  // The min/max highlight: a heavier edge on the units and a bolder tick. No
+  // fill swap, so the column reads as emphasized rather than selected.
+  &__column--extreme &__unit {
+    border-width: 2px;
+  }
+
+  &__column--extreme &__axis {
+    color: var(--ink);
+    font-weight: 700;
+  }
+
+  &__extremes {
+    margin: 0 0 var(--space-5);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--ink-muted);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  // Average on the deck scale. Ticks are evenly spaced rather than placed by
+  // value: a numeric axis crowds 1,2,3,5 into the first sixth of the default
+  // deck. The mark is interpolated between the two ticks that bracket it.
+  &__rail {
+    position: relative;
+    height: var(--space-6);
+    margin: 0 var(--space-4);
+    border-top: var(--hairline);
+  }
+
+  &__tick {
+    position: absolute;
+    top: var(--space-3);
+    transform: translateX(-50%);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+
+  &__mark {
+    position: absolute;
+    top: 0;
+    width: var(--space-2);
+    height: var(--space-2);
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--ink);
+  }
+
+  &__caption {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--ink-muted);
+  }
+
+  &__number {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--ink);
   }
 }

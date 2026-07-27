@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { StatsView } from './StatsView'
 import { makeParticipant, makeResults } from '../../test/fixtures'
+import { FIBONACCI_DECK } from '../../lib/deck'
 
+const DECK = [...FIBONACCI_DECK]
 const alice = makeParticipant({ id: 'p1', name: 'Alice' })
 const bob = makeParticipant({ id: 'p2', name: 'Bob' })
 
@@ -10,6 +12,7 @@ describe('StatsView', () => {
   it('re-presents the existing results — each vote, average, consensus — once revealed', () => {
     render(
       <StatsView
+        deck={DECK}
         participants={[alice, bob]}
         results={makeResults({
           votes: { p1: '5', p2: '5' },
@@ -31,6 +34,7 @@ describe('StatsView', () => {
   it('shows a neutral waiting state pre-reveal and never leaks a value (FR-10)', () => {
     const { container } = render(
       <StatsView
+        deck={DECK}
         participants={[alice, bob]}
         results={makeResults({ votes: { p1: '5', p2: '8' } })}
         revealed={false}
@@ -48,6 +52,7 @@ describe('StatsView', () => {
   it('falls back to the waiting state when revealed but results are still null', () => {
     render(
       <StatsView
+        deck={DECK}
         participants={[alice]}
         results={null}
         revealed
