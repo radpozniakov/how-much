@@ -1,18 +1,11 @@
-"""Domain-level tests for deliberate host handover: Room.transfer_host (FR-20/D-45).
+"""Domain tests for deliberate host handover: Room.transfer_host (FR-20/D-45).
 
-Its own file rather than an extension, because the backend split is by behavior
-area and both candidate homes fit badly: test_participants_domain.py is about
-membership and capacity, not authority, and test_lifecycle_domain.py is explicitly
-"leave, host transfer & empty-room cleanup" whose transfer tests are all
-*consequences of a leave*. A deliberate handover is not a lifecycle event.
-test_rename_domain.py is the precedent — one new domain method with its own
-decision entry got its own file.
+Its own file because this is authority, not membership (test_participants_domain)
+and not a lifecycle consequence of a leave (test_lifecycle_domain).
 
-Naming: every test here says **handover**, never the bare word "transfer", to keep
-it distinguishable from the D-13 disconnect path in
-test_lifecycle_domain.py::test_host_leave_transfer_resets_host_voting. The same
-one-line effect (host_voting back to True) is reached by two different triggers,
-and only this one passes through ``_require_host``.
+Every test says **handover**, never bare "transfer", to keep it distinct from the
+D-13 disconnect path: the same effect reached by a different trigger, and only this
+one passes through ``_require_host``.
 """
 
 import pytest
@@ -53,13 +46,13 @@ def test_handover_resets_host_voting_to_true():
 
 
 def test_outgoing_host_may_vote_after_handover():
-    """DD-2's zero-new-code claim, asserted rather than trusted: cast_vote's guard
-    keys on who is host *now*, so the outgoing host stops matching it."""
+    """cast_vote's guard keys on who is host *now*, so the outgoing host stops
+    matching it — asserted rather than trusted."""
     room, (host, alice) = _room_with("Host", "Alice")
     room.set_host_voting(host, False)
 
     room.transfer_host(host, alice)
-    room.cast_vote(host, "5")  # would raise HostNotVoting before the handover
+    room.cast_vote(host, "5")
 
     assert room.votes[host] == "5"
 
@@ -80,7 +73,7 @@ def test_handover_rejects_non_host():
     with pytest.raises(NotHost):
         room.transfer_host(alice, bob)
 
-    assert room.host_id == host  # a raise alone would pass a partial mutation
+    assert room.host_id == host
 
 
 def test_handover_rejects_self_target():
@@ -102,8 +95,8 @@ def test_handover_rejects_unknown_target():
 
 
 def test_handover_legal_after_reveal():
-    """§A: a handover touches no input to results(), so it is not locked. The
-    invariance assertion is the load-bearing half — "did not raise" is not enough."""
+    """A handover touches no input to results(), so it is not locked. The invariance
+    assertion is the load-bearing half — "did not raise" is not enough."""
     room, (host, alice, bob) = _room_with("Host", "Alice", "Bob")
     room.cast_vote(host, "5")
     room.cast_vote(alice, "5")
@@ -120,9 +113,9 @@ def test_handover_legal_after_reveal():
 
 
 def test_handover_after_reveal_grows_voter_roster():
-    """§A-ii: the post-reveal denominator change is *intended*. host_voting flips
-    back on, so the ex-host rejoins the voter set — while results stay identical.
-    Pins this so a later reader does not "fix" it."""
+    """The post-reveal denominator change is *intended*: host_voting flips back on
+    so the ex-host rejoins the voter set, while results stay identical. Pinned so a
+    later reader does not "fix" it."""
     room, (host, alice) = _room_with("Host", "Alice")
     room.set_host_voting(host, False)
     room.cast_vote(alice, "5")
@@ -131,20 +124,16 @@ def test_handover_after_reveal_grows_voter_roster():
 
     room.transfer_host(host, alice)
 
-    # host_voting True means nobody is excluded, so the ex-host counts as a voter
-    # again — and they hold no vote, which is what puts an unvoted card into an
-    # already-revealed grid (rendered as the not-voted glyph, by design).
     assert room.host_voting is True
     assert host not in room.votes
-    # …while the revealed round itself is untouched.
     assert room.results().votes == before.votes
     assert room.results().average == before.average
 
 
 def test_incoming_host_still_cannot_vote_while_revealed():
-    """§A-i: asserts the error *identity*. RoundRevealed (not HostNotVoting) proves
-    the new host is blocked as a voter like everyone else, not as a host — so
-    host_voting=True post-reveal is inert rather than inconsistent."""
+    """Asserts the error *identity*: RoundRevealed, not HostNotVoting, proves the new
+    host is blocked as a voter like everyone else — so host_voting=True post-reveal
+    is inert rather than inconsistent."""
     room, (host, alice) = _room_with("Host", "Alice")
     room.reveal(host)
 
@@ -155,8 +144,8 @@ def test_incoming_host_still_cannot_vote_while_revealed():
 
 
 def test_handover_on_hostless_room_raises_not_host():
-    """§A-iv: defensive. host_id is None only in an empty room, so this state is
-    unreachable while anyone is connected — this guards the guarantee, not behavior."""
+    """Defensive: host_id is None only in an empty room, so this state is unreachable
+    while anyone is connected. Guards the guarantee, not behaviour."""
     room = Room(code="ROOM01")
     assert room.host_id is None
 
@@ -165,8 +154,7 @@ def test_handover_on_hostless_room_raises_not_host():
 
 
 def test_handover_is_repeatable():
-    """ "Indefinitely, no residue": the role keeps moving and exactly one host holds
-    it at every hop, including back to the original."""
+    """No residue: exactly one host at every hop, including back to the original."""
     room, (a, b, c) = _room_with("A", "B", "C")
 
     for actor, target in ((a, b), (b, c), (c, a)):
@@ -174,4 +162,4 @@ def test_handover_is_repeatable():
         assert room.host_id == target
         assert room.host_voting is True
 
-    assert room.host_id == a  # full circle, and still exactly one host
+    assert room.host_id == a

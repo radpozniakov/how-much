@@ -1,12 +1,9 @@
-"""API-level tests for S6b: round actions over /ws/rooms/{code}.
+"""API tests for round actions over /ws/rooms/{code}.
 
-Round frames (set_item, cast_vote, set_host_voting, reveal, reset) dispatch to
-the domain and rebroadcast the RoomView (D-36). A frame carries no participant_id
-— the action is attributed to the socket's own identity (established at
-handshake). A rejected action returns an ``error`` frame to the offending socket
-only. Since D-50 retired the S3/S4 HTTP round routes this is the only transport
-for a round action, so the tests here that used to drive one over ``curl`` and
-watch it surface on a socket are gone with the routes.
+Round frames dispatch to the domain and rebroadcast the RoomView (D-36). A frame
+carries no participant_id — the action is attributed to the socket's handshake
+identity — and a rejected action errors the offending socket only. Since D-50 this
+is the only transport for a round action.
 
 Uses the synchronous ``TestClient.websocket_connect``; a server broadcast lands in
 a session's queue and is read by its ``receive_json``.
@@ -32,7 +29,7 @@ def test_full_round_over_socket(client):
     code, host_id = _create(client)
     with client.websocket_connect(f"/ws/rooms/{code}") as ws:
         ws.send_json({"type": "attach", "participant_id": host_id})
-        ws.receive_json()  # own snapshot
+        ws.receive_json()
 
         ws.send_json({"type": "set_item", "topic": "Login page"})
         item = ws.receive_json()
@@ -42,7 +39,7 @@ def test_full_round_over_socket(client):
         voted = ws.receive_json()
         me = next(p for p in voted["room"]["participants"] if p["id"] == host_id)
         assert me["has_voted"] is True
-        assert voted["room"]["results"] is None  # value withheld pre-reveal (FR-10)
+        assert voted["room"]["results"] is None
 
         ws.send_json({"type": "reveal"})
         revealed = ws.receive_json()
@@ -61,18 +58,16 @@ def test_full_round_over_socket(client):
 
 
 def test_frame_uses_connection_identity_not_payload(client):
-    """A round frame carries no participant_id; a spoofed one is ignored — the
-    vote is attributed to the connected socket (F2)."""
+    """A round frame carries no participant_id; a spoofed one is ignored and the vote
+    is attributed to the connected socket."""
     code, host_id = _create(client)
     with client.websocket_connect(f"/ws/rooms/{code}") as ws:
         ws.send_json({"type": "attach", "participant_id": host_id})
         ws.receive_json()
-        # A bogus participant_id in the frame must not redirect the action.
         ws.send_json({"type": "cast_vote", "card": "8", "participant_id": "evil"})
         ws.receive_json()
-        # Assert while still connected — the socket's leave on close drops the vote.
         room = store.get(code)
-        assert room.votes.get(host_id) == "8"  # attributed to the socket's identity
+        assert room.votes.get(host_id) == "8"
         assert "evil" not in room.votes
 
 
@@ -83,19 +78,17 @@ def test_rejected_action_errors_sender_only(client):
     bob_id = _join_http(client, code, "Bob")
     with client.websocket_connect(f"/ws/rooms/{code}") as host_ws:
         host_ws.send_json({"type": "attach", "participant_id": host_id})
-        host_ws.receive_json()  # own snapshot
+        host_ws.receive_json()
         with client.websocket_connect(f"/ws/rooms/{code}") as bob_ws:
             bob_ws.send_json({"type": "attach", "participant_id": bob_id})
-            bob_ws.receive_json()  # bob's snapshot
-            host_ws.receive_json()  # host sees bob attach
+            bob_ws.receive_json()
+            host_ws.receive_json()
 
-            bob_ws.send_json({"type": "reveal"})  # non-host
+            bob_ws.send_json({"type": "reveal"})
             err = bob_ws.receive_json()
             assert err["type"] == "error" and err["reason"] == "not_host"
-            assert store.get(code).revealed is False  # rejected: no mutation
+            assert store.get(code).revealed is False
 
-            # The host's NEXT frame must be a real broadcast, not a stray one from
-            # bob's rejected reveal: host reveals legitimately and sees revealed.
             host_ws.send_json({"type": "reveal"})
             nxt = host_ws.receive_json()
     assert nxt["type"] == "room_state" and nxt["room"]["revealed"] is True
@@ -129,7 +122,7 @@ def test_host_not_voting_errors_with_host_not_voting(client):
         ws.send_json({"type": "attach", "participant_id": host_id})
         ws.receive_json()
         ws.send_json({"type": "set_host_voting", "voting": False})
-        ws.receive_json()  # host_voting now False
+        ws.receive_json()
         ws.send_json({"type": "cast_vote", "card": "5"})
         err = ws.receive_json()
     assert err["type"] == "error" and err["reason"] == "host_not_voting"
@@ -144,21 +137,20 @@ def test_ws_reveal_reflects_to_second_socket(client):
         host_ws.receive_json()
         with client.websocket_connect(f"/ws/rooms/{code}") as bob_ws:
             bob_ws.send_json({"type": "attach", "participant_id": bob_id})
-            bob_ws.receive_json()  # bob snapshot
-            host_ws.receive_json()  # host sees bob attach
+            bob_ws.receive_json()
+            host_ws.receive_json()
 
             host_ws.send_json({"type": "reveal"})
-            host_ws.receive_json()  # host's own reveal broadcast
-            bob_frame = bob_ws.receive_json()  # bob sees the reveal too
+            host_ws.receive_json()
+            bob_frame = bob_ws.receive_json()
     assert bob_frame["room"]["revealed"] is True
-    assert store.get(code).revealed is True  # domain is the source of truth
+    assert store.get(code).revealed is True
 
 
 def test_over_long_topic_over_ws_is_bad_request(client):
-    """F3: the WS set_item frame enforces MAX_TOPIC_LENGTH at the frame boundary
-    (`messages.SetItemFrame` — `Room.set_item` only trims); the over-long topic is
-    rejected as bad_request (a frame validation failure) and the socket stays
-    connected. This used to read "like the HTTP route", which D-50 deleted."""
+    """`messages.SetItemFrame` enforces MAX_TOPIC_LENGTH at the frame boundary, since
+    `Room.set_item` only trims. The over-long topic is a bad_request and the socket
+    stays connected."""
     code, host_id = _create(client)
     with client.websocket_connect(f"/ws/rooms/{code}") as ws:
         ws.send_json({"type": "attach", "participant_id": host_id})
@@ -166,7 +158,6 @@ def test_over_long_topic_over_ws_is_bad_request(client):
         ws.send_json({"type": "set_item", "topic": "x" * 5000})
         err = ws.receive_json()
         assert err["type"] == "error" and err["reason"] == "bad_request"
-        # still connected: a valid action still works
         ws.send_json({"type": "set_item", "topic": "ok"})
         ok = ws.receive_json()
     assert ok["room"]["current_item"] == "ok"
@@ -180,31 +171,28 @@ def test_malformed_round_frame_keeps_socket_alive(client):
         ws.send_json({"type": "not_a_round_action"})
         err = ws.receive_json()
         assert err["type"] == "error" and err["reason"] == "bad_request"
-        ws.send_json({"type": "reveal"})  # still usable
+        ws.send_json({"type": "reveal"})
         ok = ws.receive_json()
     assert ok["room"]["revealed"] is True
 
 
 def test_action_after_participant_vanishes_errors_not_in_room(client):
-    """A participant who left the room while its socket stays open gets a
-    not_in_room error on its next action — no crash (risk R6).
+    """A participant who left while its socket stays open gets a not_in_room error on
+    its next action rather than crashing.
 
-    The removal goes straight through ``store.leave``, which is the mechanism swap
-    D-50 forced: this used to use ``DELETE /participants/{id}``. The domain call is
-    in fact the *only* remaining way to reach the state under test — a host removal
-    (D-47) detaches the socket as it goes, so it can never leave an attached socket
-    pointing at an absent participant. What R6 guards is the dispatch path being
-    handed a stale identity, not the means by which it went stale."""
+    Goes through ``store.leave`` directly because that is now the only way to reach
+    this state: a host removal (D-47) detaches the socket as it goes. What matters is
+    the dispatch path being handed a stale identity, not how it went stale."""
     code, host_id = _create(client)
     bob_id = _join_http(client, code, "Bob")
     with client.websocket_connect(f"/ws/rooms/{code}") as bob_ws:
         bob_ws.send_json({"type": "attach", "participant_id": bob_id})
-        bob_ws.receive_json()  # bob snapshot
-        store.leave(store.get(code), bob_id)  # gone from the domain, socket still up
+        bob_ws.receive_json()
+        store.leave(store.get(code), bob_id)
         bob_ws.send_json({"type": "cast_vote", "card": "5"})
         err = bob_ws.receive_json()
     assert err["type"] == "error" and err["reason"] == "not_in_room"
-    assert host_id in store.get(code).participants  # host untouched
+    assert host_id in store.get(code).participants
 
 
 def test_set_name_over_ws_fans_out_to_other_socket(client):
@@ -214,16 +202,15 @@ def test_set_name_over_ws_fans_out_to_other_socket(client):
     bob_id = _join_http(client, code, "Bob")
     with client.websocket_connect(f"/ws/rooms/{code}") as host_ws:
         host_ws.send_json({"type": "attach", "participant_id": host_id})
-        host_ws.receive_json()  # own snapshot
+        host_ws.receive_json()
         with client.websocket_connect(f"/ws/rooms/{code}") as bob_ws:
             bob_ws.send_json({"type": "attach", "participant_id": bob_id})
-            bob_ws.receive_json()  # bob snapshot
-            host_ws.receive_json()  # host sees bob attach
+            bob_ws.receive_json()
+            host_ws.receive_json()
 
             bob_ws.send_json({"type": "set_name", "name": "Bobby"})
-            bob_ws.receive_json()  # bob's own rename broadcast
-            host_frame = host_ws.receive_json()  # host sees the rename too
-            # Assert while still connected — closing a socket drops its participant.
+            bob_ws.receive_json()
+            host_frame = host_ws.receive_json()
             bob = next(
                 p for p in host_frame["room"]["participants"] if p["id"] == bob_id
             )
@@ -239,14 +226,13 @@ def test_set_name_uses_connection_identity_not_payload(client):
     with client.websocket_connect(f"/ws/rooms/{code}") as bob_ws:
         bob_ws.send_json({"type": "attach", "participant_id": bob_id})
         bob_ws.receive_json()
-        # A bogus participant_id must not redirect the rename to the host.
         bob_ws.send_json(
             {"type": "set_name", "name": "Hacker", "participant_id": host_id}
         )
         bob_ws.receive_json()
         room = store.get(code)
-        assert room.participants[bob_id].name == "Hacker"  # the socket's own id
-        assert room.participants[host_id].name == "Alice"  # host untouched
+        assert room.participants[bob_id].name == "Hacker"
+        assert room.participants[host_id].name == "Alice"
 
 
 def test_set_name_trims_and_bounds_over_ws(client):
@@ -257,11 +243,11 @@ def test_set_name_trims_and_bounds_over_ws(client):
         ws.send_json({"type": "attach", "participant_id": host_id})
         ws.receive_json()
 
-        ws.send_json({"type": "set_name", "name": "   "})  # blank after trim
+        ws.send_json({"type": "set_name", "name": "   "})
         err = ws.receive_json()
         assert err["type"] == "error" and err["reason"] == "bad_request"
 
-        ws.send_json({"type": "set_name", "name": "  Ada  "})  # trimmed
+        ws.send_json({"type": "set_name", "name": "  Ada  "})
         ok = ws.receive_json()
     me = next(p for p in ok["room"]["participants"] if p["id"] == host_id)
     assert me["name"] == "Ada"
@@ -277,7 +263,7 @@ def test_over_long_name_over_ws_is_bad_request(client):
         ws.send_json({"type": "set_name", "name": "x" * 5000})
         err = ws.receive_json()
         assert err["type"] == "error" and err["reason"] == "bad_request"
-        ws.send_json({"type": "set_name", "name": "ok"})  # still usable
+        ws.send_json({"type": "set_name", "name": "ok"})
         ok = ws.receive_json()
     me = next(p for p in ok["room"]["participants"] if p["id"] == host_id)
     assert me["name"] == "ok"
@@ -285,12 +271,12 @@ def test_over_long_name_over_ws_is_bad_request(client):
 
 def test_action_after_room_swept_errors_room_not_found(client):
     """If the room is gone mid-session, a round action is answered room_not_found
-    rather than dispatching on None (risk R1)."""
+    rather than dispatching on None."""
     code, host_id = _create(client)
     with client.websocket_connect(f"/ws/rooms/{code}") as ws:
         ws.send_json({"type": "attach", "participant_id": host_id})
         ws.receive_json()
-        store.clear()  # simulate the room being reclaimed while the socket is open
+        store.clear()
         ws.send_json({"type": "reveal"})
         err = ws.receive_json()
     assert err["type"] == "error" and err["reason"] == "room_not_found"

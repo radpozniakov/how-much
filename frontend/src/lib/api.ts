@@ -1,6 +1,3 @@
-// The two HTTP calls the frontend makes (D-38): create a room and join one. Both
-// return the caller's own participant_id — which the socket then `attach`es with,
-// and which answers "am I host?". Everything else flows over the WebSocket.
 import { API_URL } from '../config'
 import type { ApiError, RoomView } from '../types'
 
@@ -22,7 +19,6 @@ export interface CreateResult extends JoinResult {
   link: string
 }
 
-/** Narrow an unknown caught value to our normalized ApiError. */
 export function isApiError(value: unknown): value is ApiError {
   return (
     typeof value === 'object' &&
@@ -32,20 +28,15 @@ export function isApiError(value: unknown): value is ApiError {
   )
 }
 
-/** Inline message for a failed create/join. 404/409/422 carry a useful detail;
- * 0 is a network failure. Shared by the landing and room join forms. */
 export function requestErrorMessage(err: unknown): string {
   if (isApiError(err)) {
     if (err.status === 0) return 'Could not reach the server. Try again.'
     if (err.status === 404) return 'No room with that code.'
-    return err.detail // 409 (capacity), 422 (name), etc.
+    return err.detail
   }
   return 'Something went wrong. Try again.'
 }
 
-// The backend sends either {detail: "msg"} (domain errors: 404/409) or
-// {detail: [{loc, msg, ...}]} (FastAPI validation: 422). Flatten both to a
-// single human string so the UI never renders "[object Object]".
 function normalizeDetail(body: unknown): string {
   if (body && typeof body === 'object' && 'detail' in body) {
     const detail = (body as { detail: unknown }).detail
@@ -54,12 +45,6 @@ function normalizeDetail(body: unknown): string {
       const first: unknown = detail[0]
       if (first && typeof first === 'object' && 'msg' in first) {
         const msg = (first as { msg: unknown }).msg
-        // Pydantic prefixes every custom-validator message with "Value error, ",
-        // which is its own implementation detail and not a sentence anyone should
-        // read. Latent until V4: a 422 used to mean a name so malformed the UI had
-        // already blocked it, but the card-values field can be rejected for
-        // duplicates or a bad count that no input attribute can prevent, so this
-        // is now the routine message for an ordinary typo.
         if (typeof msg === 'string') return msg.replace(/^Value error, /, '')
       }
     }
@@ -94,11 +79,6 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return data as T
 }
 
-/** Create a room as its host. `cards` is the host's optional comma-separated card
- * values (FR-22/D-48), sent raw — the server owns parsing and normalizing them, so
- * there is one implementation of those rules and it is the one that decides. Blank
- * is sent as null, which the server reads as "no choice" and answers with the
- * Fibonacci default. An invalid deck comes back as a 422 the caller renders. */
 export async function createRoom(
   name: string,
   cards = '',
@@ -107,7 +87,6 @@ export async function createRoom(
     name,
     cards: cards.trim() || null,
   })
-  // Use the server's canonical code (uppercase, D-17), never the raw input.
   return { participantId: res.participant_id, room: res.room, link: res.link }
 }
 

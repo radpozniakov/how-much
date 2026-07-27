@@ -1,13 +1,11 @@
 """Read-side views of a room — the shape every client sees.
 
-These DTOs and their builders are the single ``RoomView`` snapshot shared by both
-transports: the HTTP router returns them, and the WebSocket layer (S6) broadcasts
-the *same* shape (D-36). Keeping them here (rather than in ``router.py``) lets the
-socket layer build a snapshot without importing a private helper from the router.
+One ``RoomView`` snapshot shared by both transports (D-36): the HTTP router returns
+it, the WebSocket layer broadcasts it. It lives here rather than in ``router.py``
+so the socket layer need not import a private router helper.
 
-The FR-10 pre-reveal gate lives in the domain (``Room.results()`` returns ``None``
-until reveal), so ``results`` below is populated only for a revealed round — no
-card value is reachable pre-reveal, over either transport.
+The FR-10 pre-reveal gate is the domain's (``Room.results()`` returns ``None`` until
+reveal), so ``results`` is populated only for a revealed round.
 """
 
 from __future__ import annotations
@@ -20,18 +18,15 @@ from app.rooms.models import Room
 class ParticipantView(BaseModel):
     id: str
     name: str
-    # Whether this participant has a vote in the current round. Presence only —
-    # the card value is never exposed before reveal (FR-10).
     has_voted: bool
 
 
 class ResultsView(BaseModel):
-    """A revealed round's payload (FR-15, FR-16): every card plus the stats. Only
-    present once the host has revealed — absent (``None``) otherwise, so no card
-    value is reachable pre-reveal.
+    """A revealed round's payload (FR-15/FR-16): every card plus the stats, absent
+    (``None``) until reveal.
 
-    ``votes`` maps participant_id -> card; names are not duplicated here — the
-    roster in ``participants`` carries them, and the frontend joins by id."""
+    ``votes`` maps participant_id -> card; names live only on the ``participants``
+    roster, which the frontend joins by id."""
 
     votes: dict[str, str]
     average: float | None
@@ -40,30 +35,21 @@ class ResultsView(BaseModel):
 
 class RoomView(BaseModel):
     """The shape every client sees: who's here, who's the host, the current item,
-    who has voted, and whether the round is revealed — but never the vote values
-    until reveal (FR-10), which arrive in ``results``. Over the socket (S6) this
-    is what gets broadcast (D-36)."""
+    who has voted, and whether the round is revealed — never the vote values until
+    reveal (FR-10), which arrive in ``results``."""
 
     code: str
-    # The room's card values, in the host's order (FR-22/D-48). Riding the
-    # snapshot is the whole distribution story: it reaches every client on every
-    # broadcast (D-36), so a client renders the deck it is actually voting into and
-    # a reconnecting participant gets it for free — nothing new to persist
-    # client-side. Fixed at creation, so it is the one field here that never
-    # changes over a room's life.
     deck: list[str]
     host_id: str | None
     participants: list[ParticipantView]
     current_item: str | None
     host_voting: bool
     revealed: bool
-    # Populated only for a revealed round; None hides all card values pre-reveal.
     results: ResultsView | None
 
 
 def _results_view(room: Room) -> ResultsView | None:
-    """Map the domain's results to the DTO. The reveal gate lives in the domain
-    (`Room.results()` returns None pre-reveal), so this simply reflects it."""
+    """Map the domain's results to the DTO, reflecting its pre-reveal ``None``."""
     results = room.results()
     if results is None:
         return None

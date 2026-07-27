@@ -1,9 +1,8 @@
-"""Domain-level tests for S5: leave, host transfer & empty-room cleanup.
+"""Domain tests for leave, host transfer & empty-room cleanup.
 
 Exercises :class:`Room.remove_participant` and :class:`RoomStore`'s sweep/clock
-directly (no HTTP), so the leave/transfer rules and the grace-timer math are
-validated independently of any transport (S6). Cleanup timing runs against an
-injected fake clock so the tests are deterministic and instant — no real sleep.
+directly, so the rules and grace-timer math are validated with no transport
+involved. An injected fake clock keeps the timing tests instant and deterministic.
 """
 
 import pytest
@@ -29,9 +28,6 @@ def _room_with(*names: str) -> tuple[Room, list[str]]:
     room = Room(code="ROOM01")
     ids = [room.add_participant(n).id for n in (names or ("Host",))]
     return room, ids
-
-
-# --- remove / host transfer (Room, direct) ----------------------------------
 
 
 def test_leave_removes_participant_and_drops_vote():
@@ -115,23 +111,18 @@ def test_rejoin_clears_empty_since():
 def test_rejoin_within_grace_gets_a_host():
     """Someone rejoining an emptied room inside its grace window becomes host.
 
-    Goes through ``store.leave``/``store.join`` rather than ``Room`` directly, so
-    the emptying stamps a real ``empty_since`` and the rejoin crosses the same
+    Goes through ``store.leave``/``store.join`` rather than ``Room`` directly, so the
+    emptying stamps a real ``empty_since`` and the rejoin crosses the same
     resolve-then-mutate seam both transports use.
 
-    This is the assertion D-50 nearly dropped. `test_rejoin_within_grace_succeeds`
-    in the deleted `test_lifecycle_api.py` was its only cover, and the two domain
-    tests V5 nominated as replacements (`test_rejoin_clears_empty_since` and
-    `test_reoccupancy_cancels_cleanup`) turned out not to reach it — both assert
-    only on `empty_since`/sweep count, and both call `add_participant` on a room
-    that is not actually in grace. Pinned by mutation: making `add_participant`
-    skip the host assignment for an in-grace room passed all 244 tests without
-    this one. The consequence it guards is not cosmetic — the room would come back
-    with `host_id is None`, so nobody could reveal or reset it (D-13, D-18)."""
+    The only test that reaches this: the neighbouring rejoin tests assert on
+    ``empty_since``/sweep count and call ``add_participant`` on a room not actually
+    in grace. Without it, a room could come back with ``host_id is None`` and nobody
+    able to reveal or reset it (D-13/D-18)."""
     store = RoomStore(clock=FakeClock())
     room = store.create()
     host = room.add_participant("Host").id
-    store.leave(room, host)  # last one out: host_id -> None, empty_since stamped
+    store.leave(room, host)
     assert room.host_id is None and room.empty_since is not None
 
     result = store.join(room.code, "Rejoiner")
@@ -140,15 +131,12 @@ def test_rejoin_within_grace_gets_a_host():
     assert room.host_id == rejoiner.id
 
 
-# --- cleanup timer / sweep (fresh RoomStore(clock=FakeClock())) --------------
-
-
 def test_empty_room_swept_after_ttl():
     clock = FakeClock()
     store = RoomStore(clock=clock)
     room = store.create()
     host = room.add_participant("Host").id
-    store.leave(room, host)  # stamps empty_since = 0
+    store.leave(room, host)
     clock.advance(60)
     store.sweep()
     assert len(store) == 0
@@ -193,7 +181,7 @@ def test_occupied_room_never_swept():
     clock = FakeClock()
     store = RoomStore(clock=clock)
     room = store.create()
-    room.add_participant("Host")  # occupied -> empty_since stays None
+    room.add_participant("Host")
     clock.advance(config.EMPTY_ROOM_TTL_SECONDS * 10)
     store.sweep()
     assert len(store) == 1
@@ -206,7 +194,7 @@ def test_get_triggers_sweep():
     host = room.add_participant("Host").id
     store.leave(room, host)
     clock.advance(config.EMPTY_ROOM_TTL_SECONDS)
-    assert store.get("ANY000") is None  # get sweeps before returning
+    assert store.get("ANY000") is None
     assert len(store) == 0
 
 
@@ -217,7 +205,7 @@ def test_create_triggers_sweep():
     host = expired.add_participant("Host").id
     store.leave(expired, host)
     clock.advance(config.EMPTY_ROOM_TTL_SECONDS)
-    store.create()  # sweeps the expired room while allocating the new one
+    store.create()
     assert expired.code not in store
     assert len(store) == 1
 

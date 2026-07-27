@@ -8,7 +8,6 @@ import { loadRecall, rememberInputs } from '../../lib/recall'
 import * as session from '../../lib/session'
 import { makeRoom } from '../../test/fixtures'
 
-// JoinPrompt calls useNavigate (home button), so it needs a router context.
 const renderInRouter = (ui: ReactElement) =>
   render(<MemoryRouter>{ui}</MemoryRouter>)
 

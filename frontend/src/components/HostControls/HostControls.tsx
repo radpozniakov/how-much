@@ -2,15 +2,11 @@ import type { FC } from 'react'
 
 export interface HostVotingToggleProps {
   hostVoting: boolean
-  // Locked once the round is revealed (host can't opt in/out mid-reveal).
   revealed: boolean
-  // The socket is not live (connecting / reconnecting) — control is unusable.
   disabled?: boolean
   onSetHostVoting: (voting: boolean) => void
 }
 
-// The host's "I'm voting" opt-in. Shown directly below the stage status line
-// ("Voting in progress").
 export const HostVotingToggle: FC<HostVotingToggleProps> = ({
   hostVoting,
   revealed,
@@ -31,14 +27,11 @@ export const HostVotingToggle: FC<HostVotingToggleProps> = ({
 
 export interface RevealButtonProps {
   revealed: boolean
-  // The socket is not live (connecting / reconnecting) — control is unusable.
   disabled?: boolean
   onReveal: () => void
   onReset: () => void
 }
 
-// A single host action below the participant cards: it reveals the round, then
-// flips to resetting it once revealed.
 export const RevealButton: FC<RevealButtonProps> = ({
   revealed,
   disabled = false,

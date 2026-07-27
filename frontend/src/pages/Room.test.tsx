@@ -12,7 +12,6 @@ import type { RoomView } from '../types'
 
 const CODE = 'ABCDEF'
 
-// Seed the per-tab identity so Room mounts ConnectedRoom (not the JoinPrompt).
 function renderRoomAs(participantId: string) {
   saveSession(CODE, participantId)
   return render(<Room code={CODE} />, {
@@ -22,7 +21,6 @@ function renderRoomAs(participantId: string) {
   })
 }
 
-// Push a server snapshot onto the live socket, making the room render.
 function connect(room: RoomView) {
   act(() => {
     deliver(lastSocket(), { type: 'room_state', room })
@@ -76,8 +74,6 @@ describe('Room (S9 wiring)', () => {
     connect(
       makeRoom({
         host_id: 'pid-1',
-        // An opted-out host is absent from the card grid (FR-17); the roster
-        // must list them regardless, so assert with host_voting off.
         host_voting: false,
         participants: [
           makeParticipant({ id: 'pid-1', name: 'Alice' }),
@@ -88,16 +84,11 @@ describe('Room (S9 wiring)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Room participants' }))
 
-    // Scoped to the panel: ParticipantGrid is also a list of participants, so an
-    // unscoped listitem query would match its cards too. Named, so a future
-    // fieldset or grouped control on this page cannot silently capture it.
     const panel = screen.getByRole('group', { name: /participants/i })
     const rows = within(panel).getAllByRole('listitem')
     expect(rows).toHaveLength(2)
     expect(rows[0]).toHaveTextContent('Alice')
     expect(rows[1]).toHaveTextContent('Bob')
-    // getByText, not toHaveTextContent: the latter matches substrings, so the
-    // negative assertion would wrongly pass for any name containing "me".
     expect(within(rows[0]).getByText('me')).toBeInTheDocument()
     expect(within(rows[1]).queryByText('me')).not.toBeInTheDocument()
   })
@@ -131,22 +122,20 @@ describe('Room (S9 wiring)', () => {
         ],
       }),
     )
-    // No voting deck for the facilitator...
     expect(
       screen.queryByRole('region', { name: 'Your vote' }),
     ).not.toBeInTheDocument()
-    // ...but the host reveal control is still there (Bob can vote).
     expect(
       screen.getByRole('button', { name: 'Reveal cards' }),
     ).toBeInTheDocument()
   })
 
   it('disables voting and revealing until an estimation subject is set', () => {
-    renderRoomAs('pid-2') // a non-host voter
+    renderRoomAs('pid-2')
     connect(
       makeRoom({
         host_id: 'pid-1',
-        current_item: null, // no subject yet
+        current_item: null,
         revealed: false,
         participants: [
           makeParticipant({ id: 'pid-1', name: 'Alice' }),
@@ -154,18 +143,16 @@ describe('Room (S9 wiring)', () => {
         ],
       }),
     )
-    // Every vote card is inactive...
     for (const card of FIBONACCI_DECK) {
       expect(screen.getByRole('button', { name: card })).toBeDisabled()
     }
-    // ...and the stage announces the waiting state.
     expect(
       screen.getByText('Waiting for the estimation subject'),
     ).toBeInTheDocument()
   })
 
   it('disables the reveal control until an estimation subject is set', () => {
-    renderRoomAs('pid-1') // the host
+    renderRoomAs('pid-1')
     connect(
       makeRoom({
         host_id: 'pid-1',
@@ -181,7 +168,7 @@ describe('Room (S9 wiring)', () => {
   })
 
   it('disables the reveal control until at least one vote is cast', () => {
-    renderRoomAs('pid-1') // the host
+    renderRoomAs('pid-1')
     connect(
       makeRoom({
         host_id: 'pid-1',
@@ -197,7 +184,7 @@ describe('Room (S9 wiring)', () => {
   })
 
   it('enables the reveal control once a vote is cast', () => {
-    renderRoomAs('pid-1') // the host
+    renderRoomAs('pid-1')
     connect(
       makeRoom({
         host_id: 'pid-1',
@@ -248,9 +235,6 @@ describe('Room (S9 wiring)', () => {
       }),
     )
 
-    // Cards view (default): the deck stays as the permanent bottom row (spec
-    // §Voting cards) but is locked — every card disabled post-reveal. Results
-    // are NOT rendered here; they live in the stats view now (S18).
     expect(
       screen.getByRole('region', { name: 'Your vote' }),
     ).toBeInTheDocument()
@@ -261,18 +245,13 @@ describe('Room (S9 wiring)', () => {
       screen.queryByRole('heading', { name: 'Results' }),
     ).not.toBeInTheDocument()
 
-    // Switching to the stats view surfaces the Results dashboard (S18).
     await user.click(screen.getByRole('tab', { name: 'Graph view' }))
     expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument()
   })
 
-  // The S8 tripwire, automated at the Room level: a PRE-REVEAL reset
-  // (has_voted true->false while revealed stays false) is the one path where
-  // VoteDeck's edge-detection, not a layout unmount, clears the local
-  // highlight. The deck must stay mounted AND the highlight must clear.
   it('clears the vote highlight on a pre-reveal reset while keeping the deck mounted', async () => {
     const user = userEvent.setup()
-    renderRoomAs('pid-2') // a non-host voter
+    renderRoomAs('pid-2')
 
     const bobUnvoted = makeParticipant({
       id: 'pid-2',
@@ -281,7 +260,6 @@ describe('Room (S9 wiring)', () => {
     })
     const base = {
       host_id: 'pid-1' as const,
-      // A subject is set so voting is enabled (empty subject locks the deck).
       current_item: 'Estimate the login page',
       revealed: false,
       participants: [
@@ -291,12 +269,10 @@ describe('Room (S9 wiring)', () => {
     }
     connect(makeRoom(base))
 
-    // Pick a card — the highlight is local (aria-pressed).
     const five = screen.getByRole('button', { name: '5' })
     await user.click(five)
     expect(five).toHaveAttribute('aria-pressed', 'true')
 
-    // The vote registers (has_voted false->true): the highlight persists.
     connect(
       makeRoom({
         ...base,
@@ -311,8 +287,6 @@ describe('Room (S9 wiring)', () => {
       'true',
     )
 
-    // Host resets WITHOUT revealing (has_voted true->false, revealed stays
-    // false): the highlight must clear and the deck must remain.
     connect(makeRoom(base))
 
     expect(
@@ -325,8 +299,6 @@ describe('Room (S9 wiring)', () => {
       )
     }
   })
-
-  // --- Removal (FR-21/D-47): the host's wiring, and what the removed person sees.
 
   it('wires both room-control actions into the roster', async () => {
     const user = userEvent.setup()
@@ -345,10 +317,6 @@ describe('Room (S9 wiring)', () => {
     await user.click(screen.getByRole('button', { name: 'Remove from room' }))
     await user.click(screen.getByRole('button', { name: 'Confirm removal' }))
 
-    // The frame reaches the socket with the target id and no actor id. Asserted here
-    // rather than only in the panel's own tests, because the callback Room passes is
-    // what turns a press into a frame — a panel wired to the wrong prop would pass
-    // every ParticipantsMenu test and do nothing here.
     const sent = lastSocket().sent.map((raw) => JSON.parse(raw))
     expect(sent).toContainEqual({
       type: 'remove_participant',
@@ -376,9 +344,6 @@ describe('Room (S9 wiring)', () => {
       })
     })
 
-    // Its own terminal screen, not the JoinPrompt a stale id gets: a removal is a
-    // thing that happened to someone, and a rejoin form neither says so nor is the
-    // right default (though nothing stops them — removal is not a ban, D-15).
     expect(
       screen.getByText('The host removed you from this room'),
     ).toBeInTheDocument()
@@ -388,7 +353,6 @@ describe('Room (S9 wiring)', () => {
     expect(
       screen.queryByRole('heading', { name: `Join room ${CODE}` }),
     ).not.toBeInTheDocument()
-    // And distinct from the swept-room copy, which would be the wrong explanation.
     expect(screen.queryByText('This room no longer exists.')).toBeNull()
   })
 
@@ -416,8 +380,6 @@ describe('Room (S9 wiring)', () => {
       })
     })
 
-    // The last snapshot this client holds still shows them in the room, so rendering
-    // it alongside the notice would offer a live deck for a room they are out of.
     expect(
       screen.queryByRole('region', { name: 'Your vote' }),
     ).not.toBeInTheDocument()
@@ -438,8 +400,6 @@ describe('Room (S9 wiring)', () => {
       }),
     )
 
-    // Bob's removal reaches Carol as an ordinary snapshot — the notice goes to the
-    // removed socket alone, so a bystander must see membership change and nothing else.
     connect(
       makeRoom({
         host_id: 'pid-1',
@@ -457,11 +417,9 @@ describe('Room (S9 wiring)', () => {
     expect(screen.queryByText(/removed you/)).toBeNull()
   })
 
-  // --- Host-chosen card values (FR-22/D-48): the deck comes off the snapshot.
-
   it("votes with the room's deck, not the client-side default", async () => {
     const user = userEvent.setup()
-    renderRoomAs('pid-2') // a non-host voter
+    renderRoomAs('pid-2')
     connect(
       makeRoom({
         host_id: 'pid-1',
@@ -483,14 +441,10 @@ describe('Room (S9 wiring)', () => {
       '12',
       '16',
     ])
-    // 13 and 21 are Fibonacci cards this room does not hold: nothing renders the
-    // constant any more, so they are simply not offered.
     for (const absent of ['13', '21']) {
       expect(deck.queryByRole('button', { name: absent })).toBeNull()
     }
 
-    // And a card off that deck reaches the socket as the string the room holds,
-    // so `invalid_card` stays unreachable from the UI.
     await user.click(deck.getByRole('button', { name: '12' }))
     expect(JSON.parse(lastSocket().sent.at(-1)!)).toEqual({
       type: 'cast_vote',

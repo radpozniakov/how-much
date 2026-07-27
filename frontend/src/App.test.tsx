@@ -4,10 +4,6 @@ import { MemoryRouter } from 'react-router'
 import App from './App'
 import { clearSession } from './lib/session'
 
-// Routing behavior, previously guarded by lib/router.test.ts's matchRoom cases,
-// now lives in App's route table + the RoomRoute adapter (D-37). With no
-// persisted session, /room/:code mounts Room → JoinPrompt (a plain form, no
-// socket), whose "Join room {code}" heading proves the code was extracted.
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>

@@ -1,8 +1,8 @@
-"""Unit tests for the WebSocket ConnectionManager (S6a).
+"""Unit tests for the WebSocket ConnectionManager.
 
-No async pytest plugin is installed, so the manager's async methods are driven
-with ``asyncio.run``. The manager holds no loop-bound state, so a fresh loop per
-call is fine. Fake sockets stand in for real WebSockets.
+No async pytest plugin is installed, so async methods are driven with
+``asyncio.run``; the manager holds no loop-bound state, so a fresh loop per call is
+fine. Fake sockets stand in for real WebSockets.
 """
 
 import asyncio
@@ -52,21 +52,19 @@ def test_unregister_live_socket_returns_true_and_drops_empty_map():
     a = FakeSocket()
     asyncio.run(m.register("R", "a", a))
     assert m.unregister("R", "a", a) is True
-    assert m.has_room("R") is False  # empty per-room map cleaned up
+    assert m.has_room("R") is False
 
 
 def test_unregister_stale_socket_is_noop_returns_false():
     m = ConnectionManager()
     a, b = FakeSocket(), FakeSocket()
     asyncio.run(m.register("R", "p", a))
-    asyncio.run(m.register("R", "p", b))  # b supersedes a
+    asyncio.run(m.register("R", "p", b))
     assert a.closed is True
-    # a is no longer the stored socket -> its unregister must be a no-op / False,
-    # so the disconnect handler for a will skip the domain leave (MF1 guard).
     assert m.unregister("R", "p", a) is False
     asyncio.run(m.broadcast("R", {"k": 1}))
-    assert b.sent == [{"k": 1}]  # b still registered
-    assert m.unregister("R", "p", b) is True  # the live socket removes cleanly
+    assert b.sent == [{"k": 1}]
+    assert m.unregister("R", "p", b) is True
 
 
 def test_duplicate_register_closes_and_replaces_old():
@@ -77,7 +75,7 @@ def test_duplicate_register_closes_and_replaces_old():
     assert a.closed is True
     asyncio.run(m.broadcast("R", {"z": 9}))
     assert b.sent == [{"z": 9}]
-    assert a.sent == []  # a received nothing after being replaced
+    assert a.sent == []
 
 
 def test_dead_socket_skipped_without_aborting_fanout():
@@ -86,19 +84,14 @@ def test_dead_socket_skipped_without_aborting_fanout():
     asyncio.run(m.register("R", "d", dead))
     asyncio.run(m.register("R", "g", good))
     asyncio.run(m.broadcast("R", {"ok": 1}))
-    assert good.sent == [{"ok": 1}]  # a broken socket didn't abort the fan-out
-    # broadcast does not remove sockets — the handler's finally owns removal, so
-    # the identity-checked unregister still reports True and the domain leave runs.
+    assert good.sent == [{"ok": 1}]
     assert m.has_room("R") is True
 
 
 def test_broadcast_unknown_room_is_noop():
     m = ConnectionManager()
-    asyncio.run(m.broadcast("NOPE", {"x": 1}))  # no room, no error
+    asyncio.run(m.broadcast("NOPE", {"x": 1}))
     assert m.has_room("NOPE") is False
-
-
-# --- detach: removing a participant's socket, whichever one it is (FR-21/D-47) ---
 
 
 def test_detach_returns_the_socket_and_takes_it_out_of_the_fanout():
@@ -110,13 +103,12 @@ def test_detach_returns_the_socket_and_takes_it_out_of_the_fanout():
     assert m.detach("R", "a") is a
     asyncio.run(m.broadcast("R", {"n": 1}))
 
-    assert a.sent == []  # detached before the fan-out, so it saw nothing
-    assert b.sent == [{"n": 1}]  # everyone else is untouched
+    assert a.sent == []
+    assert b.sent == [{"n": 1}]
 
 
 def test_detach_does_not_close_the_socket_it_returns():
-    """Deliberately synchronous and transport-only: the caller decides what to say on
-    the way out (a removal notice, in apply_and_evict's case)."""
+    """Synchronous and transport-only: the caller decides what to say on the way out."""
     m = ConnectionManager()
     a = FakeSocket()
     asyncio.run(m.register("R", "a", a))
@@ -133,22 +125,20 @@ def test_detach_drops_the_empty_per_room_map():
 
     m.detach("R", "a")
 
-    assert m.has_room("R") is False  # same cleanup unregister does
+    assert m.has_room("R") is False
 
 
 def test_detach_is_identity_blind_unlike_unregister():
-    """The one behavioral difference, and the reason both exist. ``unregister`` is a
-    handler retiring its OWN socket and must not touch a newer one; ``detach`` is a
-    host removing a participant, where whichever socket represents them right now is
-    the one that has to go — including a second one opened by the `attach`
-    impersonation this phase accepts as a known limitation."""
+    """The one behavioural difference, and why both exist: ``unregister`` is a handler
+    retiring its OWN socket and must not touch a newer one, while ``detach`` must cut
+    whichever socket represents the target right now."""
     m = ConnectionManager()
     old, new = FakeSocket(), FakeSocket()
     asyncio.run(m.register("R", "p", old))
-    asyncio.run(m.register("R", "p", new))  # new supersedes old
+    asyncio.run(m.register("R", "p", new))
 
-    assert m.unregister("R", "p", old) is False  # identity check refuses
-    assert m.detach("R", "p") is new  # detach takes the live one regardless
+    assert m.unregister("R", "p", old) is False
+    assert m.detach("R", "p") is new
 
 
 def test_detach_after_detach_returns_none():
@@ -162,12 +152,12 @@ def test_detach_after_detach_returns_none():
 
 
 def test_detach_unknown_participant_or_room_returns_none():
-    """A member who joined over HTTP and never attached a socket is a legitimate
-    state, not an error — the host must still be able to remove them."""
+    """A member who joined over HTTP and never attached is legitimate, not an error —
+    the host must still be able to remove them."""
     m = ConnectionManager()
     a = FakeSocket()
     asyncio.run(m.register("R", "a", a))
 
     assert m.detach("R", "never-attached") is None
     assert m.detach("NOPE", "a") is None
-    assert m.has_room("R") is True  # and nothing else was disturbed
+    assert m.has_room("R") is True

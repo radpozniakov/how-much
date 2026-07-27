@@ -1,17 +1,14 @@
 """Domain tests for host-initiated removal: Room.remove_participant_by_host
 (FR-21/D-47).
 
-Its own file for the same reason test_handover_domain.py is:
-test_participants_domain.py covers membership as a *property* of joining (capacity,
-non-unique names), and test_lifecycle_domain.py is explicitly the leave-driven path,
-where the departing participant is the actor. This is neither — it is an authority
-action that happens to produce a leave, so its interesting assertions are about the
-guards and about what the delegate does *not* do.
+Its own file for the same reason test_handover_domain.py is: this is an authority
+action that happens to produce a leave, so the assertions are about the guards and
+about what the delegate does *not* do.
 
-Naming: every test says **removal** and every actor variable is named for its role,
-because the one thing these tests exist to distinguish is host-initiated removal
-from the self-service leave that shares its effect. The two are one method apart and
-the failure mode is a test that would pass against either.
+Every test says **removal** and every actor is named for its role, because these
+tests exist to distinguish this from the self-service leave that shares its effect.
+The two are one method apart, and the failure mode is a test that passes against
+either.
 """
 
 import pytest
@@ -50,8 +47,7 @@ def test_removal_drops_the_targets_vote():
 
 
 def test_removal_leaves_everyone_else_untouched():
-    """A removal is targeted, not a purge — pins that the delegate is called with the
-    target and not, say, the actor."""
+    """Targeted, not a purge: pins that the delegate gets the target, not the actor."""
     room, (host, alice, bob) = _room_with("Host", "Alice", "Bob")
     room.cast_vote(alice, "3")
     room.cast_vote(bob, "8")
@@ -63,9 +59,8 @@ def test_removal_leaves_everyone_else_untouched():
 
 
 def test_removal_rejects_non_host():
-    """Authorization is the domain's, never the client's (S23 constraint 1). The
-    membership assertion is the load-bearing half: a raise alone would also pass if
-    the participant had been dropped first and the guard checked after."""
+    """The membership assertion is the load-bearing half: a raise alone would also
+    pass if the participant were dropped first and the guard checked after."""
     room, (host, alice, bob) = _room_with("Host", "Alice", "Bob")
 
     with pytest.raises(NotHost):
@@ -75,8 +70,7 @@ def test_removal_rejects_non_host():
 
 
 def test_removal_rejects_a_stranger_as_actor():
-    """`_require_host` doubles as membership enforcement, so someone not in the room
-    at all cannot remove anyone — asserted rather than inferred from the guard."""
+    """`_require_host` doubles as membership enforcement — asserted, not inferred."""
     room, (host, alice) = _room_with("Host", "Alice")
 
     with pytest.raises(NotHost):
@@ -86,8 +80,8 @@ def test_removal_rejects_a_stranger_as_actor():
 
 
 def test_removal_rejects_self_target():
-    """Constraint 3, and the reason the delegate's auto-transfer branch is dead: the
-    only participant who could be the host is the one id this rejects."""
+    """Also why the delegate's auto-transfer branch is dead: the only participant who
+    could be the host is the one id this rejects."""
     room, (host, alice) = _room_with("Host", "Alice")
 
     with pytest.raises(CannotTargetSelf):
@@ -98,11 +92,9 @@ def test_removal_rejects_self_target():
 
 
 def test_self_target_message_describes_removal_not_handover():
-    """The whole reason CannotTargetSelf exists rather than reusing
-    UnknownParticipant is that a message which does not describe the action is a
-    defect. Two callers now share the class, so this asserts the message is the
-    caller's — a shared "you cannot target yourself" would pass the type check above
-    and quietly reintroduce exactly what the split was for."""
+    """CannotTargetSelf exists because a message that does not describe the action is
+    a defect. Two callers share the class, so this asserts the message is the
+    caller's — a shared wording would pass the type check above and undo the split."""
     room, (host, _alice) = _room_with("Host", "Alice")
 
     with pytest.raises(CannotTargetSelf, match="remove yourself"):
@@ -120,9 +112,8 @@ def test_removal_rejects_unknown_target():
 
 
 def test_removal_never_moves_the_host_role():
-    """The delegate's D-13 auto-transfer is unreachable from here, and this asserts
-    it over the case most likely to trip it: removing the *oldest* participant, who
-    is the very one that branch would promote."""
+    """Asserts the delegate's D-13 auto-transfer is unreachable, over the case most
+    likely to trip it: removing the *oldest* participant, whom that branch promotes."""
     room, (host, alice, bob) = _room_with("Host", "Alice", "Bob")
 
     room.remove_participant_by_host(host, alice)
@@ -131,9 +122,8 @@ def test_removal_never_moves_the_host_role():
 
 
 def test_removal_preserves_an_opted_out_hosts_choice():
-    """The mirror of the handover's host_voting reset, and the reason it is *not*
-    reset here: the role has not moved, so there is no incoming host with an
-    inherited opt-out to protect. The facilitator stays a facilitator."""
+    """The mirror of the handover's host_voting reset, and why it is *not* reset
+    here: the role has not moved, so there is no incoming host to protect."""
     room, (host, alice, bob) = _room_with("Host", "Alice", "Bob")
     room.set_host_voting(host, False)
 
@@ -144,8 +134,8 @@ def test_removal_preserves_an_opted_out_hosts_choice():
 
 
 def test_removal_cannot_empty_the_room():
-    """Why this needs no empty_since stamp and can stay out of store.leave: the actor
-    is a member, so at least one participant always remains."""
+    """Why this needs no empty_since stamp: the actor is a member, so at least one
+    participant always remains."""
     room, (host, alice) = _room_with("Host", "Alice")
 
     room.remove_participant_by_host(host, alice)
@@ -155,8 +145,8 @@ def test_removal_cannot_empty_the_room():
 
 
 def test_removal_frees_capacity():
-    """The room-full path is FR-5's, but a removal has to actually give the seat
-    back — otherwise "remove someone to make room" silently does not work."""
+    """A removal must give the seat back, or "remove someone to make room" silently
+    does not work (FR-5)."""
     room = Room(code="ROOM01")
     ids = [room.add_participant(f"P{i}").id for i in range(30)]
     host = ids[0]
@@ -169,10 +159,9 @@ def test_removal_frees_capacity():
 
 
 def test_removal_legal_after_reveal_and_rewrites_the_round():
-    """Not locked by RoundRevealed, and — unlike the handover — it genuinely does
-    change the results. That is the point: this is the leave path's documented
-    post-reveal behavior reached by a deliberate trigger, so it must not be blocked
-    *and* must not be quietly neutered into leaving the vote behind."""
+    """Not locked by RoundRevealed, and — unlike the handover — it genuinely changes
+    the results. That is the point: the leave path's post-reveal behaviour reached by
+    a deliberate trigger, so it must neither be blocked nor leave the vote behind."""
     room, (host, alice, bob) = _room_with("Host", "Alice", "Bob")
     room.cast_vote(host, "5")
     room.cast_vote(alice, "5")
@@ -185,9 +174,6 @@ def test_removal_legal_after_reveal_and_rewrites_the_round():
     after = room.results()
     assert bob not in after.votes
     assert after.average == 5
-    # Removing the dissenter flips the round to consensus. Asserted rather than
-    # tolerated: it is the same rewrite test_leave_mid_reveal_flips_consensus pins
-    # for a leave, and pinning it here says the two triggers agree.
     assert after.consensus is True
     assert room.revealed is True
 
@@ -218,16 +204,14 @@ def test_removal_is_repeatable_down_to_the_host_alone():
 
     assert list(room.participants) == [host]
 
-    # And then has nobody left to remove — the self-guard is the floor.
     with pytest.raises(CannotTargetSelf):
         room.remove_participant_by_host(host, host)
 
 
 def test_removed_participant_can_rejoin_immediately():
-    """Removal is not a ban (D-15): with no accounts there is nothing to ban, so the
-    room code still works and a rejoin is a fresh participant with a new id. Pinned
-    as the *decided* v0.1 behavior — out of scope per doc/02, not an oversight — so
-    that a later reader finds a decision here rather than a gap."""
+    """Removal is not a ban (D-15): the code still works and a rejoin is a fresh
+    participant. Pinned as decided behaviour so a later reader finds a decision here
+    rather than a gap."""
     room, (host, alice) = _room_with("Host", "Alice")
 
     room.remove_participant_by_host(host, alice)
@@ -239,7 +223,7 @@ def test_removed_participant_can_rejoin_immediately():
 
 def test_removal_then_handover_hands_over_the_smaller_room():
     """The two room-control actions compose: FR-21 does not disturb FR-20's
-    invariants, and a host who wants out still hands over rather than self-removing."""
+    invariants."""
     room, (host, alice, bob) = _room_with("Host", "Alice", "Bob")
 
     room.remove_participant_by_host(host, alice)
@@ -247,6 +231,5 @@ def test_removal_then_handover_hands_over_the_smaller_room():
 
     assert room.host_id == bob
     assert set(room.participants) == {host, bob}
-    # The ex-host is now an ordinary participant — and therefore removable.
     room.remove_participant_by_host(bob, host)
     assert list(room.participants) == [bob]

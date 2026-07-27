@@ -1,24 +1,18 @@
 """The WebSocket message envelope (S6).
 
-Every frame is a flat ``{"type": ..., ...payload}`` object. This module defines
-the two server->client frames (``room_state`` and ``error``), the inbound
-handshake frames (``join`` / ``attach``), and the round-action frames
-(``set_item`` / ``set_name`` / ``cast_vote`` / ``set_host_voting`` /
-``transfer_host`` / ``remove_participant`` / ``reveal`` / ``reset``), plus parsers
-that turn a raw decoded object into a validated frame.
+Every frame is a flat ``{"type": ..., ...payload}`` object: two server->client
+frames (``room_state``, ``error``), the handshake frames (``join`` / ``attach``),
+the eight round-action frames, and the parsers that validate them.
 
-The handshake and round phases have **separate** frame registries: the first
-frame on a socket must be a handshake frame, and every frame after it must be a
-round frame. A handshake frame arriving mid-session (or vice versa) is therefore
-an unrecognised frame for that phase and rejected with :class:`BadFrame`.
+Handshake and round phases have **separate** registries — the first frame must be
+a handshake frame, every later one a round frame — so a frame from the wrong phase
+is unrecognised and rejected with :class:`BadFrame`.
 
-Round frames deliberately carry **no** ``participant_id``: the socket already
-established the caller's identity at handshake, so the handler attributes the
-action to the connection rather than trusting a client-supplied id (no spoofing).
+Round frames deliberately carry **no** ``participant_id``: the socket established
+the caller's identity at handshake, so no client-supplied id is trusted.
 
-The outbound ``room_state`` reuses the exact ``RoomView`` the HTTP layer emits
-(D-36), so the FR-10 pre-reveal gate is inherited: no card value appears before
-the host reveals, regardless of transport.
+``room_state`` reuses the ``RoomView`` the HTTP layer emits (D-36), inheriting the
+FR-10 pre-reveal gate on both transports.
 """
 
 from __future__ import annotations
@@ -44,9 +38,7 @@ from app.rooms.views import room_view
 class BadFrame(Exception):
     """A client frame could not be parsed or was not a recognised type.
 
-    Transport-level (not a domain ``RoomError``): it means the *envelope* was
-    malformed, so the handler answers with an ``error`` frame rather than a
-    domain status."""
+    Transport-level, not a domain ``RoomError``: the *envelope* was malformed."""
 
 
 def room_state_frame(room: Room) -> dict[str, Any]:
@@ -60,10 +52,6 @@ def error_frame(reason: str, message: str) -> dict[str, Any]:
     return {"type": "error", "reason": reason, "message": message}
 
 
-# Stable WS reason slug per domain error — the socket's counterpart to the
-# HTTP ``_ROOM_ERROR_STATUS`` map in :mod:`app.main`. Round actions can only raise
-# the six below; anything unmapped is a bug, surfaced as the defensive
-# ``internal`` slug (kept distinct from the frame ``type: "error"``).
 _ERROR_REASONS: dict[type[RoomError], str] = {
     NotHost: "not_host",
     InvalidCard: "invalid_card",
@@ -79,31 +67,19 @@ def room_error_reason(exc: RoomError) -> str:
     return _ERROR_REASONS.get(type(exc), "internal")
 
 
-# The one ``error`` frame that is nobody's rejection (FR-21/D-47). Every other slug
-# above answers a frame the recipient sent; this one is *unsolicited* — it tells a
-# participant why the socket they are about to lose is going away. It therefore has
-# no domain error to map from and cannot appear in ``_ERROR_REASONS``.
-#
-# It also occupies a category the client did not previously have: an error that
-# arrives mid-session (so the socket already has a snapshot) and is nonetheless
-# terminal. Handshake rejections are terminal because no snapshot ever arrived;
-# round rejections are non-terminal because the socket stays open. This is neither,
-# which is why the frontend's ``roomSocket`` has to name the slug explicitly rather
-# than infer terminality from the connection phase.
 REMOVED_REASON = "removed"
 REMOVED_MESSAGE = "The host removed you from this room"
 
 
 def removed_frame() -> dict[str, Any]:
-    """The notice sent to a removed participant, immediately before their socket is
-    closed (FR-21/D-47). Wording lives here, beside the slug it travels with; S22
-    owns the final copy and can change it without touching the protocol."""
+    """The notice sent to a removed participant just before their socket closes
+    (FR-21/D-47). Wording lives beside the slug it travels with."""
     return error_frame(REMOVED_REASON, REMOVED_MESSAGE)
 
 
 class JoinFrame(BaseModel):
-    """A new participant joining over the socket. Carries only a display name
-    (no auth, D-9); trimmed and bounded exactly like the HTTP ``JoinRequest``."""
+    """A new participant joining over the socket: a display name, no auth (D-9).
+    Trimmed and bounded exactly like the HTTP ``JoinRequest``."""
 
     type: Literal["join"]
     name: str
@@ -122,9 +98,8 @@ class JoinFrame(BaseModel):
 
 
 class AttachFrame(BaseModel):
-    """An already-known participant attaching a socket — the creator (who joined
-    over HTTP create) or anyone who joined over HTTP. Membership is verified by
-    the handler against the room."""
+    """An already-known participant attaching a socket after an HTTP create or
+    join. The handler verifies membership against the room."""
 
     type: Literal["attach"]
     participant_id: str
@@ -136,11 +111,8 @@ HandshakeFrame = JoinFrame | AttachFrame
 class SetItemFrame(BaseModel):
     """Set or clear the current item's topic (host-only in the domain, FR-8).
 
-    Bounds the topic length at the transport boundary, because ``Room.set_item``
-    only trims — without this a socket could set an unbounded topic. This used to
-    be described as parity with the HTTP ``SetItemRequest``; that model is gone
-    with D-50, so the bound is no longer a mirror of anything and is simply the
-    boundary's own rule. ``None`` or blank clears the topic."""
+    Bounds the length here because ``Room.set_item`` only trims. ``None`` or blank
+    clears the topic."""
 
     type: Literal["set_item"]
     topic: str | None = None
@@ -158,9 +130,8 @@ class SetItemFrame(BaseModel):
 class SetNameFrame(BaseModel):
     """Change the caller's own display name (self-service, not host-gated).
 
-    Trimmed and bounded exactly like the handshake ``JoinFrame`` — ``Room.set_name``
-    trusts the passed name, so without this a socket could set an unbounded/blank
-    name the join path would reject (join/rename parity)."""
+    Trimmed and bounded exactly like ``JoinFrame`` — ``Room.set_name`` trusts the
+    name it is given, so this is where join/rename parity is enforced."""
 
     type: Literal["set_name"]
     name: str
@@ -179,8 +150,8 @@ class SetNameFrame(BaseModel):
 
 
 class CastVoteFrame(BaseModel):
-    """Cast or change the caller's vote. The card is validated against the deck
-    in the domain (``Room.cast_vote``), which raises ``InvalidCard`` (FR-9)."""
+    """Cast or change the caller's vote. ``Room.cast_vote`` validates the card
+    against the deck and raises ``InvalidCard`` (FR-9)."""
 
     type: Literal["cast_vote"]
     card: str
@@ -196,16 +167,11 @@ class SetHostVotingFrame(BaseModel):
 class TransferHostFrame(BaseModel):
     """Hand the host role to another participant (host-only, FR-20/D-45).
 
-    The field is ``target_id``, **not** ``participant_id`` — deliberately. Every
-    round frame pointedly omits an actor id so a client cannot attribute an action
-    to someone else; a field literally named ``participant_id`` here would sit one
-    typo away from being read as that actor id by the next person to touch this
-    file. The name says which end of the action it is.
+    ``target_id``, **not** ``participant_id``: round frames omit an actor id, and a
+    field by that name would sit one typo away from being read as one.
 
-    No length or format validator, unlike ``topic``/``name``: those are values the
-    domain trusts, so the frame is their only bound. This one is matched against
-    ``room.participants`` in ``Room.transfer_host``, which is a stricter check than
-    any transport-boundary bound could express.
+    No validator, unlike ``topic``/``name``: ``Room.transfer_host`` matches it
+    against ``room.participants``, a stricter check than any bound here.
     """
 
     type: Literal["transfer_host"]
@@ -215,15 +181,10 @@ class TransferHostFrame(BaseModel):
 class RemoveParticipantFrame(BaseModel):
     """Remove another participant from the room (host-only, FR-21/D-47).
 
-    ``target_id`` for the same reason ``TransferHostFrame`` uses it: an actor id is
-    what every round frame pointedly omits, so the field name has to say which end
-    of the action it is. The two frames are deliberately the same shape — they are
-    the room-control pair, host-on-participant rather than host-on-round.
-
-    The one way it is *not* like its sibling: this frame's effect on the transport
-    exceeds a broadcast, because the removed participant's own socket has to go. So
-    it is the one round frame ``ws._apply_round`` does not dispatch — see the
-    ``apply_and_evict`` seam in ``connection.py``.
+    Deliberately the same shape as ``TransferHostFrame``, its room-control sibling,
+    and ``target_id`` for the same reason. Unlike that one, its transport effect
+    exceeds a broadcast — the target's socket has to go — so it is the one round
+    frame ``ws._apply_round`` does not dispatch; see ``apply_and_evict``.
     """
 
     type: Literal["remove_participant"]

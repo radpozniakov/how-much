@@ -1,4 +1,4 @@
-"""Domain-level tests for room identity and the in-memory store."""
+"""Domain tests for room identity and the in-memory store."""
 
 from app.rooms.models import CODE_ALPHABET, Room, generate_code, generate_id
 from app.rooms.store import RoomStore
@@ -11,7 +11,6 @@ def test_generate_code_length_and_alphabet():
 
 
 def test_code_alphabet_excludes_ambiguous_characters():
-    # Guards the join-friction promise in D-29.
     for ambiguous in "01OIL":
         assert ambiguous not in CODE_ALPHABET
 
@@ -19,7 +18,7 @@ def test_code_alphabet_excludes_ambiguous_characters():
 def test_generate_id_is_32_char_hex():
     room_id = generate_id()
     assert len(room_id) == 32
-    int(room_id, 16)  # raises ValueError if not hex
+    int(room_id, 16)
 
 
 def test_ids_are_unique():

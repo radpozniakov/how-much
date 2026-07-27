@@ -5,9 +5,6 @@ import { FIBONACCI_DECK } from '../../lib/deck'
 
 const card = (name: string) => screen.getByRole('button', { name })
 
-// The deck is a prop since V4 (FR-22/D-48), so every case has to supply one.
-// Most of these are about the deck's *behavior* rather than its values, so they
-// use the default; the host-chosen cases below name their own.
 const DEFAULT_DECK = [...FIBONACCI_DECK]
 
 describe('VoteDeck', () => {
@@ -94,15 +91,12 @@ describe('VoteDeck', () => {
     }
     const { rerender } = render(<VoteDeck {...props} hasVoted={false} />)
     fireEvent.click(card('5'))
-    // A reveal then reset flips my has_voted true, then false.
     rerender(<VoteDeck {...props} hasVoted={true} />)
     rerender(<VoteDeck {...props} hasVoted={false} />)
     expect(card('5')).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('keeps the highlight across a snapshot still showing has_voted:false', () => {
-    // Guards the click->echo race: between the click and the returning snapshot
-    // the snapshot still says has_voted:false — the highlight must NOT clear.
     const props = {
       deck: DEFAULT_DECK,
       hasVoted: false,
@@ -114,8 +108,6 @@ describe('VoteDeck', () => {
     rerender(<VoteDeck {...props} />)
     expect(card('2')).toHaveAttribute('aria-pressed', 'true')
   })
-
-  // --- host-chosen decks (FR-22/D-48) ---------------------------------------
 
   it('renders a host-chosen deck and nothing from the default', () => {
     render(
@@ -129,8 +121,6 @@ describe('VoteDeck', () => {
     for (const value of ['1', '2', '4', '8', '12', '16']) {
       expect(card(value)).toBeInTheDocument()
     }
-    // 13 and 21 are Fibonacci cards this room does not hold. Their absence is the
-    // point: the component renders the room's deck, not a client-side constant.
     expect(screen.queryByRole('button', { name: '13' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '21' })).not.toBeInTheDocument()
   })
@@ -152,8 +142,6 @@ describe('VoteDeck', () => {
   })
 
   it('votes a decimal card verbatim', () => {
-    // The card travels as the string the deck holds — no numeric round-trip on
-    // this side, which is what keeps consensus (a string comparison) exact.
     const onVote = vi.fn()
     render(
       <VoteDeck

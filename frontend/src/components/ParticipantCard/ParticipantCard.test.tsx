@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { ParticipantCard } from './ParticipantCard'
 
-// The card component renders an <li>; wrap in a <ul> for valid DOM.
 function renderCard(props: Parameters<typeof ParticipantCard>[0]) {
   return render(
     <ul>

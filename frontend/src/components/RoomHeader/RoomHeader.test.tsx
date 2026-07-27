@@ -43,15 +43,9 @@ describe('RoomHeader', () => {
         participantsMenu: <button type="button">Make host</button>,
       })
 
-      // Focus must start INSIDE the control. Driving this from an already-`body`
-      // state would pass against an implementation that does nothing at all.
       await user.click(screen.getByRole('button', { name: 'Make host' }))
       expect(screen.getByRole('button', { name: 'Make host' })).toHaveFocus()
 
-      // A successful handover unmounts the whole host-only control, including the
-      // button just activated. Removing a focused element fires no blur, so without
-      // recovery focus falls silently to document.body and a keyboard user is
-      // stranded at the document root.
       rerender(
         <RoomHeader
           code="ABCDEF"
@@ -66,8 +60,6 @@ describe('RoomHeader', () => {
     })
 
     it('keeps the control mounted while the name is being edited', async () => {
-      // The trailing group swaps the name button for an input in edit mode; the
-      // slot sits outside that ternary and must survive the swap.
       const user = userEvent.setup()
       renderHeader({ participantsMenu: <span data-testid="slot">roster</span> })
 
@@ -81,8 +73,6 @@ describe('RoomHeader', () => {
   })
 
   it('copies the shareable room link on the copy button', async () => {
-    // userEvent.setup() installs a jsdom clipboard; spy on it to capture the
-    // link the component writes.
     const user = userEvent.setup()
     const writeText = vi
       .spyOn(navigator.clipboard, 'writeText')
@@ -128,7 +118,6 @@ describe('RoomHeader', () => {
       await user.type(input, '  Alicia  {Enter}')
 
       expect(onRename).toHaveBeenCalledExactlyOnceWith('Alicia')
-      // Back to display mode (the input is gone).
       expect(
         screen.queryByRole('textbox', { name: 'Your display name' }),
       ).not.toBeInTheDocument()
@@ -143,7 +132,7 @@ describe('RoomHeader', () => {
       const input = screen.getByRole('textbox', { name: 'Your display name' })
       await user.clear(input)
       await user.type(input, 'Bob')
-      await user.tab() // blur
+      await user.tab()
 
       expect(onRename).toHaveBeenCalledExactlyOnceWith('Bob')
     })
@@ -159,7 +148,6 @@ describe('RoomHeader', () => {
       await user.type(input, 'Zzz{Escape}')
 
       expect(onRename).not.toHaveBeenCalled()
-      // Display mode restored, still showing the original name.
       expect(screen.getByRole('button', { name: 'Alice' })).toBeInTheDocument()
     })
 
@@ -170,7 +158,7 @@ describe('RoomHeader', () => {
 
       await user.click(screen.getByRole('button', { name: 'Alice' }))
       const input = screen.getByRole('textbox', { name: 'Your display name' })
-      await user.type(input, '{Enter}') // committed as-is
+      await user.type(input, '{Enter}')
 
       expect(onRename).not.toHaveBeenCalled()
     })

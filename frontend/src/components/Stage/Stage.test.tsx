@@ -61,8 +61,6 @@ describe('Stage', () => {
     expect(screen.queryByText('0/2')).not.toBeInTheDocument()
   })
 
-  // ── Host inline topic editor (merged from the former Topic component) ──
-
   it('gives the host an editable title seeded from the current item', () => {
     render(
       <Stage
@@ -171,7 +169,6 @@ describe('Stage', () => {
         />,
       )
       const input = screen.getByRole('textbox', { name: /topic/i })
-      // Type without blurring — focus stays in the editor.
       fireEvent.change(input, { target: { value: 'Autosaved topic' } })
       expect(onSetTopic).not.toHaveBeenCalled()
 
@@ -200,10 +197,8 @@ describe('Stage', () => {
         />,
       )
       const input = screen.getByRole('textbox', { name: /topic/i })
-      // Focus so the handler's .blur() actually dispatches a blur event.
       input.focus()
       fireEvent.change(input, { target: { value: 'Original edits' } })
-      // Escape blurs the editor, which reverts and clears the pending autosave.
       fireEvent.keyDown(input, { key: 'Escape' })
 
       vi.advanceTimersByTime(500)
@@ -298,7 +293,6 @@ describe('Stage', () => {
     const input = screen.getByRole('textbox', { name: /topic/i })
     await user.type(input, 'abc')
 
-    // The server echoes the submitted topic back as the new currentItem.
     rerender(
       <Stage
         currentItem="abc"
@@ -310,7 +304,6 @@ describe('Stage', () => {
     )
     expect(input).toHaveValue('abc')
 
-    // Post-echo typing is not stomped by a stale resync.
     await user.type(input, 'def')
     expect(input).toHaveValue('abcdef')
   })

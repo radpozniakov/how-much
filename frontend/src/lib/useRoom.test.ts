@@ -24,7 +24,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  clearSession() // sessionStorage is shared across tests in this file
+  clearSession()
 })
 
 describe('useRoom', () => {
@@ -115,8 +115,6 @@ describe('useRoom', () => {
       result.current.transferHost('p2')
     })
     const sent = lastSocket().sent.map((s) => JSON.parse(s))
-    // target_id, and deliberately no actor id — the server attributes the handover
-    // to this socket's handshake identity (D-45).
     expect(sent).toContainEqual({ type: 'transfer_host', target_id: 'p2' })
   })
 
@@ -139,8 +137,6 @@ describe('useRoom', () => {
       result.current.removeParticipant('p2')
     })
     const sent = lastSocket().sent.map((s) => JSON.parse(s))
-    // target_id, and deliberately no actor id — the server attributes the removal to
-    // this socket's handshake identity (D-47), exactly as for the handover.
     expect(sent).toContainEqual({ type: 'remove_participant', target_id: 'p2' })
   })
 
@@ -169,9 +165,6 @@ describe('useRoom', () => {
       })
     })
 
-    // The id is as dead as a swept one, so it must not survive in storage: a remount
-    // would otherwise re-attach with it and reconnect into a refusal, replacing the
-    // notice Room is showing.
     expect(result.current.status).toBe('rejected')
     expect(loadSession()).toBeNull()
   })
@@ -191,8 +184,6 @@ describe('useRoom', () => {
       })
     })
 
-    // The guard is `status === 'rejected'` AND the slug, not the slug alone — a
-    // rejected action must not log the acting client out of its own room.
     expect(loadSession()).not.toBeNull()
   })
 

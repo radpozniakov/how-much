@@ -1,9 +1,7 @@
 """The room domain model and its identifier generation.
 
 A room is identified by its ``code`` (D-29): a short, human-typeable token that
-users enter to join and that is embedded in the shareable link (D-17). It doubles
-as the room's system-generated unique ID (D-19); a separate WebSocket-routing id
-is deferred to S6, when something actually needs it.
+doubles as the room's unique id (D-17/D-19).
 """
 
 from __future__ import annotations
@@ -23,8 +21,6 @@ from app.rooms.errors import (
     UnknownParticipant,
 )
 
-# Unambiguous alphabet: uppercase letters + digits, minus characters that are
-# easily confused when read aloud or typed (0/O, 1/I/L). Keeps join friction low.
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 
 
@@ -34,18 +30,17 @@ def generate_id() -> str:
 
 
 def generate_code(length: int) -> str:
-    """A random join code of ``length`` chars drawn from :data:`CODE_ALPHABET`.
+    """A random join code of ``length`` chars from :data:`CODE_ALPHABET`.
 
-    Uses :mod:`secrets` so codes aren't guessable — the only thing standing
-    between a stranger and a room is the code, so it should not be predictable.
+    Uses :mod:`secrets`: the code is the only thing gating a room, so it must not
+    be guessable.
     """
     return "".join(secrets.choice(CODE_ALPHABET) for _ in range(length))
 
 
 @dataclass
 class Participant:
-    """Someone in a room. Identified internally by ``id`` so that duplicate
-    display names (allowed — D-10) never collide."""
+    """Someone in a room, keyed by ``id`` so duplicate names (D-10) never collide."""
 
     name: str
     id: str = field(default_factory=generate_id)
@@ -53,60 +48,41 @@ class Participant:
 
 @dataclass(frozen=True)
 class RoundResults:
-    """A revealed round's outcome (FR-15, FR-16): every cast card, the average of
-    the numeric votes, and whether they reached consensus (all equal)."""
+    """A revealed round's outcome (FR-15/FR-16): cards, average, all-equal flag."""
 
-    votes: dict[str, str]  # participant_id -> card, only built for a revealed round
+    votes: dict[str, str]
     average: float | None
     consensus: bool
 
 
 @dataclass
 class Room:
-    """An estimation room. Holds its code, the people in it, and the current
-    voting round: a single optional topic, each participant's private vote (D-11),
-    and whether the round has been revealed."""
+    """An estimation room: its code, its people, and one voting round — an
+    optional topic, private votes (D-11), and a revealed flag."""
 
     code: str
-    # The room's card values, chosen by the host at creation and fixed for the
-    # room's life (FR-22/D-48). Immutable and never reassigned, which is what buys
-    # the slice out of the hard question: no cast vote can ever hold a card that
-    # has left the deck. Defaults to the Fibonacci deck, so every construction site
-    # that predates V4 — and every room whose host left the field blank — is
-    # unchanged. Validated at the create boundary (`app.rooms.deck.parse_deck`), so
-    # the domain can treat it as valid by construction.
     deck: tuple[str, ...] = config.FIBONACCI_DECK
     participants: dict[str, Participant] = field(default_factory=dict)
     host_id: str | None = None
     current_item: str | None = None
-    # participant_id -> chosen card token. Values are private until reveal;
-    # nothing outside the domain should expose them pre-reveal (FR-10).
     votes: dict[str, str] = field(default_factory=dict)
-    # Whether the host votes this round. Others always vote; only the host may
-    # opt out (D-14).
     host_voting: bool = True
-    # Whether the host has revealed the round; the FR-10 gate lives in `results()`.
     revealed: bool = False
-    # When the room last became empty, in the store's clock units. Store-managed:
-    # the store stamps/compares it (leave/sweep); the domain only clears it on
-    # re-occupancy. None while occupied.
     empty_since: float | None = None
 
     def add_participant(self, name: str) -> Participant:
         """Add a participant and return them.
 
-        The first participant added becomes the host — which is the creator,
-        since room creation adds them first (D-32). Rejects the join once the
-        room is at capacity (D-6).
+        The first one added becomes the host, which is the creator (D-32).
 
         Raises:
-            RoomFull: if the room already holds ``config.ROOM_CAPACITY`` people.
+            RoomFull: if the room already holds ``config.ROOM_CAPACITY`` people (D-6).
         """
         if len(self.participants) >= config.ROOM_CAPACITY:
             raise RoomFull(config.ROOM_CAPACITY)
         participant = Participant(name=name)
         self.participants[participant.id] = participant
-        self.empty_since = None  # re-occupancy cancels a pending cleanup (D-18)
+        self.empty_since = None
         if self.host_id is None:
             self.host_id = participant.id
         return participant
@@ -114,19 +90,13 @@ class Room:
     def remove_participant(self, participant_id: str) -> None:
         """Remove a participant and drop their vote (FR-6/FR-7 leave path).
 
-        If the leaver is the host, the role auto-transfers to the oldest
-        remaining participant (insertion order, D-13/FR-7) and host voting resets
-        to on (a fresh host votes by default, D-14). The last leaver sets
-        ``host_id`` to None; the store then starts the grace timer.
+        A departing host hands the role to the oldest remaining participant and
+        resets ``host_voting`` (D-13/D-14); the last leaver sets ``host_id`` to
+        None and the store starts the grace timer. The vote is dropped even after
+        reveal, so results recompute over whoever remains.
 
-        The vote is dropped unconditionally, even after reveal — a leave is not a
-        re-estimate, so it is allowed post-reveal and results recompute over
-        whoever remains (`results()` is defined over cast votes only).
-
-        **Unauthorized by design**, and the only membership mutation that is: the
-        actor here is the departing participant, so there is nobody to authorize
-        against. The host-initiated removal that shares this effect is
-        :meth:`remove_participant_by_host`, which guards first and then delegates
+        **Unauthorized by design** — the actor is the leaver, so there is nobody to
+        authorize against. :meth:`remove_participant_by_host` guards, then delegates
         here (FR-21/D-47).
 
         Raises:
@@ -144,10 +114,8 @@ class Room:
         """Guard a host-only action (D-12).
 
         Raises:
-            NotHost: if ``participant_id`` is not the room's host. A participant
-                who is not the host — including one who is not in the room at all
-                — is by definition not permitted, so this doubles as membership
-                enforcement for host-only actions.
+            NotHost: if ``participant_id`` is not the host. Doubles as membership
+                enforcement — a non-member is never the host.
         """
         if participant_id != self.host_id:
             raise NotHost()
@@ -155,9 +123,7 @@ class Room:
     def set_item(self, participant_id: str, topic: str | None) -> None:
         """Set or clear the current item's topic (host-only, FR-8).
 
-        The topic is trimmed; blank or ``None`` clears it. A room has a single
-        current item, no backlog (D-11). Locked once revealed — the host resets
-        the round to re-estimate.
+        Trimmed; blank or ``None`` clears it. One item per room, no backlog (D-11).
 
         Raises:
             NotHost: if the caller is not the host.
@@ -172,10 +138,8 @@ class Room:
     def set_name(self, participant_id: str, name: str) -> None:
         """Change a participant's own display name (self-service).
 
-        Names are non-unique by design (D-10), so there is no collision check.
-        Like ``add_participant``, the domain trusts the passed name — trimming
-        and length are enforced at the transport boundary (the ``set_name``
-        frame validator), which keeps this parity with the join path.
+        Names are non-unique by design (D-10). Like ``add_participant``, the domain
+        trusts the name — trimming and length belong to the transport boundary.
 
         Raises:
             UnknownParticipant: if ``participant_id`` is not in the room.
@@ -187,9 +151,8 @@ class Room:
     def cast_vote(self, participant_id: str, card: str) -> None:
         """Record ``participant_id``'s vote, overwriting any prior one (FR-11).
 
-        The value is stored privately and never surfaced pre-reveal (FR-10). The
-        revealed check comes first: once cards are shown no one may vote,
-        regardless of membership.
+        Stored privately, never surfaced pre-reveal (FR-10). The revealed check
+        comes first: once cards are shown nobody may vote, member or not.
 
         Raises:
             RoundRevealed: if the round has already been revealed (FR-11).
@@ -203,9 +166,6 @@ class Room:
             raise UnknownParticipant()
         if participant_id == self.host_id and not self.host_voting:
             raise HostNotVoting()
-        # `self.deck`, not the Fibonacci constant: since V4 the deck is room state
-        # (D-48). Membership is exact string matching against canonical values,
-        # which is why the boundary normalizes before storing.
         if card not in self.deck:
             raise InvalidCard(card)
         self.votes[participant_id] = card
@@ -213,8 +173,7 @@ class Room:
     def set_host_voting(self, participant_id: str, voting: bool) -> None:
         """Toggle whether the host votes this round (host-only, FR-14/D-14).
 
-        Opting out drops any vote the host has already cast. Locked once revealed
-        — the host resets the round to change this.
+        Opting out drops any vote the host has already cast.
 
         Raises:
             NotHost: if the caller is not the host.
@@ -230,37 +189,19 @@ class Room:
     def transfer_host(self, participant_id: str, target_id: str) -> None:
         """Hand the host role to another participant (host-only, FR-20/D-45).
 
-        A *move*, not a grant: ``host_id`` is a single field, so exactly one host
-        exists at any moment and no co-host or residue is possible. Unlike the
-        disconnect-driven auto-transfer (D-13) there is no transient
-        ``host_id: None`` window, so the host UI never flickers through an
-        unowned state.
-
-        ``host_voting`` resets to ``True``, exactly as ``remove_participant`` does
-        when a host leaves and the role auto-transfers. The reason is the incoming
-        host: an inherited opt-out they never chose would leave them with no deck
-        and outside the vote-progress denominator, silently. Both hosts end up
-        voters and either may opt out afterwards.
-
-        The outgoing host's vote is deliberately **not** dropped — they remain a
-        member, and ``results()`` is defined over cast votes regardless of who
-        holds the role. They also regain the right to vote with no code here: it
-        is ``cast_vote``'s ``participant_id == self.host_id`` guard that stops an
-        opted-out host, and the instant ``host_id`` moves they no longer match it.
-
-        Legal at any point, including after reveal — see ``RoundRevealed`` for why
-        this is not the inconsistency it looks like: a handover touches no input
-        to ``results()``.
+        A move, not a grant: one ``host_id`` field, so no co-host and no transient
+        unowned window. ``host_voting`` resets to ``True`` so the incoming host
+        never inherits an opt-out they did not choose. The outgoing host keeps
+        their vote and regains the right to vote by no longer matching
+        ``cast_vote``'s host guard. Legal after reveal — it touches no input to
+        ``results()``.
 
         Raises:
-            NotHost: if the caller is not the host. This also enforces the
-                actor's membership, since a non-member is never the host.
+            NotHost: if the caller is not the host.
             CannotTargetSelf: if the host targets themselves.
             UnknownParticipant: if the target is not in the room.
         """
         self._require_host(participant_id)
-        # Self-target first: it would otherwise pass the membership check below and
-        # surface as a confusing success, or as an error whose message is false.
         if target_id == participant_id:
             raise CannotTargetSelf("You cannot hand the host role to yourself")
         if target_id not in self.participants:
@@ -271,45 +212,23 @@ class Room:
     def remove_participant_by_host(self, participant_id: str, target_id: str) -> None:
         """Remove another participant from the room (host-only, FR-21/D-47).
 
-        The name says the one thing that distinguishes this from
-        :meth:`remove_participant`, which it delegates to: same effect, host
-        authority. The primitive stays unauthorized because it also serves the leave
-        path, where the departing participant *is* the actor and there is nobody to
-        authorize against.
+        Guards, then delegates to :meth:`remove_participant`: same effect, host
+        authority. Not a ban (D-15) — the removed person may rejoin with the code.
 
-        Not a ban (D-15). With no accounts there is nothing durable to ban: the
-        removed person still holds the room code and may rejoin immediately as a
-        fresh participant, which is out of scope by
-        [02-current-scope.md](../../../doc/02-current-scope.md) and deliberate, not
-        an oversight.
-
-        The delegate's host-auto-transfer branch is **unreachable from here**, and
-        provably so rather than incidentally: it fires only when the removed id is
-        ``host_id``, and the self-target guard below rejects exactly that id, since
-        the actor has already been established as the host. So a removal never moves
-        the role — a host who wants out hands over first (``transfer_host``) and then
-        leaves. Nor can it empty the room, because the actor remains in it, which is
-        why this needs no ``empty_since`` stamp and can stay in the domain rather
-        than routing through ``store.leave``.
-
-        The target's vote goes with them, as on the leave path. That happens even
-        after reveal, rewriting the round's average and consensus — deliberately;
-        see ``RoundRevealed`` for why membership sits outside that guard.
+        The delegate's host-auto-transfer branch is unreachable from here: it fires
+        only for ``host_id``, which the self-target guard rejects. Nor can this
+        empty the room, since the actor remains — hence no ``empty_since`` stamp and
+        no need to route through ``store.leave``. The target's vote goes with them,
+        even after reveal.
 
         Raises:
-            NotHost: if the caller is not the host. This also enforces the actor's
-                membership, since a non-member is never the host.
+            NotHost: if the caller is not the host.
             CannotTargetSelf: if the host targets themselves.
             UnknownParticipant: if the target is not in the room.
         """
         self._require_host(participant_id)
-        # Self-target first, for the same reason as in transfer_host: it would
-        # otherwise reach the delegate as a plain, authorized-looking leave.
         if target_id == participant_id:
             raise CannotTargetSelf("You cannot remove yourself from the room")
-        # Explicit, though the delegate raises the same error: this keeps the two
-        # host-on-participant actions structurally identical, and keeps the guard
-        # order (authority, then self, then membership) readable in one place.
         if target_id not in self.participants:
             raise UnknownParticipant()
         self.remove_participant(target_id)
@@ -317,8 +236,7 @@ class Room:
     def reveal(self, participant_id: str) -> None:
         """Reveal the round so every vote becomes visible (host-only, FR-12).
 
-        Unconditional — a host may reveal at any point, with no all-voted gate.
-        Idempotent: revealing an already-revealed round is a no-op.
+        Unconditional (no all-voted gate) and idempotent.
 
         Raises:
             NotHost: if the caller is not the host.
@@ -329,9 +247,8 @@ class Room:
     def reset_round(self, participant_id: str) -> None:
         """Clear the round for a fresh start (host-only, FR-13).
 
-        Drops all votes, clears the current item, and hides results again.
-        ``host_voting`` is a facilitator preference that persists across rounds,
-        so it is deliberately left untouched (D-14 is silent on reset).
+        Drops all votes, clears the item, hides results. ``host_voting`` persists
+        across rounds as a facilitator preference, so it is left untouched (D-14).
 
         Raises:
             NotHost: if the caller is not the host.
@@ -344,17 +261,13 @@ class Room:
     def results(self) -> RoundResults | None:
         """The revealed round's outcome, or ``None`` until the host reveals.
 
-        This single domain-side gate keeps card values from leaking pre-reveal
-        (FR-10). Stats are over cast votes only (reveal is unconditional, so a
-        partial round reports the average/consensus of those who did vote). The
-        average is unrounded — display formatting is the frontend's concern.
+        The single domain-side gate keeping card values from leaking pre-reveal
+        (FR-10). Stats cover cast votes only; the average is unrounded, since
+        formatting is the frontend's concern.
 
-        ``float``, not ``int``: a deck may hold decimals since V4 (D-48), and
-        ``int("0.5")`` raises ``ValueError`` — a 500, not a domain error, and only
-        on reveal, so a room with a ``0.5`` card would look fine right up until its
-        first reveal. Consensus is deliberately **not** recomputed from these
-        floats: it compares the card strings, which the create boundary
-        normalized, so equality there stays exact."""
+        ``float``, not ``int``: decks may hold decimals (D-48) and ``int("0.5")``
+        would raise. Consensus compares the normalized card *strings*, not these
+        floats, so its equality stays exact."""
         if not self.revealed:
             return None
         values = [float(card) for card in self.votes.values()]

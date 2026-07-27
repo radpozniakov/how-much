@@ -1,7 +1,7 @@
-"""API-level tests for POST /rooms/{code}/participants.
+"""API tests for POST /rooms/{code}/participants.
 
-Every room already has one participant — its creator/host — from the create call
-(D-32), so join tests build on a room that is not empty.
+Every room already holds its creator/host from the create call (D-32), so these
+tests build on a room that is not empty.
 """
 
 from app import config
@@ -40,7 +40,7 @@ def test_join_unknown_room_is_404(client):
 
 
 def test_join_code_is_case_insensitive(client):
-    code = _new_room(client)["room"]["code"]  # codes are generated uppercase
+    code = _new_room(client)["room"]["code"]
     resp = client.post(f"/rooms/{code.lower()}/participants", json={"name": "Alice"})
     assert resp.status_code == 201
     assert resp.json()["room"]["code"] == code
@@ -83,7 +83,7 @@ def test_overlong_name_rejected(client):
 
 
 def test_capacity_enforced_via_api(client):
-    code = _new_room(client)["room"]["code"]  # creator already occupies one slot
+    code = _new_room(client)["room"]["code"]
     for i in range(config.ROOM_CAPACITY - 1):
         assert (
             client.post(

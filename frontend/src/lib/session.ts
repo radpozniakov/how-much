@@ -1,10 +1,3 @@
-// Per-tab identity persistence (D-39). We store the participant_id + room code
-// learned over HTTP so a reload can reconnect via `attach`. sessionStorage (not
-// localStorage) is deliberate: each browser tab is its own participant.
-//
-// All access is wrapped: disabled storage / private mode / quota errors degrade
-// to "no session" (the user just re-enters their name) rather than crashing.
-
 const KEY = 'howmuch:session'
 
 export interface StoredSession {
@@ -35,16 +28,13 @@ export function loadSession(): StoredSession | null {
 export function saveSession(code: string, participantId: string): void {
   try {
     sessionStorage.setItem(KEY, JSON.stringify({ code, participantId }))
-  } catch {
-    // Storage unavailable — identity won't survive a reload, but that's a
-    // graceful fresh rejoin (D-15), not a fatal error.
-  }
+    // eslint-disable-next-line no-empty
+  } catch {}
 }
 
 export function clearSession(): void {
   try {
     sessionStorage.removeItem(KEY)
-  } catch {
-    // ignore
-  }
+    // eslint-disable-next-line no-empty
+  } catch {}
 }

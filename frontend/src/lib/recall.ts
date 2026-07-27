@@ -31,7 +31,6 @@ export function loadRecall(): RecalledInputs {
 export function rememberInputs(patch: Partial<RecalledInputs>): void {
   try {
     localStorage.setItem(KEY, JSON.stringify({ ...loadRecall(), ...patch }))
-  } catch {
-    // ignore
-  }
+    // eslint-disable-next-line no-empty
+  } catch {}
 }

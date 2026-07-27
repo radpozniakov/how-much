@@ -21,7 +21,6 @@ describe('StatsView', () => {
       />,
     )
 
-    // The Results dashboard is mounted (its "Results" heading identifies it).
     expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument()
     expect(screen.getByText('Alice').closest('li')).toHaveTextContent('5')
     expect(screen.getByText('Bob').closest('li')).toHaveTextContent('5')
@@ -33,16 +32,12 @@ describe('StatsView', () => {
     const { container } = render(
       <StatsView
         participants={[alice, bob]}
-        // Even if a stray results object were passed, an unrevealed round must
-        // not surface any card value.
         results={makeResults({ votes: { p1: '5', p2: '8' } })}
         revealed={false}
         hostId={null}
       />,
     )
 
-    // No "Results" dashboard heading pre-reveal — the e2e suite relies on this to
-    // assert results are absent until the host reveals.
     expect(
       screen.queryByRole('heading', { name: 'Results' }),
     ).not.toBeInTheDocument()

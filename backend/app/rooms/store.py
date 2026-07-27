@@ -1,9 +1,8 @@
 """In-memory registry of rooms.
 
-There is no database (D-4): every room lives in this process's memory and is
-lost on restart. The store is a module-level singleton — honest about the fact
-that room state *is* global process state — and exposes ``clear()`` so tests can
-start from a clean slate.
+No database (D-4): rooms live in this process and are lost on restart. A
+module-level singleton, because room state *is* global process state; ``clear()``
+exists so tests start clean.
 """
 
 from __future__ import annotations
@@ -14,8 +13,6 @@ from collections.abc import Callable
 from app import config
 from app.rooms.models import Participant, Room, generate_code
 
-# Bound on collision retries when allocating a code — a safety valve, given
-# collisions over the ~887M code space are already astronomically unlikely.
 _MAX_CODE_ATTEMPTS = 10
 
 
@@ -29,10 +26,8 @@ class RoomStore:
     def create(self, deck: tuple[str, ...] = config.FIBONACCI_DECK) -> Room:
         """Create, store, and return a new room with a unique join code.
 
-        ``deck`` is the host's chosen card values (FR-22/D-48), already parsed and
-        normalized at the create boundary; it defaults to the Fibonacci deck, which
-        is also what a host who left the field blank gets. The store just threads
-        it through — a deck is fixed at creation, so this is the only place it is
+        ``deck`` arrives already parsed and normalized from the create boundary
+        (FR-22/D-48). A deck is fixed at creation, so this is the only place it is
         ever set.
 
         Raises:
@@ -56,15 +51,13 @@ class RoomStore:
     def join(self, code: str, name: str) -> tuple[Room, Participant] | None:
         """Resolve a room and add a participant in one synchronous step.
 
-        Returns the room plus the new participant, or ``None`` if there is no such
-        room (including one just discarded by the ``get`` sweep). Propagates
-        ``RoomFull`` from :meth:`Room.add_participant` at capacity (D-6).
+        Returns the room and new participant, or ``None`` if there is no such room.
+        Propagates ``RoomFull`` at capacity (D-6).
 
-        This is the single resolve-then-mutate seam shared by the HTTP join route
-        and the WebSocket ``join`` handshake. It is deliberately synchronous with
-        no ``await`` between the lookup and the mutation, so a concurrent
-        background sweep (S6) — which can only run at an ``await`` point on the
-        same event loop — cannot discard the room mid-join."""
+        The resolve-then-mutate seam shared by the HTTP join route and the WS
+        ``join`` handshake. Deliberately synchronous: with no ``await`` between
+        lookup and mutation, the background sweeper cannot discard the room
+        mid-join."""
         room = self.get(code)
         if room is None:
             return None
@@ -72,9 +65,9 @@ class RoomStore:
         return room, participant
 
     def leave(self, room: Room, participant_id: str) -> None:
-        """Remove a participant and, if it was the last one, start the empty-room
-        grace timer (D-18). Coordinates the room's membership with the store's
-        clock — the room owns who's present, the store owns when it's discarded."""
+        """Remove a participant and, if they were the last, start the empty-room
+        grace timer (D-18). The room owns who is present; the store owns when it is
+        discarded."""
         room.remove_participant(participant_id)
         if not room.participants:
             room.empty_since = self._clock()
@@ -82,14 +75,10 @@ class RoomStore:
     def sweep(self) -> None:
         """Discard rooms empty for at least ``EMPTY_ROOM_TTL_SECONDS`` (D-18/FR-6).
 
-        Lazy, not scheduled: cleanup piggybacks on store access (`get`/`create`).
-        That was originally *instead of* a background task, back when the app was
-        HTTP-only; S6 added the real sweeper (`main._sweeper`) and this stayed as
-        the belt to its braces, so an expired room is unreachable on the next
-        access even between sweeps. `get()`
-        sweeps before returning, so an expired room is unreachable the instant
-        grace passes; its memory is reclaimed on that next access, not at exactly
-        the TTL. A rejoin clears `empty_since`, so a re-occupied room is spared."""
+        Called both on store access (`get`/`create`) and by the background sweeper
+        (`main._sweeper`), so an expired room is unreachable the instant grace
+        passes even between scheduled sweeps; memory is reclaimed on that access
+        rather than exactly at the TTL. A rejoin clears `empty_since`."""
         now = self._clock()
         expired = [
             code
@@ -111,5 +100,4 @@ class RoomStore:
         self._rooms.clear()
 
 
-# The single process-wide store. Import this instance; do not construct another.
 store = RoomStore()

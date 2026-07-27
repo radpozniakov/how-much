@@ -50,7 +50,6 @@ describe('Results', () => {
   it('renders an em dash for the average when it is null', () => {
     render(
       <Results
-        // Give Alice a vote so the only remaining em dash is the average's.
         results={makeResults({ votes: { p1: '5' }, average: null })}
         participants={[alice]}
         hostId={null}

@@ -1,4 +1,4 @@
-"""API-level tests for POST /rooms (create + join-as-host)."""
+"""API tests for POST /rooms (create + join-as-host)."""
 
 import pytest
 from app import config
@@ -65,13 +65,6 @@ def test_created_room_is_retrievable_from_store(client):
     assert room.host_id == body["participant_id"]
 
 
-# --- host-chosen card values (FR-22/D-48) ------------------------------------
-#
-# The rules themselves live in test_deck.py; these pin the *wiring* — that the
-# create route parses `cards`, that the deck reaches the room and the snapshot,
-# and that a rejection is a 422 rather than a broken room.
-
-
 def test_create_without_cards_gets_the_fibonacci_default(client):
     body = client.post("/rooms", json={"name": "Alice"}).json()
     assert body["room"]["deck"] == list(config.FIBONACCI_DECK)
@@ -84,7 +77,6 @@ def test_create_with_cards_sets_the_rooms_deck(client):
         "/rooms", json={"name": "Alice", "cards": "1, 2, 4, 8, 12, 16"}
     ).json()
     assert body["room"]["deck"] == ["1", "2", "4", "8", "12", "16"]
-    # ...and it is the room's own state, not just something in the response.
     assert store.get(body["room"]["code"]).deck == ("1", "2", "4", "8", "12", "16")
 
 
@@ -99,13 +91,10 @@ def test_an_invalid_deck_is_a_422_and_creates_no_room(client):
     resp = client.post("/rooms", json={"name": "Alice", "cards": "1, 1, 2"})
     assert resp.status_code == 422
     assert "repeat" in resp.json()["detail"][0]["msg"]
-    # The point of validating at the boundary: no half-built room survives it.
     assert len(store) == 0
 
 
 def test_the_deck_rides_the_room_view_for_joiners_too(client):
-    # It reaches every client on every snapshot (D-36), so a participant who never
-    # saw the create response still knows what they are voting into.
     created = client.post("/rooms", json={"name": "Alice", "cards": "1,2,3"}).json()
     code = created["room"]["code"]
     joined = client.post(f"/rooms/{code}/participants", json={"name": "Bob"}).json()
@@ -115,14 +104,13 @@ def test_the_deck_rides_the_room_view_for_joiners_too(client):
 def test_a_vote_outside_the_custom_deck_is_rejected(client):
     """The deck the create route wrote actually constrains voting.
 
-    Still a wiring test: it creates over HTTP, so the path from ``cards`` to an
-    enforced deck is covered end to end. Only the assertion moved to the domain,
-    where ``cast_vote`` decides — it used to go through ``PUT /vote``, which D-50
-    removed. ``InvalidCard`` is what that route was mapping to its 422 anyway."""
+    A wiring test: it creates over HTTP, so the path from ``cards`` to an enforced
+    deck is covered end to end. The assertion is on the domain, where ``cast_vote``
+    decides."""
     from app.rooms.store import store
 
     created = client.post("/rooms", json={"name": "Alice", "cards": "1,2,3"}).json()
     room = store.get(created["room"]["code"])
     with pytest.raises(InvalidCard):
         room.cast_vote(created["participant_id"], "8")
-    room.cast_vote(created["participant_id"], "2")  # and a card in the deck is fine
+    room.cast_vote(created["participant_id"], "2")

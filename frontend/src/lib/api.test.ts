@@ -51,9 +51,6 @@ describe('api error normalization', () => {
   })
 
   it('strips pydantic\'s "Value error, " prefix off a custom-validator message', async () => {
-    // Latent until V4 (FR-22/D-48): a 422 used to mean a name so malformed the UI
-    // had already blocked it, but a rejected deck — duplicates, a bad count — is
-    // the routine outcome of an ordinary typo, so the prefix would now be read.
     stubFetch(422, {
       detail: [
         {
@@ -106,8 +103,6 @@ describe('api success', () => {
   })
 
   it('sends the raw card values, and null when they are blank', async () => {
-    // Raw because the server owns the deck rules (FR-22/D-48); null rather than
-    // "" so "the host named no values" is one thing on the wire, not two.
     const body = async (cards?: string) => {
       stubFetch(201, {
         participant_id: 'p1',

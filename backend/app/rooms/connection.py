@@ -1,22 +1,16 @@
 """Live WebSocket registry (S6).
 
-The ``ConnectionManager`` maps each room code to its connected sockets, keyed by
-participant id. It is pure transport: it holds no domain state and never decides
-who is *in* a room — that stays in ``store``/``Room``. Its only jobs are to fan a
-frame out to a room's sockets and to track which socket currently represents a
-participant.
+``ConnectionManager`` maps ``code -> {participant_id -> socket}``. Pure transport:
+it holds no domain state and never decides who is *in* a room.
 
-Single-owner cleanup: removal of a socket from the map (and the domain leave that
-follows) is done exactly once, in the connection handler's ``finally`` via
-:meth:`unregister`. :meth:`broadcast` therefore never deletes a socket on send
-failure — it skips it and lets that socket's own handler perform the cleanup, so
-the handler's identity-checked ``unregister`` still reports ``True`` and the
-domain ``leave`` runs.
+Single-owner cleanup: a socket leaves the map exactly once, in the connection
+handler's ``finally`` via :meth:`unregister`. So :meth:`broadcast` never deletes on
+send failure — it skips, letting that socket's own handler do the cleanup and run
+the domain leave.
 
-There is exactly one exception, and it *uses* that property rather than working
-around it: :func:`apply_and_evict` (FR-21/D-47) takes a removed participant's socket
-out of the map itself, so their handler's ``unregister`` reports ``False`` and
-correctly skips a leave for someone the host has already removed.
+:func:`apply_and_evict` (FR-21/D-47) is the one exception, and it *uses* that
+property: it detaches the removed participant itself, so their handler's
+``unregister`` reports ``False`` and skips a leave that already happened.
 """
 
 from __future__ import annotations
@@ -43,35 +37,27 @@ class ConnectionManager:
     async def register(self, code: str, participant_id: str, ws: WebSocket) -> None:
         """Register ``ws`` as the socket for ``participant_id`` in ``code``.
 
-        If the participant already has a live socket, the **new socket is written
-        into the map first, then the old one is closed**. This ordering is
-        load-bearing: closing first would yield the event loop while the map still
-        pointed at the old socket, so the old handler's ``finally`` would see
-        itself as still-registered and wrongly run the domain leave for a
-        participant the new socket still represents."""
+        Ordering is load-bearing: the **new socket is written first, then the old
+        one closed**. Closing first would yield the event loop while the map still
+        pointed at the old socket, so its handler would see itself as registered and
+        wrongly run the domain leave."""
         room = self._rooms.setdefault(code, {})
         old = room.get(participant_id)
-        room[participant_id] = ws  # write new first (ordering is load-bearing)
+        room[participant_id] = ws
         if old is not None and old is not ws:
-            # old socket already gone is fine; the map entry is what matters
             with contextlib.suppress(Exception):
                 await old.close()
 
     def detach(self, code: str, participant_id: str) -> WebSocket | None:
         """Take ``participant_id``'s socket out of the map and return it, if any.
 
-        The identity-blind counterpart to :meth:`unregister`: that one is for a
-        handler retiring *its own* socket and must not touch a newer one, so it
-        checks. This one is for removing a participant (FR-21/D-47), where whichever
-        socket currently represents them is the one that has to go — including a
-        second socket opened by the `attach` impersonation the phase accepts as a
-        known limitation, since that is precisely the socket a host removing someone
-        means to cut.
+        The identity-blind counterpart to :meth:`unregister`. Removal (FR-21/D-47)
+        must cut whichever socket currently represents the target, so unlike
+        ``unregister`` it does not check identity.
 
-        Returning the socket rather than closing it keeps this class synchronous and
-        transport-only: the caller decides what to say on the way out. ``None`` when
-        the participant has no live socket at all — they joined over HTTP and never
-        attached one, which is a legitimate state, not an error."""
+        Returns the socket rather than closing it, keeping this class synchronous
+        and transport-only. ``None`` means no live socket — a legitimate state for
+        someone who joined over HTTP and never attached."""
         room = self._rooms.get(code)
         if room is None:
             return None
@@ -83,10 +69,9 @@ class ConnectionManager:
     def unregister(self, code: str, participant_id: str, ws: WebSocket) -> bool:
         """Remove ``participant_id``'s socket **iff it is still ``ws``**.
 
-        Returns whether this call actually removed the socket. A superseded socket
-        (replaced by a newer one for the same participant) is no longer the stored
-        socket, so this is a no-op and returns ``False`` — the caller then skips
-        the domain leave, leaving the participant live on the newer socket."""
+        Returns whether it actually removed one. A superseded socket is no longer
+        the stored one, so this is a no-op returning ``False`` — the caller then
+        skips the domain leave and the participant stays live on the newer socket."""
         room = self._rooms.get(code)
         if room is None or room.get(participant_id) is not ws:
             return False
@@ -103,10 +88,6 @@ class ConnectionManager:
         if not room:
             return
         for participant_id, ws in list(room.items()):
-            # Skip a concurrently-dropping client; do not abort the fan-out. The
-            # send is logged at debug rather than swallowed silently, so a real
-            # bug (e.g. a non-serializable frame failing for *every* client) is
-            # visible in the logs instead of invisible.
             try:
                 await ws.send_json(frame)
             except Exception:
@@ -121,16 +102,14 @@ class ConnectionManager:
         return code in self._rooms
 
 
-# The single process-wide manager. Import this instance; do not construct another.
 manager = ConnectionManager()
 
 
 async def broadcast_room_state(room: Room) -> None:
     """Fan the current ``RoomView`` snapshot out to a room's sockets (D-36).
 
-    The one place a state change becomes a broadcast; called at every presence
-    mutation site — the WS receive loop and, still, the HTTP join (D-50 left that
-    route standing). A no-op when the room has no connected sockets."""
+    The one place a state change becomes a broadcast, called from the WS receive
+    loop and the surviving HTTP join. A no-op when nobody is connected."""
     await manager.broadcast(room.code, room_state_frame(room))
 
 
@@ -138,12 +117,9 @@ async def apply_and_broadcast(room: Room, action: Callable[[], None]) -> None:
     """Run a domain mutation, then broadcast the new snapshot (D-36).
 
     ``action`` is a zero-arg closure over a synchronous ``Room`` method. The
-    broadcast is bound to a *successful* mutation: if ``action`` raises (a domain
-    ``RoomError``), it propagates and no broadcast is sent, so a rejected action
-    never disturbs other clients. This was the single seam shared by both
-    transports, which is how it kept broadcast from being forgotten at a call
-    site; since D-50 retired the HTTP round routes its only caller is the WS
-    receive loop, and the guarantee is the same one for one transport."""
+    broadcast is bound to a *successful* mutation: a raised ``RoomError``
+    propagates and sends nothing, so a rejected action never disturbs other
+    clients."""
     action()
     await broadcast_room_state(room)
 
@@ -153,35 +129,24 @@ async def apply_and_evict(
 ) -> None:
     """Run a removal, cut the removed participant's socket, then broadcast (D-47).
 
-    The second transport seam, and the reason there is one: removing a participant is
-    the first action whose effect on the transport exceeds "fan the new snapshot
-    out". Their socket has to go too, and ``apply_and_broadcast``'s ``action`` is
-    synchronous by contract (it is a ``Room`` method) while closing a socket is not.
+    The second transport seam, needed because a removal's effect exceeds "fan the
+    snapshot out" and closing a socket is async, while ``apply_and_broadcast``'s
+    ``action`` is synchronous by contract.
 
-    The order is load-bearing, all three steps:
+    All three steps are load-bearing in order:
 
-    1. ``action()`` first, synchronously. It raises the domain ``RoomError`` for an
-       unauthorized or badly-targeted attempt, and nothing below it runs — so a
-       rejected removal cannot detach an innocent socket. Same guarantee
-       ``apply_and_broadcast`` gives, for the same reason.
-    2. ``detach`` **before** the broadcast, so the removed client is out of the
-       fan-out when it happens. Otherwise their last frame would be a snapshot of a
-       room they are no longer in, which their UI would render — a header with no
-       name, a grid missing its own card — for the tick before the notice lands.
-       Nothing about that state is true, so it should never reach a screen.
-    3. The notice, then the close. Frame-then-close is how this codebase already
-       rejects a handshake (see ``ws.room_socket``), so the client's existing
-       stash-the-reason-then-report-on-close path is reused rather than extended.
+    1. ``action()`` first, so a rejected removal raises before any socket is
+       detached — the same guarantee ``apply_and_broadcast`` gives.
+    2. ``detach`` **before** the broadcast, so the removed client never renders a
+       snapshot of a room it is no longer in.
+    3. Notice, then close — the frame-then-close pattern ``ws.room_socket`` already
+       uses to reject a handshake, so the client's existing path is reused.
 
-    Detaching also settles the teardown hazard doc/07 flagged: the removed socket's
-    own handler will still reach its ``finally``, but its ``unregister`` now finds a
-    different (absent) entry and returns ``False``, so it skips the domain leave for
-    a participant already gone and does not emit a second, identical broadcast. That
-    is the same single-owner property (MF1) that protects a superseded socket — not
-    a new mechanism, an existing one lined up to point the right way.
+    Detaching also makes the removed socket's own ``unregister`` return ``False``,
+    so its handler skips a duplicate leave and broadcast.
 
-    Both sends are individually suppressed: a client that vanished mid-removal is
-    the ordinary case, not a failure, and a failed notice must not skip the close.
+    Both sends are suppressed individually: a client that vanished mid-removal is
+    ordinary, and a failed notice must not skip the close.
     """
     action()
     evicted = manager.detach(room.code, target_id)

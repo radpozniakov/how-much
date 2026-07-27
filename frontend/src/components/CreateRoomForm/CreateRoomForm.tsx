@@ -7,17 +7,11 @@ import { MAX_DECK_INPUT_LENGTH } from '../../lib/limits'
 import { loadRecall, rememberInputs } from '../../lib/recall'
 import { saveSession } from '../../lib/session'
 
-// What "leave it blank" gets you, spelled out rather than described. This is the
-// one place the default deck is still named client-side (lib/deck.ts) — the room
-// itself votes from the snapshot.
 const DEFAULT_DECK_HINT = FIBONACCI_DECK.join(', ')
 
 export const CreateRoomForm: FC = () => {
   const navigate = useNavigate()
   const [name, setName] = useState(() => loadRecall().name)
-  // The host's card values as typed, sent raw (FR-22/D-48). Deliberately not
-  // parsed or pre-validated here: the server owns the deck rules, so a second
-  // implementation on this side could only drift from the one that decides.
   const [cards, setCards] = useState(() => loadRecall().cards)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -51,9 +45,6 @@ export const CreateRoomForm: FC = () => {
             required
           />
         </label>
-        {/* The room's one creation-time option (FR-22/D-48). Optional, and fixed
-            once the room exists — there is no later chance to change it, which is
-            why it sits here and nowhere in the room UI. S22 owns the wording. */}
         <label className="field">
           <span className="field__label">Card values</span>
           <input

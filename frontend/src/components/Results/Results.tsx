@@ -18,12 +18,9 @@ export const Results: FC<ResultsProps> = ({
       {participants.map((p) => (
         <li key={p.id} className="results__item">
           <span>{p.name}</span>
-          {/* host_id can be null during a transfer/empty window — never match undefined. */}
           {hostId !== null && p.id === hostId && (
             <span className="results__badge">host</span>
           )}
-          {/* This view is only mounted once revealed, so votes is the sole
-              source for the card value (FR-10) — no fallback to has_voted. */}
           <span className="results__value">{results.votes[p.id] ?? '—'}</span>
         </li>
       ))}

@@ -1,4 +1,4 @@
-"""Domain-level tests for participants, host assignment, and capacity."""
+"""Domain tests for participants, host assignment, and capacity."""
 
 import pytest
 from app import config

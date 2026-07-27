@@ -1,12 +1,11 @@
-"""API-level tests for S6a: /ws/rooms/{code} presence over WebSocket.
+"""API tests for /ws/rooms/{code} presence over WebSocket.
 
-Uses the synchronous ``TestClient.websocket_connect``. Two concurrent sockets in
-one room are exercised via nested context managers; a broadcast issued by the
-server lands in the other session's queue and is read by its ``receive_json``.
+Uses the synchronous ``TestClient.websocket_connect``; two concurrent sockets in one
+room are nested context managers, and a server broadcast lands in the other
+session's queue.
 
-The shared ``client`` fixture is intentionally NOT context-managed (see conftest),
-so the background sweeper lifespan does not run here — presence tests don't need
-it, and the store is reset per test by the autouse fixture.
+The shared ``client`` fixture is intentionally NOT context-managed, so the sweeper
+lifespan does not run here — the autouse fixture resets the store instead.
 """
 
 from app import config
@@ -40,14 +39,13 @@ def test_join_fans_out_to_already_connected_client(client):
     code, host_id = _create(client)
     with client.websocket_connect(f"/ws/rooms/{code}") as host_ws:
         host_ws.send_json({"type": "attach", "participant_id": host_id})
-        host_ws.receive_json()  # host's own snapshot
+        host_ws.receive_json()
         with client.websocket_connect(f"/ws/rooms/{code}") as joiner_ws:
             joiner_ws.send_json({"type": "join", "name": "Bob"})
             joined = joiner_ws.receive_json()
             host_update = host_ws.receive_json()
     assert joined["type"] == "room_state"
     assert any(p["name"] == "Bob" for p in joined["room"]["participants"])
-    # FR-17: the already-connected host sees the new participant live.
     assert host_update["type"] == "room_state"
     assert any(p["name"] == "Bob" for p in host_update["room"]["participants"])
 
@@ -58,13 +56,13 @@ def test_unknown_room_rejected_and_not_created(client):
         frame = ws.receive_json()
     assert frame["type"] == "error"
     assert frame["reason"] == "room_not_found"
-    assert len(store) == 0  # no room conjured by the failed join
+    assert len(store) == 0
 
 
 def test_full_room_rejected(client):
-    code, _ = _create(client)  # host is participant #1
+    code, _ = _create(client)
     for i in range(config.ROOM_CAPACITY - 1):
-        _join_http(client, code, f"P{i}")  # fill to capacity
+        _join_http(client, code, f"P{i}")
     with client.websocket_connect(f"/ws/rooms/{code}") as ws:
         ws.send_json({"type": "join", "name": "Overflow"})
         frame = ws.receive_json()
@@ -96,12 +94,11 @@ def test_host_disconnect_transfers_host(client):
     bob_id = _join_http(client, code, "Bob")
     with client.websocket_connect(f"/ws/rooms/{code}") as bob_ws:
         bob_ws.send_json({"type": "attach", "participant_id": bob_id})
-        bob_ws.receive_json()  # bob's own snapshot
+        bob_ws.receive_json()
         with client.websocket_connect(f"/ws/rooms/{code}") as host_ws:
             host_ws.send_json({"type": "attach", "participant_id": host_id})
-            host_ws.receive_json()  # host's snapshot
-            bob_ws.receive_json()  # bob sees host attach
-        # host socket dropped -> leave -> auto-transfer (D-13/FR-7)
+            host_ws.receive_json()
+            bob_ws.receive_json()
         transfer = bob_ws.receive_json()
     assert transfer["type"] == "room_state"
     assert transfer["room"]["host_id"] == bob_id
@@ -117,62 +114,51 @@ def test_non_host_disconnect_removes_leaver(client):
         with client.websocket_connect(f"/ws/rooms/{code}") as bob_ws:
             bob_ws.send_json({"type": "attach", "participant_id": bob_id})
             bob_ws.receive_json()
-            host_ws.receive_json()  # host sees bob attach
-        update = host_ws.receive_json()  # bob dropped
+            host_ws.receive_json()
+        update = host_ws.receive_json()
     assert [p["id"] for p in update["room"]["participants"]] == [host_id]
-    assert update["room"]["host_id"] == host_id  # host unchanged
+    assert update["room"]["host_id"] == host_id
 
 
 def test_http_join_reflects_to_socket(client):
-    """D-36, in the one place it is still observable from outside the socket: the
-    surviving HTTP join broadcasts to sockets already in the room.
-
-    This is what is left of the old ``test_http_presence_reflects_to_socket`` after
-    D-50. That test drove a join *and* a removal over HTTP to show the two transports
-    converge on one snapshot; the removal route is gone, so only the join half can
-    still be asserted — and the convergence claim itself is no longer falsifiable
-    with one transport. Kept because the broadcast on a *non-socket* mutation is the
-    part that could still silently regress."""
+    """D-36 in the one place still observable from outside the socket: the surviving
+    HTTP join broadcasts to sockets already in the room. Kept because a broadcast on a
+    *non-socket* mutation is the part that could silently regress."""
     code, host_id = _create(client)
     with client.websocket_connect(f"/ws/rooms/{code}") as ws:
         ws.send_json({"type": "attach", "participant_id": host_id})
-        ws.receive_json()  # own snapshot
-        _join_http(client, code, "Carol")  # HTTP POST /participants
+        ws.receive_json()
+        _join_http(client, code, "Carol")
         joined = ws.receive_json()
     assert any(p["name"] == "Carol" for p in joined["room"]["participants"])
 
 
 def test_duplicate_attach_keeps_participant_present(client):
-    """MF1 regression: a superseded socket must NOT remove the live participant."""
+    """Regression: a superseded socket must NOT remove the live participant."""
     code, host_id = _create(client)
     bob_id = _join_http(client, code, "Bob")
     try:
         with client.websocket_connect(f"/ws/rooms/{code}") as sock_a:
             sock_a.send_json({"type": "attach", "participant_id": bob_id})
-            sock_a.receive_json()  # A's snapshot
+            sock_a.receive_json()
             with client.websocket_connect(f"/ws/rooms/{code}") as sock_b:
                 sock_b.send_json({"type": "attach", "participant_id": bob_id})
                 frame_b = sock_b.receive_json()
-                # Bob is still in the room, now represented by socket B.
                 assert any(p["id"] == bob_id for p in frame_b["room"]["participants"])
-                # Domain truth: A's supersession did NOT remove Bob (the MF1 fix).
-                # A's finally sees unregister -> False and skips store.leave.
                 assert bob_id in store.get(code).participants
     except WebSocketDisconnect:
-        pass  # socket A is force-closed by the server; ignore its close on exit
-    # Once the live socket B also drops, Bob legitimately leaves — the room is
-    # empty of Bob but the host participant remains.
+        pass
     assert bob_id not in store.get(code).participants
     assert host_id in store.get(code).participants
 
 
 def test_handshake_frame_mid_session_is_bad_request_and_stays_connected(client):
-    """After the handshake, a stray join/attach is not a round frame (S6b) — it is
-    rejected as bad_request without dropping the live socket."""
+    """After the handshake, a stray join/attach is not a round frame — rejected as
+    bad_request without dropping the live socket."""
     code, host_id = _create(client)
     with client.websocket_connect(f"/ws/rooms/{code}") as ws:
         ws.send_json({"type": "attach", "participant_id": host_id})
-        ws.receive_json()  # room_state
+        ws.receive_json()
         ws.send_json({"type": "join", "name": "Again"})
         first = ws.receive_json()
         ws.send_json({"type": "attach", "participant_id": host_id})
@@ -182,22 +168,19 @@ def test_handshake_frame_mid_session_is_bad_request_and_stays_connected(client):
 
 
 def test_room_state_carries_no_card_value_pre_reveal(client):
-    """FR-10: presence snapshot exposes has_voted, never the card value.
+    """FR-10: the presence snapshot exposes has_voted, never the card value.
 
-    The vote is placed through the domain rather than over a socket, because the
-    assertion is about the *handshake* snapshot — the very first frame a client
-    receives has to withhold the value, so the vote must predate the connection.
-    It used to be placed with ``PUT /vote``, which D-50 removed; the transport was
-    never the subject here."""
+    The vote goes through the domain rather than a socket because the assertion is
+    about the *handshake* snapshot, so it must predate the connection."""
     code, host_id = _create(client)
     store.get(code).cast_vote(host_id, "5")
     with client.websocket_connect(f"/ws/rooms/{code}") as ws:
         ws.send_json({"type": "attach", "participant_id": host_id})
         frame = ws.receive_json()
     room = frame["room"]
-    assert room["results"] is None  # no results payload pre-reveal
+    assert room["results"] is None
     assert all(
         set(p.keys()) == {"id", "name", "has_voted"} for p in room["participants"]
     )
     me = next(p for p in room["participants"] if p["id"] == host_id)
-    assert me["has_voted"] is True  # presence shown, value withheld
+    assert me["has_voted"] is True

@@ -1,7 +1,7 @@
-"""Domain-level tests for the voting round: item, votes, and the host toggle.
+"""Domain tests for the voting round: item, votes, and the host toggle.
 
-Exercises :class:`Room` directly (no HTTP), so the round rules are validated
-independently of any transport (S6). Reveal, reset, and results stats are S4.
+Exercises :class:`Room` directly, so the rules are validated with no transport
+involved. Reveal, reset, and results stats live in test_reveal_domain.py.
 """
 
 import pytest
@@ -24,31 +24,20 @@ def _room_with(*names: str) -> tuple[Room, list[str]]:
 
 
 def test_default_deck_is_exactly_fibonacci():
-    # Guards D-8: numbers only, no 40/100, no special cards. Since V4 (D-48) this
-    # is the *default* rather than the constraint — a room whose host named no card
-    # values gets exactly this, and `Room.deck` defaults to it. No leading 0 since
-    # D-49 raised the floor to 1.
     assert config.FIBONACCI_DECK == ("1", "2", "3", "5", "8", "13", "21")
     assert Room(code="ROOM01").deck == config.FIBONACCI_DECK
 
 
 def test_the_default_deck_is_a_deck_a_host_could_have_typed():
-    # The default is a *suggestion* — `CreateRoomForm` prints it as what leaving the
-    # field blank gives you — so it has to survive the same rules a typed deck does.
-    # Nothing else pins that: `Room.deck` takes any tuple, so a default that drifted
-    # outside the bounds would only surface as a 422 on a host copying the hint.
     assert parse_deck(", ".join(config.FIBONACCI_DECK)) == config.FIBONACCI_DECK
-
-
-# --- item -------------------------------------------------------------------
 
 
 def test_host_sets_and_clears_topic():
     room, (host,) = _room_with("Host")
     room.set_item(host, "  Login flow  ")
-    assert room.current_item == "Login flow"  # trimmed
+    assert room.current_item == "Login flow"
     room.set_item(host, "   ")
-    assert room.current_item is None  # blank clears
+    assert room.current_item is None
     room.set_item(host, "Again")
     room.set_item(host, None)
     assert room.current_item is None
@@ -59,9 +48,6 @@ def test_non_host_cannot_set_item():
     with pytest.raises(NotHost):
         room.set_item(other, "sneaky")
     assert room.current_item is None
-
-
-# --- voting -----------------------------------------------------------------
 
 
 def test_vote_recorded():
@@ -75,7 +61,7 @@ def test_revote_overwrites():
     room.cast_vote(alice, "3")
     room.cast_vote(alice, "13")
     assert room.votes[alice] == "13"
-    assert list(room.votes) == [alice]  # one entry, not two
+    assert list(room.votes) == [alice]
 
 
 @pytest.mark.parametrize("bad", ["40", "100", "?", "4", "", "eight"])
@@ -84,9 +70,6 @@ def test_invalid_card_rejected(bad):
     with pytest.raises(InvalidCard):
         room.cast_vote(alice, bad)
     assert alice not in room.votes
-
-
-# --- a host-chosen deck (FR-22/D-48) ----------------------------------------
 
 
 def _custom_room(deck: tuple[str, ...]) -> tuple[Room, str]:
@@ -103,8 +86,6 @@ def test_a_custom_deck_card_is_accepted():
 
 
 def test_a_fibonacci_card_absent_from_a_custom_deck_is_rejected():
-    # The proof that `cast_vote` validates against `self.deck` and not the global
-    # constant: 13 is a perfectly good Fibonacci card and not in this room.
     room, alice = _custom_room(("1", "2", "4", "8", "12", "16"))
     with pytest.raises(InvalidCard):
         room.cast_vote(alice, "13")
@@ -118,8 +99,6 @@ def test_a_decimal_card_is_votable():
 
 
 def test_a_card_matching_only_before_normalization_is_rejected():
-    # Deck membership is exact string matching, which is why the boundary
-    # normalizes: this room holds "1.5", so "1.50" is not one of its cards.
     room, alice = _custom_room(("1", "1.5", "2", "3"))
     with pytest.raises(InvalidCard):
         room.cast_vote(alice, "1.50")
@@ -132,13 +111,9 @@ def test_unknown_participant_cannot_vote():
 
 
 def test_unknown_participant_checked_before_card():
-    # Guard order: identity is checked before the card value.
     room, (host,) = _room_with("Host")
     with pytest.raises(UnknownParticipant):
         room.cast_vote("ghost-id", "999")
-
-
-# --- host voting toggle (D-14) ----------------------------------------------
 
 
 def test_host_cannot_vote_while_opted_out():

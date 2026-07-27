@@ -1,13 +1,9 @@
-"""API-level tests for host handover over /ws/rooms/{code} (FR-20/D-45).
+"""API tests for host handover over /ws/rooms/{code} (FR-20/D-45).
 
-The ``transfer_host`` frame carries a ``target_id`` and no actor id: the actor is
-the socket's handshake identity, so a client cannot hand the role away on someone
-else's behalf (S23 constraint 2). Authorization is the domain's ``_require_host``,
-never the frontend's ``isHost`` (constraint 1), and both outcomes are logged
-(constraint 4) — the logging assertions here cover the call and its four fields;
-whether those records actually surface is what tests/test_logging_config.py is for.
-
-Uses the synchronous ``TestClient.websocket_connect``, as test_ws_rounds.py does.
+The ``transfer_host`` frame carries a ``target_id`` and no actor id, so the actor is
+the socket's handshake identity and authorization is the domain's ``_require_host``,
+never the frontend's ``isHost``. The logging assertions cover the call and its four
+fields; whether records surface at all is test_logging_config.py's job.
 """
 
 import logging
@@ -34,12 +30,12 @@ def test_handover_over_ws_fans_out_to_both_sockets(client):
 
     with client.websocket_connect(f"/ws/rooms/{code}") as host_ws:
         host_ws.send_json({"type": "attach", "participant_id": host_id})
-        host_ws.receive_json()  # own snapshot
+        host_ws.receive_json()
 
         with client.websocket_connect(f"/ws/rooms/{code}") as bob_ws:
             bob_ws.send_json({"type": "attach", "participant_id": bob_id})
-            bob_ws.receive_json()  # own snapshot
-            host_ws.receive_json()  # host sees Bob's join
+            bob_ws.receive_json()
+            host_ws.receive_json()
 
             host_ws.send_json({"type": "transfer_host", "target_id": bob_id})
             on_host = host_ws.receive_json()
@@ -47,15 +43,12 @@ def test_handover_over_ws_fans_out_to_both_sockets(client):
 
             assert on_host["room"]["host_id"] == bob_id
             assert on_bob["room"]["host_id"] == bob_id
-            # The domain is the source of truth, not the frame that carried the
-            # snapshot. Checked INSIDE the sockets' scope: closing them is a leave,
-            # which empties the room and nulls host_id again.
             assert store.get(code).host_id == bob_id
 
 
 def test_handover_uses_connection_identity_not_payload(client):
-    """A spoofed ``participant_id`` in the frame must not attribute the action to
-    the host: Bob's socket is Bob, so this is a non-host attempt (constraint 2)."""
+    """A spoofed ``participant_id`` must not attribute the action to the host: Bob's
+    socket is Bob, so this is a non-host attempt."""
     code, host_id = _create(client)
     bob_id = _join_http(client, code, "Bob")
 
@@ -67,14 +60,14 @@ def test_handover_uses_connection_identity_not_payload(client):
             {
                 "type": "transfer_host",
                 "target_id": bob_id,
-                "participant_id": host_id,  # ignored — the socket decides the actor
+                "participant_id": host_id,
             }
         )
         err = bob_ws.receive_json()
 
         assert err["type"] == "error"
         assert err["reason"] == "not_host"
-        assert store.get(code).host_id == host_id  # unchanged
+        assert store.get(code).host_id == host_id
 
 
 def test_non_host_transfer_errors_not_host_without_broadcast(client):
@@ -89,14 +82,12 @@ def test_non_host_transfer_errors_not_host_without_broadcast(client):
         with client.websocket_connect(f"/ws/rooms/{code}") as bob_ws:
             bob_ws.send_json({"type": "attach", "participant_id": bob_id})
             bob_ws.receive_json()
-            host_ws.receive_json()  # Bob's join fan-out
+            host_ws.receive_json()
 
             bob_ws.send_json({"type": "transfer_host", "target_id": host_id})
             err = bob_ws.receive_json()
             assert err["type"] == "error" and err["reason"] == "not_host"
 
-            # A failed action broadcasts nothing, so the host's next frame is the
-            # snapshot from its OWN action — not a stray fan-out from Bob's attempt.
             host_ws.send_json({"type": "set_item", "topic": "ok"})
             nxt = host_ws.receive_json()
 
@@ -117,14 +108,12 @@ def test_self_target_errors_cannot_target_self(client):
 
         assert err["type"] == "error"
         assert err["reason"] == "cannot_target_self"
-        # Inside the socket's scope — closing it would empty the room.
         assert store.get(code).host_id == host_id
 
 
 def test_unknown_target_errors_not_in_room_and_socket_survives(client):
-    """A stale target is a real race (they left between snapshot and click), so it
-    reuses ``not_in_room`` — and must NOT be terminal: the client only treats that
-    slug as fatal during handshake, never mid-session."""
+    """A stale target is a real race, so it reuses ``not_in_room`` — and must NOT be
+    terminal: the client treats that slug as fatal only at handshake."""
     code, host_id = _create(client)
 
     with client.websocket_connect(f"/ws/rooms/{code}") as ws:
@@ -135,7 +124,7 @@ def test_unknown_target_errors_not_in_room_and_socket_survives(client):
         err = ws.receive_json()
         assert err["type"] == "error" and err["reason"] == "not_in_room"
 
-        ws.send_json({"type": "reveal"})  # still usable
+        ws.send_json({"type": "reveal"})
         ok = ws.receive_json()
 
     assert ok["type"] == "room_state"
@@ -143,7 +132,7 @@ def test_unknown_target_errors_not_in_room_and_socket_survives(client):
 
 
 def test_handover_after_reveal_succeeds_over_ws(client):
-    """§A end-to-end: legal post-reveal, and the revealed results are unchanged."""
+    """End to end: legal post-reveal, and the revealed results are unchanged."""
     code, host_id = _create(client)
     bob_id = _join_http(client, code, "Bob")
 
@@ -161,15 +150,15 @@ def test_handover_after_reveal_succeeds_over_ws(client):
         ws.send_json({"type": "transfer_host", "target_id": bob_id})
         after = ws.receive_json()
 
-    assert after["type"] == "room_state"  # not an error frame
+    assert after["type"] == "room_state"
     assert after["room"]["host_id"] == bob_id
     assert after["room"]["revealed"] is True
-    assert after["room"]["results"] == before  # byte-identical (§A)
+    assert after["room"]["results"] == before
     assert after["room"]["host_voting"] is True
 
 
 def test_successful_handover_is_logged(client, caplog):
-    """Constraint 4: actor, target, room, and outcome all recorded."""
+    """Actor, target, room, and outcome all recorded."""
     code, host_id = _create(client)
     bob_id = _join_http(client, code, "Bob")
 
@@ -189,7 +178,7 @@ def test_successful_handover_is_logged(client, caplog):
 
 
 def test_rejected_handover_is_logged(client, caplog):
-    """ "Who tried" is as much of the session's history as "who succeeded"."""
+    """Who tried is as much of the session's history as who succeeded."""
     code, host_id = _create(client)
     bob_id = _join_http(client, code, "Bob")
 
@@ -204,8 +193,8 @@ def test_rejected_handover_is_logged(client, caplog):
 
     assert "rejected" in caplog.text
     assert code in caplog.text
-    assert bob_id in caplog.text  # the actor, from the socket
-    assert host_id in caplog.text  # the attempted target
+    assert bob_id in caplog.text
+    assert host_id in caplog.text
     assert "NotHost" in caplog.text
 
 
@@ -217,11 +206,11 @@ def test_missing_target_id_is_bad_request(client):
         ws.send_json({"type": "attach", "participant_id": host_id})
         ws.receive_json()
 
-        ws.send_json({"type": "transfer_host"})  # no target_id
+        ws.send_json({"type": "transfer_host"})
         err = ws.receive_json()
         assert err["type"] == "error" and err["reason"] == "bad_request"
 
-        ws.send_json({"type": "reveal"})  # still usable
+        ws.send_json({"type": "reveal"})
         ok = ws.receive_json()
 
     assert ok["room"]["revealed"] is True

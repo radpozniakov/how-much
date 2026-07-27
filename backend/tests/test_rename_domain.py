@@ -1,9 +1,8 @@
-"""Domain-level tests for self-service rename: Room.set_name.
+"""Domain tests for self-service rename: Room.set_name.
 
-Renaming mutates a participant's display name in place; the id (the collision-free
-key, D-10) is untouched, and duplicate names stay allowed. Trimming/length are a
-transport concern, so the domain trusts the passed name (parity with
-add_participant) — the WS-level bounds live in test_ws_rounds.py.
+Renames in place: the id stays the collision-free key (D-10) and duplicate names
+stay allowed. Trimming and length are a transport concern, so the domain trusts the
+name it is given — the WS-level bounds live in test_ws_rounds.py.
 """
 
 import pytest
@@ -18,7 +17,7 @@ def test_set_name_changes_name_keeps_id():
     room.set_name(p.id, "Alicia")
 
     assert room.participants[p.id].name == "Alicia"
-    assert room.participants[p.id].id == p.id  # id is stable across a rename
+    assert room.participants[p.id].id == p.id
 
 
 def test_set_name_unknown_participant_raises():
@@ -39,4 +38,4 @@ def test_set_name_allows_duplicate_names():
 
     assert room.participants[alice.id].name == "Alice"
     assert room.participants[bob.id].name == "Alice"
-    assert alice.id != bob.id  # distinct ids despite identical names
+    assert alice.id != bob.id

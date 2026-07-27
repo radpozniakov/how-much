@@ -12,10 +12,6 @@ const LABELS: Record<ConnectionStatus, string> = {
   rejected: 'disconnected',
 }
 
-// Plain text, no chrome: it is one segment of the header's `code | live |
-// actions` strip, where the separators do the framing. The word alone ("live")
-// does not say what it describes, so the meaning rides along as a hover title
-// and an accessible label rather than as visible caption text.
 export const StatusIndicator: FC<StatusIndicatorProps> = ({ status }) => (
   <span
     className={`status status--${status}`}

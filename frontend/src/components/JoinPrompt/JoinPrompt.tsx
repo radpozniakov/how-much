@@ -12,8 +12,6 @@ export interface JoinPromptProps {
   onJoined: (participantId: string) => void
 }
 
-// Deep-link / no-identity entry: prompt for a name, join over HTTP, then hand the
-// new participant_id back so the room can connect.
 export const JoinPrompt: FC<JoinPromptProps> = ({ code, onJoined }) => {
   const navigate = useNavigate()
   const [name, setName] = useState(() => loadRecall().name)

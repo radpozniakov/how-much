@@ -49,8 +49,6 @@ describe('JoinRoomForm', () => {
   it('shows a 404 as a friendly inline error', async () => {
     vi.mocked(api.joinRoom).mockRejectedValue({ status: 404, detail: 'x' })
     render(<JoinRoomForm />)
-    // Fill the required fields so submit reaches the API (both inputs are
-    // `required`; an empty submit is blocked by native validation).
     fireEvent.change(screen.getByLabelText(/name/i), {
       target: { value: 'Bob' },
     })

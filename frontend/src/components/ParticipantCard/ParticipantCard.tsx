@@ -1,21 +1,15 @@
 import type { FC } from 'react'
 import { CheckIcon } from '../icons'
 
-// The three color-free card states (spec §Participant card). Distinguished by
-// border style + inner content ONLY — never color (spec §Notes for regeneration).
 export type CardState = 'not-voted' | 'voted' | 'revealed'
 
 export interface ParticipantCardProps {
   name: string
   hasVoted: boolean
   revealed: boolean
-  // The revealed numeric card value, present only for a revealed round (FR-10).
   value?: string
 }
 
-// Derive the visible state. Pre-reveal the value is never exposed (FR-10): a
-// voter shows a checkmark, not the number. Post-reveal, a cast card shows its
-// value; an abstainer falls back to the not-voted glyph.
 function resolveState(
   hasVoted: boolean,
   revealed: boolean,
@@ -26,8 +20,6 @@ function resolveState(
   return 'not-voted'
 }
 
-// A portrait card: a face (dashed `?` / solid checkmark / solid numeric value)
-// with the participant name bold below (spec §Participant card).
 export const ParticipantCard: FC<ParticipantCardProps> = ({
   name,
   hasVoted,

@@ -1,7 +1,7 @@
-"""Domain-level tests for S4: reveal, reset, and results stats.
+"""Domain tests for reveal, reset, and results stats.
 
-Exercises :class:`Room` directly (no HTTP), so the reveal/reset rules and the
-average/consensus math are validated independently of any transport (S6).
+Exercises :class:`Room` directly, so the rules and the average/consensus math are
+validated with no transport involved.
 """
 
 import pytest
@@ -16,15 +16,12 @@ def _room_with(*names: str) -> tuple[Room, list[str]]:
     return room, ids
 
 
-# --- reveal -----------------------------------------------------------------
-
-
 def test_reveal_sets_flag_and_is_idempotent():
     room, (host,) = _room_with("Host")
     assert room.revealed is False
     room.reveal(host)
     assert room.revealed is True
-    room.reveal(host)  # no-op, still revealed
+    room.reveal(host)
     assert room.revealed is True
 
 
@@ -36,15 +33,11 @@ def test_non_host_cannot_reveal():
 
 
 def test_results_is_none_until_revealed():
-    # The domain-level FR-10 gate: no results object exists pre-reveal.
     room, (host, alice) = _room_with("Host", "Alice")
     room.cast_vote(alice, "5")
     assert room.results() is None
     room.reveal(host)
     assert room.results() is not None
-
-
-# --- reset ------------------------------------------------------------------
 
 
 def test_reset_clears_votes_topic_and_reveal():
@@ -64,12 +57,10 @@ def test_non_host_cannot_reset():
     room.cast_vote(other, "3")
     with pytest.raises(NotHost):
         room.reset_round(other)
-    assert room.votes  # untouched
+    assert room.votes
 
 
 def test_reset_preserves_host_voting():
-    # host_voting is a facilitator preference that persists across rounds (D-14
-    # is silent on reset); a reset must not silently re-opt the host in.
     room, (host,) = _room_with("Host")
     room.set_host_voting(host, False)
     room.reset_round(host)
@@ -81,14 +72,10 @@ def test_reveal_reset_cycle_is_clean():
     room.cast_vote(alice, "2")
     room.reveal(host)
     room.reset_round(host)
-    # A fresh round runs normally after a reset.
     room.reveal(host)
     assert room.revealed is True
     room.reset_round(host)
     assert room.revealed is False
-
-
-# --- post-reveal vote lock (FR-11) ------------------------------------------
 
 
 def test_vote_after_reveal_is_rejected():
@@ -97,12 +84,10 @@ def test_vote_after_reveal_is_rejected():
     room.reveal(host)
     with pytest.raises(RoundRevealed):
         room.cast_vote(alice, "8")
-    assert room.votes[alice] == "5"  # unchanged
+    assert room.votes[alice] == "5"
 
 
 def test_reveal_checked_before_participant():
-    # Guard order: the revealed state is checked ahead of membership, so a
-    # post-reveal vote from a non-member is RoundRevealed, not UnknownParticipant.
     room, (host,) = _room_with("Host")
     room.reveal(host)
     with pytest.raises(RoundRevealed):
@@ -118,27 +103,21 @@ def test_voting_works_again_after_reset():
 
 
 def test_set_item_after_reveal_is_rejected():
-    # Revealed results must not be relabelled against a different topic.
     room, (host,) = _room_with("Host")
     room.set_item(host, "Login flow")
     room.reveal(host)
     with pytest.raises(RoundRevealed):
         room.set_item(host, "Payment flow")
-    assert room.current_item == "Login flow"  # unchanged
+    assert room.current_item == "Login flow"
 
 
 def test_set_host_voting_after_reveal_is_rejected():
-    # Toggling host voting off post-reveal would drop the host's revealed card
-    # and recompute the average out from under everyone.
     room, (host,) = _room_with("Host")
     room.cast_vote(host, "5")
     room.reveal(host)
     with pytest.raises(RoundRevealed):
         room.set_host_voting(host, False)
-    assert room.votes[host] == "5"  # revealed card untouched
-
-
-# --- results math (FR-15, FR-16) --------------------------------------------
+    assert room.votes[host] == "5"
 
 
 def _reveal(room, host):
@@ -212,9 +191,6 @@ def test_results_snapshot_carries_cards_and_stats():
     assert results.consensus is False
 
 
-# --- decimal decks (FR-22/D-48) ---------------------------------------------
-
-
 def _decimal_room() -> tuple[Room, list[str]]:
     """A room on a deck with a half-point card; the first member is the host."""
     room = Room(code="ROOM01", deck=("1", "1.5", "2", "3"))
@@ -222,9 +198,6 @@ def _decimal_room() -> tuple[Room, list[str]]:
 
 
 def test_revealing_a_decimal_round_does_not_raise():
-    # The V4 landmine, pinned: `results()` parsed cards with `int()`, so the first
-    # reveal in a room holding `1.5` raised ValueError — a 500, not a domain error,
-    # and only on reveal, so such a room looked fine right up until it wasn't.
     room, (host, a, b) = _decimal_room()
     room.cast_vote(a, "1.5")
     room.cast_vote(b, "2")
@@ -242,9 +215,6 @@ def test_average_over_decimal_cards():
 
 
 def test_consensus_holds_over_decimal_cards():
-    # Consensus compares the card strings, not the parsed floats. That is exact
-    # here precisely because the create boundary normalized the deck, so a room can
-    # never hold two spellings of one number for two agreeing voters to split over.
     room, (host, a, b) = _decimal_room()
     room.cast_vote(a, "1.5")
     room.cast_vote(b, "1.5")
