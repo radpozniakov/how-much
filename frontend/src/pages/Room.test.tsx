@@ -3,6 +3,7 @@ import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { Room } from './Room'
+import { loadRecall } from '../lib/recall'
 import { clearSession, saveSession } from '../lib/session'
 import { makeParticipant, makeResults, makeRoom } from '../test/fixtures'
 import { MockWebSocket, deliver, lastSocket } from '../test/mockWebSocket'
@@ -36,6 +37,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   clearSession()
+  localStorage.clear()
 })
 
 describe('Room (S9 wiring)', () => {
@@ -494,5 +496,90 @@ describe('Room (S9 wiring)', () => {
       type: 'cast_vote',
       card: '12',
     })
+  })
+
+  // --- Recalled inputs (FR-23/D-52): a rename counts as submitting a name.
+
+  it('remembers a committed rename for the next visit', async () => {
+    const user = userEvent.setup()
+    renderRoomAs('pid-1')
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        participants: [makeParticipant({ id: 'pid-1', name: 'Alice' })],
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Alice' }))
+    const input = screen.getByRole('textbox', { name: 'Your display name' })
+    await user.clear(input)
+    await user.type(input, 'Alicia{Enter}')
+
+    // The frame left the client, and the name it carried is what the landing page
+    // will offer back — the two are the same value by construction.
+    expect(JSON.parse(lastSocket().sent.at(-1)!)).toEqual({
+      type: 'set_name',
+      name: 'Alicia',
+    })
+    expect(loadRecall().name).toBe('Alicia')
+  })
+
+  it('remembers nothing for a rename committed after the socket drops', async () => {
+    // The header's `live` check guards *entering* the editor, not committing it,
+    // so a drop while the user is mid-edit leaves an open editor whose Enter
+    // still commits — and `RoomSocket.send` then discards the frame. Without the
+    // gate in `renameSelf` the device would remember a name no room ever saw,
+    // which is precisely what "write on successful submission only" forbids.
+    //
+    // NOTE for whoever closes the off-live editor gap (S20/S21): if the editor
+    // starts closing on a drop, this test stops reaching `commit` at all and goes
+    // quietly vacuous rather than failing. Re-point it at whatever the new
+    // off-live commit path is instead of deleting it.
+    const user = userEvent.setup()
+    renderRoomAs('pid-1')
+    const ws = lastSocket()
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        participants: [makeParticipant({ id: 'pid-1', name: 'Alice' })],
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Alice' }))
+    const input = screen.getByRole('textbox', { name: 'Your display name' })
+    await user.clear(input)
+    await user.type(input, 'Alicia')
+
+    // The socket drops with the editor still open, then the user commits.
+    act(() => {
+      ws.onclose?.()
+    })
+    await user.keyboard('{Enter}')
+
+    expect(ws.sent.map((f) => JSON.parse(f).type)).not.toContain('set_name')
+    expect(loadRecall().name).toBe('')
+  })
+
+  it('remembers nothing for a rename the header discards', async () => {
+    const user = userEvent.setup()
+    renderRoomAs('pid-1')
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        participants: [makeParticipant({ id: 'pid-1', name: 'Alice' })],
+      }),
+    )
+
+    // Escape cancels, so no `set_name` is sent and nothing is submitted — the
+    // recall write hangs off the commit, not off the edit.
+    await user.click(screen.getByRole('button', { name: 'Alice' }))
+    const input = screen.getByRole('textbox', { name: 'Your display name' })
+    await user.clear(input)
+    await user.type(input, 'Alicia{Escape}')
+
+    expect(lastSocket().sent.map((f) => JSON.parse(f).type)).not.toContain(
+      'set_name',
+    )
+    expect(loadRecall().name).toBe('')
   })
 })

@@ -443,6 +443,23 @@ closes.
   arrives as a real value, and the two can never show at once — which is also why
   the placeholder cannot double as the recall mechanism. It leaves the field's hint
   text restating the same list; whether the hint keeps it is S22's call.
+  **Settled by building it (V6).** Two questions the rule above leaves open. First,
+  the record is written by *patch* — `rememberInputs({name})` from a join must not
+  clear the deck a host chose when they last created a room, so the two fields have
+  independent writers over one key rather than one writer that has to know both.
+  Second, "successful submission" is thinner for a rename than for a form: `set_name`
+  is fire-and-forget with no acknowledgement to wait on, so what stands in for it is
+  that the frame left the client at all — the write is gated on the same `live`
+  status `RoomSocket.send` gates on. The header's own check is **not** sufficient and
+  leaning on it was the first attempt's bug: it guards *entering* the rename editor,
+  not committing it, so a socket that drops mid-edit leaves an editor whose Enter
+  still commits while `send` silently discards the frame — remembering a name no room
+  ever saw. The write therefore sits in `pages/Room.tsx`, which already owns the
+  session writes and has `status` in hand, rather than in `useRoom` (which stays a
+  bare protocol binding) or the header (which stays a dumb band). Names are
+  remembered **trimmed**, matching what the backend's validators strip to, so what
+  comes back is the name the room took; the deck stays raw as typed, since the server
+  owns its parsing.
   _Chosen over remembering nothing (the field is retyped every session, and the
   deck is retyped identically by the same host every time) and over server-side
   preferences (no accounts, D-9; no persistence, NFR-2)._

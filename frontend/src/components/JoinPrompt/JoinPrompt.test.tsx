@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import type { ReactElement } from 'react'
 import { JoinPrompt } from './JoinPrompt'
 import * as api from '../../lib/api'
+import { loadRecall, rememberInputs } from '../../lib/recall'
 import * as session from '../../lib/session'
 import { makeRoom } from '../../test/fixtures'
 
@@ -19,6 +20,10 @@ vi.mock('../../lib/session', () => ({ saveSession: vi.fn() }))
 
 beforeEach(() => {
   vi.clearAllMocks()
+})
+
+afterEach(() => {
+  localStorage.clear()
 })
 
 describe('JoinPrompt', () => {
@@ -67,5 +72,31 @@ describe('JoinPrompt', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: /go to home page/i }))
     expect(await screen.findByText('home page')).toBeInTheDocument()
+  })
+
+  // --- recalled inputs (FR-23/D-52) ------------------------------------------
+
+  it('starts the name from recall', () => {
+    // The rejoin surface: a deep link, a sweep, or a stale id lands here, and the
+    // name is one this device has already typed at least once.
+    rememberInputs({ name: 'Bob' })
+    renderInRouter(<JoinPrompt code="ABCDEF" onJoined={vi.fn()} />)
+    expect(screen.getByLabelText(/name/i)).toHaveValue('Bob')
+  })
+
+  it('remembers the name on a successful join', async () => {
+    vi.mocked(api.joinRoom).mockResolvedValue({
+      participantId: 'p9',
+      room: makeRoom({ code: 'ABCDEF' }),
+    })
+    const onJoined = vi.fn()
+    renderInRouter(<JoinPrompt code="ABCDEF" onJoined={onJoined} />)
+    fireEvent.change(screen.getByLabelText(/name/i), {
+      target: { value: 'Bob' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /join/i }))
+
+    await waitFor(() => expect(onJoined).toHaveBeenCalled())
+    expect(loadRecall().name).toBe('Bob')
   })
 })

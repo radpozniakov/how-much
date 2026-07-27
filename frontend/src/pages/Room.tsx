@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FC } from 'react'
 import { useNavigate } from 'react-router'
+import { rememberInputs } from '../lib/recall'
 import { clearSession, loadSession } from '../lib/session'
 import { useRoom } from '../lib/useRoom'
 import {
@@ -56,6 +57,29 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
   const exitRoom = () => {
     clearSession()
     navigate('/')
+  }
+
+  // A rename is a name submission too, so it replaces what the next visit offers
+  // back (FR-19/FR-23, D-52). Wrapped here rather than inside useRoom or the
+  // header: `setName` stays a bare protocol call and the header stays a dumb
+  // band, while this page — which already owns the session writes — owns the
+  // recall write as well.
+  //
+  // "Successful submission" is thinner for a rename than for a form: `set_name`
+  // is fire-and-forget with no acknowledgement to wait on. The nearest honest
+  // stand-in is that the frame actually left the client, so the write is gated on
+  // the same condition `RoomSocket.send` gates on.
+  //
+  // The header's own `live` check is not enough to lean on: it guards *entering*
+  // the editor, not committing it. A socket that drops while the user is mid-edit
+  // leaves an open editor whose Enter still commits, and `send` then discards the
+  // frame — so without this gate the device would remember a name no room ever
+  // saw. (That the edit itself is lost on a mid-edit drop is pre-existing and not
+  // this slice's to fix; remembering it as submitted would be.)
+  const renameSelf = (newName: string) => {
+    if (status !== 'live') return
+    rememberInputs({ name: newName })
+    setName(newName)
   }
 
   // A stale-identity rejection: the hook has cleared the session; drop back to
@@ -135,7 +159,7 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
       <RoomHeader
         code={code}
         participantName={me?.name ?? ''}
-        onRename={setName}
+        onRename={renameSelf}
         onExit={exitRoom}
         status={status}
         // Host-only roster beside the name. Gated here rather than inside the
