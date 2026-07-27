@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FC } from 'react'
 import { useNavigate } from 'react-router'
+import { rememberInputs } from '../lib/recall'
 import { clearSession, loadSession } from '../lib/session'
 import { useRoom } from '../lib/useRoom'
 import {
@@ -56,6 +57,12 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
   const exitRoom = () => {
     clearSession()
     navigate('/')
+  }
+
+  const renameSelf = (newName: string) => {
+    if (status !== 'live') return
+    rememberInputs({ name: newName })
+    setName(newName)
   }
 
   // A stale-identity rejection: the hook has cleared the session; drop back to
@@ -131,7 +138,7 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
       <RoomHeader
         code={code}
         participantName={me?.name ?? ''}
-        onRename={setName}
+        onRename={renameSelf}
         onExit={exitRoom}
         status={status}
         // Host-only roster beside the name. Gated here rather than inside the

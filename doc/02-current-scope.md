@@ -3,9 +3,8 @@
 > **Living doc — what the app does today.** Keep this updated as scope changes.
 > Build history lives in `archive/`; rationale in [03-decisions.md](03-decisions.md).
 > Known gaps, all tracked in [07-v0.1-phase.md](07-v0.1-phase.md): **session-token
-> hardening (V3)**, **input recall (V6, FR-23 — written but not built)**,
-> **deployment polish (S10)**, **interaction polish (S20)**, **accessibility
-> (S21)**, and **copy (S22)**.
+> hardening (V3)**, **deployment polish (S10)**, **interaction polish (S20)**,
+> **accessibility (S21)**, and **copy (S22)**.
 
 The smallest set that makes a real estimation session usable.
 
@@ -17,6 +16,7 @@ The smallest set that makes a real estimation session usable.
 | Joining | Join via link or code; enter display name only (no auth) |
 | Identity | Name only, non-unique, internal ID distinguishes participants |
 | Rename | A participant can rename themselves at any time; everyone sees it live |
+| Input recall | The browser offers back the display name and card values this device last submitted, as editable starting values |
 | Capacity | Up to 30 participants per room |
 | Deck | Numbers only, no special cards; host sets 2–12 values from 1 to 999 (comma-separated) at creation, fixed for the room's life; blank means `1,2,3,5,8,13,21` |
 | Item | Single current item with optional free-text topic |

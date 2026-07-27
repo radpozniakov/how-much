@@ -44,7 +44,14 @@ HOWMUCH_FRONTEND_URL=http://host:5173 HOWMUCH_API_URL=http://host:8000 npm test
 | `presence-handoff.spec.ts` | FR-7, FR-17 — live presence, host auto-transfer on disconnect |
 | `edge-cases.spec.ts` | FR-18 — bad room code, tab reload/reconnect recovery |
 | `capacity.spec.ts` | FR-5 — 30-participant cap enforced (HTTP layer) |
+| `rename.spec.ts` | FR-19 — self-rename propagates to every client |
+| `participants-menu.spec.ts` | FR-20, FR-21 — host handover and participant removal |
+| `recall.spec.ts` | FR-23 — recalled name and card values, per device |
 
 Each participant is a separate browser **context** because identity lives in
 per-tab `sessionStorage` (`howmuch:session`). Room capacity is exercised over
 HTTP rather than with 31 browsers — same domain seam, far cheaper.
+
+`recall.spec.ts` inverts that pattern: recall is per *device* (`localStorage`,
+`howmuch:recall`), so its scenarios are one context revisited, and a second
+context is what proves recall does not travel.

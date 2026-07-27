@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router'
 import { createRoom, requestErrorMessage } from '../../lib/api'
 import { FIBONACCI_DECK } from '../../lib/deck'
 import { MAX_DECK_INPUT_LENGTH } from '../../lib/limits'
+import { loadRecall, rememberInputs } from '../../lib/recall'
 import { saveSession } from '../../lib/session'
 
 // What "leave it blank" gets you, spelled out rather than described. This is the
@@ -13,11 +14,11 @@ const DEFAULT_DECK_HINT = FIBONACCI_DECK.join(', ')
 
 export const CreateRoomForm: FC = () => {
   const navigate = useNavigate()
-  const [name, setName] = useState('')
+  const [name, setName] = useState(() => loadRecall().name)
   // The host's card values as typed, sent raw (FR-22/D-48). Deliberately not
   // parsed or pre-validated here: the server owns the deck rules, so a second
   // implementation on this side could only drift from the one that decides.
-  const [cards, setCards] = useState('')
+  const [cards, setCards] = useState(() => loadRecall().cards)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -27,6 +28,7 @@ export const CreateRoomForm: FC = () => {
     setBusy(true)
     try {
       const { participantId, room } = await createRoom(name, cards)
+      rememberInputs({ name: name.trim(), cards })
       saveSession(room.code, participantId)
       navigate(`/room/${room.code}`)
     } catch (err) {
@@ -59,6 +61,7 @@ export const CreateRoomForm: FC = () => {
             value={cards}
             onChange={(e) => setCards(e.target.value)}
             maxLength={MAX_DECK_INPUT_LENGTH}
+            placeholder={DEFAULT_DECK_HINT}
             autoComplete="off"
           />
         </label>

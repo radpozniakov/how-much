@@ -2,11 +2,12 @@ import { useState } from 'react'
 import type { FC, SyntheticEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { joinRoom, requestErrorMessage } from '../../lib/api'
+import { loadRecall, rememberInputs } from '../../lib/recall'
 import { saveSession } from '../../lib/session'
 
 export const JoinRoomForm: FC = () => {
   const navigate = useNavigate()
-  const [name, setName] = useState('')
+  const [name, setName] = useState(() => loadRecall().name)
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -17,6 +18,7 @@ export const JoinRoomForm: FC = () => {
     setBusy(true)
     try {
       const { participantId, room } = await joinRoom(code, name)
+      rememberInputs({ name: name.trim() })
       saveSession(room.code, participantId)
       navigate(`/room/${room.code}`)
     } catch (err) {

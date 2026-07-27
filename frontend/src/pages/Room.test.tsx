@@ -3,6 +3,7 @@ import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { Room } from './Room'
+import { loadRecall } from '../lib/recall'
 import { clearSession, saveSession } from '../lib/session'
 import { makeParticipant, makeResults, makeRoom } from '../test/fixtures'
 import { MockWebSocket, deliver, lastSocket } from '../test/mockWebSocket'
@@ -36,6 +37,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   clearSession()
+  localStorage.clear()
 })
 
 describe('Room (S9 wiring)', () => {
@@ -494,5 +496,73 @@ describe('Room (S9 wiring)', () => {
       type: 'cast_vote',
       card: '12',
     })
+  })
+
+  it('remembers a committed rename for the next visit', async () => {
+    const user = userEvent.setup()
+    renderRoomAs('pid-1')
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        participants: [makeParticipant({ id: 'pid-1', name: 'Alice' })],
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Alice' }))
+    const input = screen.getByRole('textbox', { name: 'Your display name' })
+    await user.clear(input)
+    await user.type(input, 'Alicia{Enter}')
+
+    expect(JSON.parse(lastSocket().sent.at(-1)!)).toEqual({
+      type: 'set_name',
+      name: 'Alicia',
+    })
+    expect(loadRecall().name).toBe('Alicia')
+  })
+
+  it('remembers nothing for a rename committed after the socket drops', async () => {
+    const user = userEvent.setup()
+    renderRoomAs('pid-1')
+    const ws = lastSocket()
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        participants: [makeParticipant({ id: 'pid-1', name: 'Alice' })],
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Alice' }))
+    const input = screen.getByRole('textbox', { name: 'Your display name' })
+    await user.clear(input)
+    await user.type(input, 'Alicia')
+
+    act(() => {
+      ws.onclose?.()
+    })
+    await user.keyboard('{Enter}')
+
+    expect(ws.sent.map((f) => JSON.parse(f).type)).not.toContain('set_name')
+    expect(loadRecall().name).toBe('')
+  })
+
+  it('remembers nothing for a rename the header discards', async () => {
+    const user = userEvent.setup()
+    renderRoomAs('pid-1')
+    connect(
+      makeRoom({
+        host_id: 'pid-1',
+        participants: [makeParticipant({ id: 'pid-1', name: 'Alice' })],
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Alice' }))
+    const input = screen.getByRole('textbox', { name: 'Your display name' })
+    await user.clear(input)
+    await user.type(input, 'Alicia{Escape}')
+
+    expect(lastSocket().sent.map((f) => JSON.parse(f).type)).not.toContain(
+      'set_name',
+    )
+    expect(loadRecall().name).toBe('')
   })
 })
