@@ -696,4 +696,26 @@ describe('ParticipantsMenu', () => {
     expect(screen.getByText('Alice').closest('li')).toHaveTextContent('host')
     expect(screen.getByText('Bob').closest('li')).toHaveTextContent('me')
   })
+
+  it('marks only the host’s row as the separator row', async () => {
+    const user = userEvent.setup()
+    renderMenu()
+    await user.click(trigger())
+
+    const marked = () =>
+      Array.from(document.querySelectorAll('.participants-menu__item--host'))
+
+    expect(marked()).toHaveLength(1)
+    expect(marked()[0]).toHaveTextContent('Alice')
+  })
+
+  it('marks no row during the transient unowned window', async () => {
+    const user = userEvent.setup()
+    renderMenu('p1', { hostId: '' })
+    await user.click(trigger())
+
+    expect(
+      document.querySelectorAll('.participants-menu__item--host'),
+    ).toHaveLength(0)
+  })
 })

@@ -400,11 +400,15 @@ export const ParticipantsMenu: FC<ParticipantsMenuProps> = ({
           <ul className="participants-menu__list">
             {ordered.map((p) => {
               const isSelf = p.id === currentParticipantId
+              const isHost = p.id === hostId
               const armedHere = armed?.id === p.id ? armed.action : null
               return (
                 <li
                   key={p.id}
-                  className="participants-menu__item"
+                  className={
+                    'participants-menu__item' +
+                    (isHost ? ' participants-menu__item--host' : '')
+                  }
                   // Addressable so the focus effect can find this row's slots after a
                   // cancel, without a ref per row.
                   data-participant-id={p.id}
@@ -416,7 +420,7 @@ export const ParticipantsMenu: FC<ParticipantsMenuProps> = ({
                   {isSelf && (
                     <span className="participants-menu__badge">me</span>
                   )}
-                  {p.id === hostId && (
+                  {isHost && (
                     <span className="participants-menu__badge">host</span>
                   )}
                   {!isSelf && (
