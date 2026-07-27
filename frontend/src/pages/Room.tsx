@@ -89,25 +89,21 @@ const ConnectedRoom: FC<ConnectedRoomProps> = ({
         // into it on the swap — real work, and S21's, alongside the same gap on the
         // branch below. Flagged there rather than half-solved here.
         <main className="page">
-          <h1>Room {code}</h1>
-          <section className="card">
-            <p>{error.message}</p>
-            <button type="button" onClick={() => navigate('/')}>
-              Back to start
-            </button>
-          </section>
+          <h1 className="landing__title">Room {code}</h1>
+          <p className="landing__description">{error.message}</p>
+          <button type="button" onClick={() => navigate('/')}>
+            Back to start
+          </button>
         </main>
       )
     }
     return (
       <main className="page">
-        <h1>Room {code}</h1>
-        <section className="card">
-          <p>This room no longer exists.</p>
-          <button type="button" onClick={() => navigate('/')}>
-            Back to start
-          </button>
-        </section>
+        <h1 className="landing__title">Room {code}</h1>
+        <p className="landing__description">This room no longer exists.</p>
+        <button type="button" onClick={() => navigate('/')}>
+          Back to start
+        </button>
       </main>
     )
   }
