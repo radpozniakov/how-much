@@ -7,8 +7,9 @@
 > and kept only for provenance.
 >
 > Read this before adding a screen or component. Currently relevant to the open
-> work in [07-v0.1-phase.md](07-v0.1-phase.md): S20 (interaction polish), S21
-> (accessibility), S22 (copy).
+> work in [07-v0.1-phase.md](07-v0.1-phase.md): V7 (visual refinements — the
+> first consumer of `--wash-hover`, which is defined and so far unused), S20
+> (interaction polish), S21 (accessibility), S22 (copy).
 
 ## The one rule
 
@@ -29,12 +30,26 @@ not chromatic.
 | `--ink` | `#000000` | all text and all borders |
 | `--ink-muted` | `#4C4C4C` | secondary text (labels) |
 | `--rule-faint` | `--ink` at 12% | a divider *inside* an already-bordered container |
+| `--wash-hover` | `--ink` at 8% | hover fill for a control that carries no border |
 
-`--ink-muted` and `--rule-faint` extend the mockup, which specified only the three
-base values. Both stay inside the monochrome system — `--rule-faint` is derived from
-`--ink` via `color-mix`, so it cannot drift into a tint. `--rule-faint` exists
-because a second solid `1px` line inside a hairline-bordered box reads as a doubled
-edge; reach for it rather than nesting hairlines.
+The last three extend the mockup, which specified only the three base values. All
+stay inside the monochrome system — the two derived from `--ink` via `color-mix`
+cannot drift into a tint, and `--ink-muted` is neutral by construction.
+
+- `--rule-faint` exists because a second solid `1px` line inside a
+  hairline-bordered box reads as a doubled edge; reach for it rather than nesting
+  hairlines.
+- `--wash-hover` is the alternative to inversion for borderless controls, which
+  have no border to thicken and no fill to swap. Inversion stays reserved for
+  genuine selection (below), and a `--surface` hover fill is invisible on the
+  panels and cards that are already `--surface`. Translucent on purpose: the same
+  value reads correctly on `--surface` and on `--bg`, so hover strength does not
+  have to be re-picked per container.
+
+The `color-mix(in srgb, var(--ink) 4%, transparent)` literal on the stage's topic
+editor predates `--wash-hover` and is deliberately weaker — it washes a 44px title,
+not a 26px button. Folding the two together is a judgement call for whoever next
+opens that block, not a cleanup owed.
 
 ## Type
 

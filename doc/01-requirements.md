@@ -88,6 +88,17 @@ Host actions taken on *another* participant, as distinct from controlling the ro
   deck is **fixed for the room's life** — there is no way to change it afterwards,
   and a host who wants different values creates a new room.
 
+### Client recall
+- **FR-23** The browser remembers, per device, the **display name** and the **card
+  values** a user last submitted, and offers them back as the starting value of the
+  matching field: the name wherever one is asked for (creating a room, joining,
+  the rejoin prompt), the card values when creating a room. Submitting a different
+  value replaces what is remembered; a rename (FR-19) counts as submitting a name.
+  A recalled value is a starting value only — it is still editable, still validated
+  the same way, and nothing is recalled before the first submission. Recall is a
+  convenience, so a browser that refuses storage simply starts with empty fields
+  (D-52).
+
 ## Non-functional requirements
 
 - **NFR-1 Transport** — Real-time state is delivered over WebSocket. Creating and

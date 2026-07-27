@@ -424,3 +424,25 @@ closes.
   in the backlog as hardening worth doing, not as a gate on v0.1. The standing
   rule survives the call: revisit if the tool ever goes somewhere less trusted
   than a team room.
+- **D-52 Remembered inputs live in `localStorage`, beside the `sessionStorage`
+  identity — never merged with it.** FR-23 wants the last name and the last deck
+  back on the next visit; D-39 wants identity scoped to one tab so two tabs are two
+  participants. Those are opposite lifetimes, so they get separate keys in separate
+  stores: `session.ts` keeps `{code, participantId}` per tab, and a second module
+  keeps `{name, cards}` per device. Widening the session record to `localStorage`
+  instead would make every new tab re-attach as the same participant and silently
+  break the second-tab flow the e2e suite relies on.
+  A recalled value is a *starting* value: it is written into the field's state at
+  mount and is then ordinary user input, so validation, `required`, and the
+  server's deck rules (FR-22) see no difference between recalled and typed. The
+  write happens on successful submission only, not on keystroke — an abandoned or
+  rejected form must not poison the next visit. Storage failures degrade to empty
+  fields, wrapped exactly as `session.ts` already wraps them.
+  The create form's card-values field gains the Fibonacci default as its
+  **placeholder** as well: the placeholder states what blank means, a recalled deck
+  arrives as a real value, and the two can never show at once — which is also why
+  the placeholder cannot double as the recall mechanism. It leaves the field's hint
+  text restating the same list; whether the hint keeps it is S22's call.
+  _Chosen over remembering nothing (the field is retyped every session, and the
+  deck is retyped identically by the same host every time) and over server-side
+  preferences (no accounts, D-9; no persistence, NFR-2)._

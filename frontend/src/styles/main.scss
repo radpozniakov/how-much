@@ -4,6 +4,11 @@
   --surface: #ffffff; // cards, stage
   --ink: #000000; // all text + borders
   --ink-muted: #4c4c4c; // secondary text (labels)
+  // The hover fill for a control with no border of its own, where inverting to
+  // --ink would be too loud (doc/06: spend inversion on selection). Translucent
+  // and derived from --ink, like --rule-faint, so one value works on --surface
+  // and --bg alike.
+  --wash-hover: color-mix(in srgb, var(--ink) 8%, transparent);
 
   // Type (spec §Fonts): Inter for text, JetBrains Mono for titles + numbers.
   --font-sans: 'Inter Variable', system-ui, 'Segoe UI', Roboto, sans-serif;
