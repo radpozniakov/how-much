@@ -1,5 +1,7 @@
 # how-much
 
+<img width="1512" height="982" alt="screen" src="https://github.com/user-attachments/assets/6a87c431-10ad-4bd0-be69-4e38f26ef14d" />
+
 A lightweight, self-hostable **Planning-Poker-style estimation tool**. A team joins
 a room, votes privately on the current item, and the host reveals all cards at once —
 removing anchoring bias. No accounts, no database.
