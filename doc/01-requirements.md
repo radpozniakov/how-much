@@ -30,7 +30,9 @@
 
 ### Voting round
 - **FR-8** The room works on a **single current item** at a time — an optional
-  free-text topic/title the host can set. There is no backlog.
+  free-text topic/title the host can set. There is no backlog. The UI does not
+  open voting until a topic is set; that precondition is UI-only — the domain
+  accepts votes regardless (D-43).
 - **FR-9** The estimation deck is **numbers only** — no special cards (`?`,
   coffee), no T-shirt sizes. Its **default** is the Fibonacci set `1, 2, 3, 5, 8,
   13, 21`, which a room gets when its host names no card values; a host who does
@@ -40,7 +42,9 @@
   *that* a participant has voted, not the value.
 - **FR-11** A voter may change their selection until the round is revealed.
 - **FR-12** The host, and only the host, reveals the round. On reveal all votes
-  become visible to everyone.
+  become visible to everyone. The UI additionally offers reveal only once a topic
+  is set and at least one vote is cast, and hides it when nobody is eligible to
+  vote; these gates are UI-only — the domain reveals unconditionally (D-43, D-12).
 - **FR-13** The host, and only the host, resets/clears to start a new round.
 - **FR-14** The host can toggle whether they themselves vote. All other
   participants always vote.
@@ -55,8 +59,10 @@
   in real time for everyone.
 - **FR-18** A dropped participant who reconnects rejoins as a **new** participant
   (same name if re-entered); any vote in the in-progress round is lost.
-- **FR-19** — *reserved: participant self-rename (shipped as `set_name`, D-42);
-  requirement to be backfilled — see [07-v0.1-phase.md](07-v0.1-phase.md).*
+- **FR-19** A participant can change their **own display name** at any time; the
+  new name reaches everyone in real time. Only the participant themselves can do
+  it — the rename carries no target — and validation matches joining: trimmed,
+  non-blank, ≤ 40 chars, non-unique (D-42).
 
 ### Room control
 Host actions taken on *another* participant, as distinct from controlling the round.
@@ -98,7 +104,5 @@ Host actions taken on *another* participant, as distinct from controlling the ro
 
 ## Open questions
 
-- No open **MVP** decisions — see [03-decisions.md](03-decisions.md).
-- Outstanding for the current phase: **FR-19** is reserved but unwritten (the
-  behavior ships; the requirement does not exist yet). The v0.1 phase tracks the
-  rest — see [07-v0.1-phase.md](07-v0.1-phase.md).
+None for the contract. Open phase work is tracked in
+[07-v0.1-phase.md](07-v0.1-phase.md).

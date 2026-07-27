@@ -7,8 +7,8 @@
 > and kept only for provenance.
 >
 > Read this before adding a screen or component. Currently relevant to the open
-> work in [07-v0.1-phase.md](07-v0.1-phase.md): the V1/V2 roster row actions, and
-> S20 (interaction polish), S21 (accessibility), S22 (copy).
+> work in [07-v0.1-phase.md](07-v0.1-phase.md): S20 (interaction polish), S21
+> (accessibility), S22 (copy).
 
 ## The one rule
 
