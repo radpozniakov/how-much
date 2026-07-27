@@ -16,9 +16,6 @@ export interface JoinPromptProps {
 // new participant_id back so the room can connect.
 export const JoinPrompt: FC<JoinPromptProps> = ({ code, onJoined }) => {
   const navigate = useNavigate()
-  // Starts from the name this device last submitted (FR-23/D-52), read once at
-  // mount. This is the surface recall earns the most on: a reload after a
-  // sweep or a stale id lands here, and the user has already typed this name.
   const [name, setName] = useState(() => loadRecall().name)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')

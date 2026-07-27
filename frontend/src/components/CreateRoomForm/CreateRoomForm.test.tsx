@@ -18,9 +18,6 @@ vi.mock('react-router', async (importActual) => ({
   useNavigate: () => navigate,
 }))
 vi.mock('../../lib/session', () => ({ saveSession: vi.fn() }))
-// lib/recall is deliberately NOT mocked: it is a thin localStorage wrapper, and
-// jsdom gives us the real store, so these tests pin the effect a user would get
-// on their next visit rather than the fact that a function was called.
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -28,9 +25,6 @@ beforeEach(() => {
 
 afterEach(() => {
   localStorage.clear()
-  // Not just `clearAllMocks` in beforeEach: that leaves a `vi.spyOn` in place, so
-  // the storage-failure test below would leak a throwing `getItem` into every
-  // later test in the file if it ever failed before restoring it itself.
   vi.restoreAllMocks()
 })
 
@@ -128,8 +122,6 @@ describe('CreateRoomForm', () => {
     expect(navigate).not.toHaveBeenCalled()
   })
 
-  // --- recalled inputs (FR-23/D-52) ------------------------------------------
-
   it('starts both fields from what this device last submitted', () => {
     rememberInputs({ name: 'Alice', cards: '1, 2, 3' })
     render(<CreateRoomForm />)
@@ -150,8 +142,6 @@ describe('CreateRoomForm', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: /create/i }))
 
-    // A recalled value is a *starting* value: it is submitted as edited, and the
-    // edit is what gets remembered next.
     await waitFor(() =>
       expect(api.createRoom).toHaveBeenCalledWith('Alicia', '1, 2, 3'),
     )
@@ -174,14 +164,10 @@ describe('CreateRoomForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /create/i }))
 
     await waitFor(() => expect(navigate).toHaveBeenCalled())
-    // Raw as typed, matching what was sent — recall is not a second place the
-    // deck string gets normalized.
     expect(loadRecall()).toEqual({ name: 'Alice', cards: '1, 2, 3' })
   })
 
   it('remembers nothing when the server rejects the deck', async () => {
-    // The write is on successful submission only: a rejected form must not
-    // poison the next visit, so a previously recalled deck survives intact.
     rememberInputs({ name: 'Alice', cards: '1, 2, 3' })
     vi.mocked(api.createRoom).mockRejectedValue({
       status: 422,
@@ -198,8 +184,6 @@ describe('CreateRoomForm', () => {
   })
 
   it('placeholders the card-values field with the default deck', () => {
-    // The placeholder states what blank means (D-52). Read off the constant for
-    // the same reason the hint is: the two must not drift from the default.
     render(<CreateRoomForm />)
     expect(screen.getByLabelText('Card values')).toHaveAttribute(
       'placeholder',
@@ -208,9 +192,6 @@ describe('CreateRoomForm', () => {
   })
 
   it('shows the placeholder exactly when no deck is recalled', () => {
-    // The placeholder and a recalled deck can never both show: a recalled deck
-    // arrives as a real value, which is what hides the placeholder. This pins the
-    // pair, since the placeholder attribute alone is present either way.
     const { unmount } = render(<CreateRoomForm />)
     expect(screen.getByLabelText('Card values')).toHaveValue('')
     unmount()
@@ -221,9 +202,6 @@ describe('CreateRoomForm', () => {
   })
 
   it('remembers the name trimmed, matching what the server takes', async () => {
-    // The backend strips the display name, so remembering the keystrokes around
-    // it would offer back a name the room never had — and would disagree with the
-    // rename path, which trims before it commits.
     vi.mocked(api.createRoom).mockResolvedValue({
       participantId: 'p1',
       room: makeRoom({ code: 'ABCDEF' }),
@@ -236,15 +214,11 @@ describe('CreateRoomForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /create/i }))
 
     await waitFor(() => expect(navigate).toHaveBeenCalled())
-    // Sent raw — trimming what goes to the server is not this slice's business,
-    // and the server strips it anyway.
     expect(api.createRoom).toHaveBeenCalledWith('  Alice  ', '')
     expect(loadRecall().name).toBe('Alice')
   })
 
   it('starts with empty fields when storage refuses to be read', () => {
-    // FR-23 names this case: recall is a convenience, so a browser that refuses
-    // storage starts blank rather than failing the landing page.
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('storage disabled')
     })
@@ -254,8 +228,6 @@ describe('CreateRoomForm', () => {
   })
 
   it('clears the recalled deck when the field is submitted blank', async () => {
-    // Otherwise a deck could never be un-chosen and the placeholder could never
-    // come back: submitting blank has to replace what is remembered, not skip it.
     rememberInputs({ name: 'Alice', cards: '1, 2, 3' })
     vi.mocked(api.createRoom).mockResolvedValue({
       participantId: 'p1',

@@ -498,8 +498,6 @@ describe('Room (S9 wiring)', () => {
     })
   })
 
-  // --- Recalled inputs (FR-23/D-52): a rename counts as submitting a name.
-
   it('remembers a committed rename for the next visit', async () => {
     const user = userEvent.setup()
     renderRoomAs('pid-1')
@@ -515,8 +513,6 @@ describe('Room (S9 wiring)', () => {
     await user.clear(input)
     await user.type(input, 'Alicia{Enter}')
 
-    // The frame left the client, and the name it carried is what the landing page
-    // will offer back — the two are the same value by construction.
     expect(JSON.parse(lastSocket().sent.at(-1)!)).toEqual({
       type: 'set_name',
       name: 'Alicia',
@@ -525,16 +521,6 @@ describe('Room (S9 wiring)', () => {
   })
 
   it('remembers nothing for a rename committed after the socket drops', async () => {
-    // The header's `live` check guards *entering* the editor, not committing it,
-    // so a drop while the user is mid-edit leaves an open editor whose Enter
-    // still commits — and `RoomSocket.send` then discards the frame. Without the
-    // gate in `renameSelf` the device would remember a name no room ever saw,
-    // which is precisely what "write on successful submission only" forbids.
-    //
-    // NOTE for whoever closes the off-live editor gap (S20/S21): if the editor
-    // starts closing on a drop, this test stops reaching `commit` at all and goes
-    // quietly vacuous rather than failing. Re-point it at whatever the new
-    // off-live commit path is instead of deleting it.
     const user = userEvent.setup()
     renderRoomAs('pid-1')
     const ws = lastSocket()
@@ -550,7 +536,6 @@ describe('Room (S9 wiring)', () => {
     await user.clear(input)
     await user.type(input, 'Alicia')
 
-    // The socket drops with the editor still open, then the user commits.
     act(() => {
       ws.onclose?.()
     })
@@ -570,8 +555,6 @@ describe('Room (S9 wiring)', () => {
       }),
     )
 
-    // Escape cancels, so no `set_name` is sent and nothing is submitted — the
-    // recall write hangs off the commit, not off the edit.
     await user.click(screen.getByRole('button', { name: 'Alice' }))
     const input = screen.getByRole('textbox', { name: 'Your display name' })
     await user.clear(input)

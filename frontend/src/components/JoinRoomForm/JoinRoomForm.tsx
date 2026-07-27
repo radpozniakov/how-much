@@ -7,8 +7,6 @@ import { saveSession } from '../../lib/session'
 
 export const JoinRoomForm: FC = () => {
   const navigate = useNavigate()
-  // Starts from the name this device last submitted (FR-23/D-52), read once at
-  // mount. The code is not recalled — it belongs to a room, not to a person.
   const [name, setName] = useState(() => loadRecall().name)
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)

@@ -17,25 +17,18 @@ describe('recall', () => {
   })
 
   it('replaces only the patched field', () => {
-    // The point of the patch shape: joining remembers a name without discarding
-    // the deck the same device chose when it last created a room (D-52).
     rememberInputs({ name: 'Alice', cards: '1, 2, 3' })
     rememberInputs({ name: 'Bob' })
     expect(loadRecall()).toEqual({ name: 'Bob', cards: '1, 2, 3' })
   })
 
   it('remembers a blank value as blank', () => {
-    // Submitting the create form with the deck field cleared must clear the
-    // recalled deck — otherwise the field can never be un-chosen, and the
-    // Fibonacci placeholder could never come back.
     rememberInputs({ cards: '1, 2, 3' })
     rememberInputs({ cards: '' })
     expect(loadRecall().cards).toBe('')
   })
 
   it('lives in localStorage, not the sessionStorage identity record', () => {
-    // D-52's load-bearing separation: merging the two stores would make every
-    // new tab re-attach as the same participant (D-39).
     rememberInputs({ name: 'Alice' })
     expect(localStorage.getItem('howmuch:recall')).toBeTruthy()
     expect(sessionStorage.getItem('howmuch:recall')).toBeNull()

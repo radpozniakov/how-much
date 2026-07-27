@@ -14,11 +14,6 @@ const DEFAULT_DECK_HINT = FIBONACCI_DECK.join(', ')
 
 export const CreateRoomForm: FC = () => {
   const navigate = useNavigate()
-  // Both fields start from what this device last submitted (FR-23/D-52). The
-  // lazy initializers are what keep this to mount only: nothing re-reads storage
-  // afterwards, so from here on a recalled value is ordinary input. (Two reads
-  // rather than one — they run in the same synchronous tick, so they cannot
-  // disagree, and one call per field beats threading a shared record through.)
   const [name, setName] = useState(() => loadRecall().name)
   // The host's card values as typed, sent raw (FR-22/D-48). Deliberately not
   // parsed or pre-validated here: the server owns the deck rules, so a second
@@ -33,8 +28,6 @@ export const CreateRoomForm: FC = () => {
     setBusy(true)
     try {
       const { participantId, room } = await createRoom(name, cards)
-      // After the server accepted it, not before: a rejected deck must leave the
-      // previous visit's values intact (FR-23/D-52).
       rememberInputs({ name: name.trim(), cards })
       saveSession(room.code, participantId)
       navigate(`/room/${room.code}`)
@@ -68,11 +61,6 @@ export const CreateRoomForm: FC = () => {
             value={cards}
             onChange={(e) => setCards(e.target.value)}
             maxLength={MAX_DECK_INPUT_LENGTH}
-            // The default deck as the placeholder (D-52): it states what blank
-            // means, and it shows precisely when no deck is recalled, because a
-            // recalled deck arrives as a real value. The two can never show at
-            // once — which is also why the placeholder cannot itself be the
-            // recall mechanism.
             placeholder={DEFAULT_DECK_HINT}
             autoComplete="off"
           />

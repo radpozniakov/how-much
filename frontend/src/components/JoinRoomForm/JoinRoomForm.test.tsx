@@ -63,11 +63,7 @@ describe('JoinRoomForm', () => {
     )
   })
 
-  // --- recalled inputs (FR-23/D-52) ------------------------------------------
-
   it('starts the name from recall and leaves the code empty', () => {
-    // The code belongs to a room, not to a person, so it is not recalled — and a
-    // recalled deck has no field here to land in.
     rememberInputs({ name: 'Bob', cards: '1, 2, 3' })
     render(<JoinRoomForm />)
     expect(screen.getByLabelText(/name/i)).toHaveValue('Bob')

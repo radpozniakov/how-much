@@ -74,11 +74,7 @@ describe('JoinPrompt', () => {
     expect(await screen.findByText('home page')).toBeInTheDocument()
   })
 
-  // --- recalled inputs (FR-23/D-52) ------------------------------------------
-
   it('starts the name from recall', () => {
-    // The rejoin surface: a deep link, a sweep, or a stale id lands here, and the
-    // name is one this device has already typed at least once.
     rememberInputs({ name: 'Bob' })
     renderInRouter(<JoinPrompt code="ABCDEF" onJoined={vi.fn()} />)
     expect(screen.getByLabelText(/name/i)).toHaveValue('Bob')
