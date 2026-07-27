@@ -116,4 +116,4 @@ Host actions taken on *another* participant, as distinct from controlling the ro
 ## Open questions
 
 None for the contract. Open phase work is tracked in
-[07-v0.1-phase.md](07-v0.1-phase.md).
+[07-v0.2-phase-backlog.md](07-v0.2-phase-backlog.md).

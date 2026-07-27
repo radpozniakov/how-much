@@ -249,11 +249,12 @@ at the time. Build log: [archive/ux-phase-backlog.md](archive/ux-phase-backlog.m
   the bottom of the room empty and the grid jumping on every reveal. Fixed layout
   beat conditional layout.
 
-## v0.1 phase
+## v0.1 phase · closed
 
-Entries land **per slice as the phase is built**, not retrospectively. Live build
-log: [07-v0.1-phase.md](07-v0.1-phase.md) — append there and here as each slice
-closes.
+Entries landed **per slice as the phase was built**, not retrospectively. Archived
+build log: [archive/v0.1-phase-backlog.md](archive/v0.1-phase-backlog.md). The
+current phase is [07-v0.2-phase-backlog.md](07-v0.2-phase-backlog.md); its decisions go in a new
+section below this one, starting at **D-55**.
 
 - **D-45 Host handover is a *move*, not a grant — and legal at any point in a
   round.** `Room.transfer_host(actor, target)` is one assignment plus
@@ -511,3 +512,29 @@ closes.
   that V7 named three bindings and not a fourth or fifth. Rejected: the flush pair
   and the empty card are what the restyled text made newly obvious, and shipping
   the treatment without them would read as unfinished rather than as scoped._
+- **D-54 The four carried-forward slices are dropped; V3 is the only open item.**
+  Maintainer's call, July 2026. S10 (deployment polish), S20 (interaction & state
+  polish), S21 (accessibility & responsiveness), and S22 (copy & microcopy) leave
+  the backlog. They were carried out of Phase 1 and the UX phase as "finish later"
+  work, and S10 had been carried twice — a slice that survives two phases without
+  being picked up is not a plan, it is a standing apology. Nothing in them was a
+  defect: every label, message, and state they would have finalized shipped as a
+  working default, and the accessibility work V1/V2 actually needed (arrow-key
+  navigation, disabled treatment, the `role="group"` question) was decided and
+  delivered in those slices, not deferred into S21 (D-46). What is genuinely
+  unfinished and now unowned: the `Origin` check on the WS handshake (D-28, D-50),
+  `:focus-visible` coverage everywhere (doc/06), focus management on the two
+  terminal room views (raised by V2, untouched by V7), and the legacy alias tokens
+  in `main.scss` (doc/06). Those gaps are recorded where they live rather than in a
+  slice header, so the backlog stops describing intentions.
+  **V3 stays**, unchanged by this: still in the backlog, still nice-to-have and not
+  a blocker on v0.1 (D-51). It is the one open item because it is the only one
+  with a security consequence.
+  Slice ids survive in code comments and in the records above (S21's owner note in
+  `ParticipantsMenu.tsx`, S22's beside `messages.REMOVED_MESSAGE` and the deck
+  copy, S10's beside the log-level knob). Those are deliberately left alone —
+  rewriting a dozen comments to say "nobody" adds churn and loses the pointer to
+  *what* was open. Read a slice id in code as "a known loose end, unowned".
+  _Chosen over carrying them a third time (the same non-decision, with more
+  history) and over deleting them silently (the phase doc would lose why four
+  headings vanished, and the loose ends above would go unrecorded)._

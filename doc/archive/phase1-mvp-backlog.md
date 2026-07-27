@@ -3,9 +3,9 @@
 > **Archived build log.** Phase 1 (MVP) is complete and verified working
 > end-to-end. Every slice below is `DONE` except **S10 (deployment polish)**,
 > which was carried into the UX phase ([ux-phase-backlog.md](ux-phase-backlog.md)),
-> went unfinished there too, and is now tracked in
-> [../07-v0.1-phase.md](../07-v0.1-phase.md). Kept for history; not a live task
-> list.
+> went unfinished there too, was carried a second time into
+> [v0.1-phase-backlog.md](v0.1-phase-backlog.md), and was **dropped** at the end of
+> that phase (**D-54**). Kept for history; not a live task list.
 
 Sequenced work to build the MVP defined in [../02-current-scope.md](../02-current-scope.md).
 
@@ -957,8 +957,8 @@ Tighten dev CORS to explicit origins (D-28), finalize Docker/compose for a
 deployable setup, config, and run docs. **Refs:** NFR-3
 
 > Not completed in Phase 1, nor in the UX phase
-> ([ux-phase-backlog.md](ux-phase-backlog.md)) — now tracked in
-> [../07-v0.1-phase.md](../07-v0.1-phase.md).
+> ([ux-phase-backlog.md](ux-phase-backlog.md)), nor in v0.1
+> ([v0.1-phase-backlog.md](v0.1-phase-backlog.md)) — **dropped** there (D-54).
 
 ---
 

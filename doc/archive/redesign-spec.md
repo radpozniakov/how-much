@@ -21,8 +21,9 @@
 > - **"the current screen shows 8 columns × 3 rows"** — describes the mockup
 >   screenshot, not a rule.
 > - **§Segment control, `"View 1 (cards)"` / `"View 2 (stats)"`** — dev
->   placeholders, not final copy. Still open as S22 in
->   [../07-v0.1-phase.md](../07-v0.1-phase.md).
+>   placeholders, not final copy. Superseded in code: the control ships as
+>   "Cards view" / "Graph view". S22, which had owned the wider copy pass, was
+>   dropped (D-54).
 > - **"dashboard/stats" framing** — narrowed to re-presenting the existing results
 >   (average + consensus); no new analytics (FR-16, D-16 · DN-B).
 > - **"Room ID" throughout** — means the room **`code`** (D-29). There is no

@@ -6,10 +6,10 @@
 > [archive/redesign-spec.md](archive/redesign-spec.md), superseded on several points
 > and kept only for provenance.
 >
-> Read this before adding a screen or component. Currently relevant to the open
-> work in [07-v0.1-phase.md](07-v0.1-phase.md): S20 (interaction polish), S21
-> (accessibility), S22 (copy). V7 is closed; it tried `--wash-hover` and put it
-> back unused (D-53, and the note under the colour table).
+> Read this before adding a screen or component. It is the standing rulebook, not
+> a companion to open work: the interaction, accessibility, and copy slices it used
+> to point at were dropped (D-54), and V7 is closed — it tried `--wash-hover` and
+> put it back unused (D-53, and the note under the colour table).
 
 ## The one rule
 
@@ -102,8 +102,8 @@ legible as its own label first. Note `&:hover:not(:focus)` in `main.scss` — ho
 suppressed while focused so the two do not compound into an unreadable state.
 
 Focus is already handled with `:focus-visible` in several places (buttons, inputs,
-the header controls). S21 is the pass that makes this consistent and complete
-everywhere, so match the existing `:focus-visible` treatment rather than inventing
+the header controls) but not everywhere. No slice owns finishing it (D-54), so any
+new control matches the existing `:focus-visible` treatment rather than inventing
 one.
 
 ## Conventions
@@ -121,4 +121,5 @@ one.
 `--accent-border`, `--sans`, `--heading`, `--mono`. Five are entirely unused
 (`--text`, `--code-bg`, `--accent-border`, `--sans`, `--heading`) and the rest have
 one or two uses each. **Do not use them in new code** — use the primary tokens
-above. Retiring them belongs with S20/S21 whenever the stylesheet is next opened.
+above. Retiring them is unowned work (D-54); do it whenever the stylesheet is next
+opened for another reason.

@@ -1,14 +1,15 @@
 # UX / UI Phase — Backlog · `CLOSED`
 
 > **Archived build log.** The redesign shipped: the design foundation and every
-> screen slice (S11–S19, S23) is `DONE`. Four slices were **not** completed and
-> are carried forward into [../07-v0.1-phase.md](../07-v0.1-phase.md), not
-> dropped — **S10** (deployment polish, itself carried from Phase 1), **S20**
-> (interaction & state polish), **S21** (accessibility & responsiveness), and
-> **S22** (copy & microcopy). Kept for history; not a live task list.
+> screen slice (S11–S19, S23) is `DONE`. Four slices were **not** completed here
+> and were carried into v0.1 — **S10** (deployment polish, itself carried from
+> Phase 1), **S20** (interaction & state polish), **S21** (accessibility &
+> responsiveness), and **S22** (copy & microcopy). They went unfinished there too
+> and were **dropped** at the end of that phase (**D-54**), which is where their
+> remaining loose ends are recorded. Kept for history; not a live task list.
 >
 > Predecessor: [phase1-mvp-backlog.md](phase1-mvp-backlog.md). Successor:
-> [../07-v0.1-phase.md](../07-v0.1-phase.md).
+> [v0.1-phase-backlog.md](v0.1-phase-backlog.md).
 
 ## Shipped beyond this backlog
 
@@ -29,7 +30,7 @@ so they are written down rather than left implicit:
   header. Renaming is self-service only (the frame carries no `participant_id`,
   so a socket can only rename itself) and fans out via the normal snapshot
   broadcast (D-42). It has no FR of its own — see the contract-additions note in
-  [../07-v0.1-phase.md](../07-v0.1-phase.md).
+  [v0.1-phase-backlog.md](v0.1-phase-backlog.md).
 - **Round-flow preconditions** — the vote deck and the reveal action are disabled
   until the host sets a subject, and reveal additionally requires at least one cast
   vote; the reveal control is hidden when nobody is eligible to vote. Reset stays
@@ -78,8 +79,8 @@ charts, timers, i18n, mobile-native. New *features* are not part of a UX phase.
 - **S10 — Deployment polish** · `CARRIED → v0.1`
   Tighten dev CORS to explicit origins (D-28), finalize Docker/compose for a
   deployable setup, config, and run docs. **Refs:** NFR-3. Independent of the
-  UX work. Not completed here either — carried a second time, now tracked in
-  [../07-v0.1-phase.md](../07-v0.1-phase.md).
+  UX work. Not completed here either — carried a second time into
+  [v0.1-phase-backlog.md](v0.1-phase-backlog.md), and dropped there (D-54).
 
 ## Design source
 
@@ -209,8 +210,8 @@ an opted-out host too, since they are in the room even when excluded from voting
   new WS frames plus backend domain rules (who may hand over, what a removed
   participant sees, how removal interacts with the host role). Per this phase's
   guiding principle they were correctly **out of scope for the UX phase**; they
-  now open the next phase — see
-  [../07-v0.1-phase.md](../07-v0.1-phase.md). S23 shipped the anchor only; the
+  opened the next phase — see
+  [v0.1-phase-backlog.md](v0.1-phase-backlog.md). S23 shipped the anchor only; the
   roster rows are deliberately inert text, and the panel uses `role="group"`
   rather than `role="menu"` until real menuitems exist.
 
@@ -225,7 +226,8 @@ an opted-out host too, since they are in the room even when excluded from voting
   → *Sequencing decided in v0.1:* the two features are **not** gated on closing
   this gap; the impersonation risk is recorded as a known limitation and the
   session-token fix is tracked as optional hardening (V3). See
-  [../07-v0.1-phase.md](../07-v0.1-phase.md). The review's other three points are
+  [v0.1-phase-backlog.md](v0.1-phase-backlog.md); V3 outlived that phase and is
+  now in [../07-v0.2-phase-backlog.md](../07-v0.2-phase-backlog.md). The review's other three points are
   not optional and carry into V1/V2 as design constraints there: authorize in the
   domain via `_require_host`, have new frames carry a **target** id and no actor
   id, and validate the target (member, and not a self-removal).

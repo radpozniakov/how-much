@@ -8,7 +8,7 @@ revealed together on the host's command. It removes anchoring bias — nobody se
 another person's number until everyone has committed.
 
 The MVP is built and working; development continues in small phases (current
-one: [07-v0.1-phase.md](07-v0.1-phase.md)). The goal is unchanged: a working,
+one: [07-v0.2-phase-backlog.md](07-v0.2-phase-backlog.md)). The goal is unchanged: a working,
 self-hostable tool with the smallest feature set that makes a real estimation
 session usable. There are many similar tools; we are not trying to differentiate
 on features, only to have a clean, dependency-light implementation we control.
