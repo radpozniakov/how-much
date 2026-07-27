@@ -171,6 +171,56 @@ export function resultEntry(page: Page, name: string): Locator {
   return card(page, 'Results').locator('li').filter({ hasText: name })
 }
 
+/** The Graph card (V8/D-56), the upper of the two cards the stats view renders.
+ * `card()` matches a heading by substring, and neither "Graph" nor "Results" is
+ * a substring of the other, so the pair stays unambiguous in both directions —
+ * which is what keeps every pre-existing `card(page,'Results')` locator honest
+ * now that the view holds two `section.card` elements. */
+export function graphCard(page: Page): Locator {
+  return card(page, 'Graph')
+}
+
+/** A histogram column identified by its axis label. Exact text, so "1" does not
+ * also match "13"/"21" — the same trap voteCard() avoids in the deck. Columns
+ * exist for every deck value, including the ones nobody voted for, so an empty
+ * column is `graphUnits(...)` with count 0, never a missing element. */
+export function graphColumn(page: Page, value: string): Locator {
+  return graphCard(page)
+    .locator('.graph__column')
+    .filter({ has: page.getByText(value, { exact: true }) })
+}
+
+/** Every vote unit stacked in one column — one per vote cast on that card. */
+export function graphUnits(page: Page, value: string): Locator {
+  return graphColumn(page, value).locator('.graph__unit')
+}
+
+/** The unit in a column that names a given voter. Units carry the name in a
+ * `title`, so asserting through it is independent of the order the server
+ * happens to list participants in. */
+export function graphVote(page: Page, value: string, name: string): Locator {
+  return graphColumn(page, value).locator(`.graph__unit[title="${name}"]`)
+}
+
+/** Columns carrying the min/max highlight. Suppressed entirely on a consensus
+ * round, so this is a count assertion in both directions. */
+export function graphExtremeColumns(page: Page): Locator {
+  return graphCard(page).locator('.graph__column--extreme')
+}
+
+/** The extremes line — "Lowest 3 — Ann, Ben · Highest 21 — Cam". Not rendered at
+ * all when the round reached consensus, so absence is `toHaveCount(0)` rather
+ * than an empty-text check. */
+export function graphExtremes(page: Page): Locator {
+  return graphCard(page).locator('.graph__extremes')
+}
+
+/** The average caption under the rail — "Average 6.3 — between 5 and 8", or
+ * "Average 5.0 — on 5" when the mean lands on a deck tick exactly. */
+export function graphCaption(page: Page): Locator {
+  return graphCard(page).locator('.graph__caption')
+}
+
 /** The host-only participants roster panel, opened from the header icon (S23). */
 export function rosterMenuTrigger(page: Page): Locator {
   return page.getByRole('button', { name: 'Room participants' })

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import {
+  card,
   createRoom,
   hostVotingToggle,
   joinViaCode,
@@ -440,7 +441,11 @@ test.describe('Host handover (FR-20)', () => {
     await revealButton(alice).click()
 
     await showStats(alice)
-    const results = alice.locator('section.card')
+    // Re-rooted from `alice.locator('section.card')` when the stats view gained
+    // the Graph card above Results (V8/D-56): one card became two and the bare
+    // locator went strict-mode ambiguous. Every assertion here is positive and
+    // was always about the Results card specifically, so narrowing loses nothing.
+    const results = card(alice, 'Results')
     await expect(results).toContainText('Average: 5.0')
     await expect(results).toContainText(/consensus/i)
 
@@ -780,9 +785,25 @@ test.describe('Participant removal (FR-21)', () => {
     await revealButton(alice).click()
 
     await showStats(alice)
-    const results = alice.locator('section.card')
+    // Two locators where there used to be one. `alice.locator('section.card')`
+    // matched the single card the room rendered, so it stood in for both "the
+    // Results card says X" and "the view says nothing about consensus". The
+    // Graph card (V8/D-56) split those meanings apart:
+    //
+    //   positives -> Results, which is what they always meant;
+    //   the negative -> the whole room, because it is a whole-view claim. This
+    //   test's name is its contract: before the removal the round is NOT a
+    //   consensus, and no widget anywhere may say otherwise. Narrowing it to
+    //   Results would move the entire Graph card out of the pin's reach and let
+    //   a "consensus" printed there pass a test named for its absence.
+    const results = card(alice, 'Results')
+    const room = alice.locator('.room')
     await expect(results).toContainText('Average: 9.0')
-    await expect(results).not.toContainText(/consensus/i)
+    // `toBeVisible` first because a negative over a locator that matches nothing
+    // is satisfied by the nothing. This one line is what makes the next assertion
+    // mean "the room says no such word" rather than "there is no room".
+    await expect(room).toBeVisible()
+    await expect(room).not.toContainText(/consensus/i)
 
     await rosterTrigger(alice).click()
     await removeFrom(alice, 'Carol')

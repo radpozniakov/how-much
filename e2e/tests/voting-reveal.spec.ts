@@ -2,6 +2,12 @@ import { expect, test, type Page } from '@playwright/test'
 import {
   card,
   createRoom,
+  graphCaption,
+  graphCard,
+  graphExtremeColumns,
+  graphExtremes,
+  graphUnits,
+  graphVote,
   joinViaCode,
   participantCards,
   resultEntry,
@@ -45,12 +51,25 @@ async function setupRoom(
   // still in the room and still appears in the header roster (S23).
   await expect(participantCards(host)).toHaveCount(2)
 
+  // Graph scenarios need three and four distinct votes, which two voters cannot
+  // produce. Extras join in call order and the server keeps insertion order, so
+  // the name lists the Graph prints stay deterministic.
+  const extra: Awaited<ReturnType<typeof browser.newContext>>[] = []
+  const join = async (name: string): Promise<Page> => {
+    const ctx = await browser.newContext()
+    extra.push(ctx)
+    const page = await ctx.newPage()
+    await joinViaCode(page, code, name)
+    return page
+  }
+
   const cleanup = async () => {
+    for (const ctx of extra) await ctx.close()
     await aCtx.close()
     await bCtx.close()
     await hostCtx.close()
   }
-  return { host, a, b, cleanup }
+  return { host, a, b, join, cleanup }
 }
 
 test.describe('Voting & reveal', () => {
@@ -205,6 +224,108 @@ test.describe('Voting & reveal', () => {
     await expect(resultEntry(host, 'Ben')).toContainText('2')
     // (1.5 + 2) / 2 = 1.75, which Results formats to one decimal place.
     await expect(card(host, 'Results')).toContainText('1.8')
+
+    await cleanup()
+  })
+
+  // The Graph card (V8/D-56) sits above Results in the same stats view. Its unit
+  // tests already pin the widget against fixtures; what only the real stack can
+  // show is that the server's votes, average and consensus flag arrive shaped the
+  // way the widget assumes — that a card string round-trips to the column with
+  // the same label, and that `consensus` is what silences the extremes line.
+
+  test('a three-way split fills the voted columns and names both extremes', async ({
+    browser,
+  }) => {
+    const { host, a, b, join, cleanup } = await setupRoom(browser)
+    const c = await join('Cam')
+
+    await voteCard(a, '3').click()
+    await voteCard(b, '5').click()
+    await voteCard(c, '13').click()
+    await revealButton(host).click()
+
+    await showStats(host)
+    await expect(graphCard(host)).toBeVisible()
+
+    // One unit per vote, in the column its card names, each naming its voter.
+    await expect(graphVote(host, '3', 'Ann')).toBeVisible()
+    await expect(graphVote(host, '5', 'Ben')).toBeVisible()
+    await expect(graphVote(host, '13', 'Cam')).toBeVisible()
+
+    // The unvoted deck values still get a column, empty — that is how a gap in
+    // the distribution reads as a gap rather than as a missing card. The
+    // facilitator host holds no card, so nothing of hers appears anywhere.
+    for (const empty of ['1', '2', '8', '21']) {
+      await expect(graphUnits(host, empty)).toHaveCount(0)
+    }
+
+    // Lowest and highest are the cast extremes, not the deck's ends.
+    await expect(graphExtremes(host)).toHaveText(
+      'Lowest 3 — Ann · Highest 13 — Cam',
+    )
+    await expect(graphExtremeColumns(host)).toHaveCount(2)
+
+    // (3 + 5 + 13) / 3 = 7, which is not a Fibonacci card, so the mean is read
+    // as bracketed by the two ticks around it.
+    await expect(graphCaption(host)).toHaveText('Average 7.0 — between 5 and 8')
+
+    await cleanup()
+  })
+
+  test('a consensus round draws the graph but prints no extremes line', async ({
+    browser,
+  }) => {
+    // The suppression is driven by the server's `consensus` flag, so it is worth
+    // one round through the real socket: the widget must not re-derive it.
+    const { host, a, b, cleanup } = await setupRoom(browser)
+
+    await voteCard(a, '8').click()
+    await voteCard(b, '8').click()
+    await revealButton(host).click()
+
+    await showStats(host)
+    await expect(graphCard(host)).toBeVisible()
+    await expect(graphVote(host, '8', 'Ann')).toBeVisible()
+    await expect(graphVote(host, '8', 'Ben')).toBeVisible()
+
+    // No lowest/highest to name when everyone agreed — the line is absent, not
+    // empty, and no column carries the highlight.
+    await expect(graphExtremes(host)).toHaveCount(0)
+    await expect(graphExtremeColumns(host)).toHaveCount(0)
+
+    // A consensus mean always lands on a tick, so the caption says "on", not
+    // "between".
+    await expect(graphCaption(host)).toHaveText('Average 8.0 — on 8')
+
+    await cleanup()
+  })
+
+  test('a tie at an extreme names every voter who is tied there', async ({
+    browser,
+  }) => {
+    // Both ends tied at once: the extremes line reports a column's whole voter
+    // list, not one representative of it.
+    const { host, a, b, join, cleanup } = await setupRoom(browser)
+    const c = await join('Cam')
+    const d = await join('Dee')
+
+    await voteCard(a, '3').click()
+    await voteCard(b, '3').click()
+    await voteCard(c, '13').click()
+    await voteCard(d, '13').click()
+    await revealButton(host).click()
+
+    await showStats(host)
+    await expect(graphUnits(host, '3')).toHaveCount(2)
+    await expect(graphUnits(host, '13')).toHaveCount(2)
+
+    await expect(graphExtremes(host)).toHaveText(
+      'Lowest 3 — Ann, Ben · Highest 13 — Cam, Dee',
+    )
+
+    // (3 + 3 + 13 + 13) / 4 = 8, a card in this deck.
+    await expect(graphCaption(host)).toHaveText('Average 8.0 — on 8')
 
     await cleanup()
   })
