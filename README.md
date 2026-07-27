@@ -4,9 +4,10 @@ A lightweight, self-hostable **Planning-Poker-style estimation tool**. A team jo
 a room, votes privately on the current item, and the host reveals all cards at once —
 removing anchoring bias. No accounts, no database.
 
-> **Status:** MVP complete and working; the UX/UI redesign has shipped. Now in the
-> **v0.1 phase** — host handover, removing a participant, and the remaining
-> deployment/polish work. See [`doc/`](doc/) for the full spec.
+> **Status:** MVP complete and working; the UX/UI redesign has shipped. In the
+> **v0.1 phase** — host handover, participant removal, and host-chosen card
+> values have shipped; remaining: session hardening and deployment/polish work.
+> See [`doc/`](doc/) for the full spec.
 
 ## How it works
 
@@ -29,15 +30,15 @@ Limits: up to **30 participants** per room.
 
 ## Documentation
 
-| Doc | Contents |
-|-----|----------|
-| [doc/00-context.md](doc/00-context.md) | Problem, goals, non-goals, architecture |
-| [doc/01-requirements.md](doc/01-requirements.md) | Functional & non-functional requirements |
-| [doc/02-current-scope.md](doc/02-current-scope.md) | Current scope: in / out / acceptance criteria |
-| [doc/03-decisions.md](doc/03-decisions.md) | Decision log with rationale |
-| [doc/04-glossary.md](doc/04-glossary.md) | Terminology |
-| [doc/06-design-language.md](doc/06-design-language.md) | Visual system: tokens, states, conventions for new UI |
-| [doc/07-v0.1-phase.md](doc/07-v0.1-phase.md) | **Current phase:** v0.1 goals, backlog, carried items |
-| [doc/archive/phase1-mvp-backlog.md](doc/archive/phase1-mvp-backlog.md) | Archived Phase 1 build log (T1…S10) |
-| [doc/archive/ux-phase-backlog.md](doc/archive/ux-phase-backlog.md) | Archived UX/UI build log (S11…S23) |
-| [doc/archive/redesign-spec.md](doc/archive/redesign-spec.md) | Archived mockup handoff the redesign was built from |
+| Doc                                                                    | Contents                                              |
+| ---------------------------------------------------------------------- | ----------------------------------------------------- |
+| [doc/00-context.md](doc/00-context.md)                                 | Problem, goals, non-goals, architecture               |
+| [doc/01-requirements.md](doc/01-requirements.md)                       | Functional & non-functional requirements              |
+| [doc/02-current-scope.md](doc/02-current-scope.md)                     | Current scope: in / out / acceptance criteria         |
+| [doc/03-decisions.md](doc/03-decisions.md)                             | Decision log with rationale                           |
+| [doc/04-glossary.md](doc/04-glossary.md)                               | Terminology                                           |
+| [doc/06-design-language.md](doc/06-design-language.md)                 | Visual system: tokens, states, conventions for new UI |
+| [doc/07-v0.1-phase.md](doc/07-v0.1-phase.md)                           | **Current phase:** v0.1 goals, backlog, carried items |
+| [doc/archive/phase1-mvp-backlog.md](doc/archive/phase1-mvp-backlog.md) | Archived Phase 1 build log (T1…S10)                   |
+| [doc/archive/ux-phase-backlog.md](doc/archive/ux-phase-backlog.md)     | Archived UX/UI build log (S11…S23)                    |
+| [doc/archive/redesign-spec.md](doc/archive/redesign-spec.md)           | Archived mockup handoff the redesign was built from   |

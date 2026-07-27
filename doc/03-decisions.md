@@ -1,7 +1,9 @@
 # 03 — Decisions
 
-Decision log for the MVP. Each entry: the choice made and why. Captured during the
-initial requirements interview.
+Decision log — the durable rationale record the commit policy points at. Each
+entry stays within a budget: the choice, the why, the load-bearing consequences,
+refs. The earliest entries came from the initial requirements interview; later
+ones land per slice as each closes.
 
 ## Tech & architecture
 
@@ -44,6 +46,8 @@ initial requirements interview.
   consensus flag (all equal). No distribution chart in MVP.
 - **D-17 Join flow: short code + shareable link.** Create returns both; join by
   either. No room listing/discovery.
+- **D-18 Room cleanup: grace period when empty.** Room persists while occupied,
+  discarded **1 minute** after the last participant leaves.
 - **D-19 Room has a system-generated unique ID, no editable name.** Rooms aren't
   named or renamed; the generated ID identifies them. Nothing for the host to edit.
 - **D-20 Backend framework: FastAPI + uvicorn.** Standard ASGI stack with
@@ -80,8 +84,6 @@ initial requirements interview.
 - **D-28 Dev-permissive CORS on the backend.** `CORSMiddleware` with
   `allow_origins=["*"]` so the browser frontend can call the API cross-origin in
   dev. To be tightened to explicit origins before deployment (T9).
-- **D-18 Room cleanup: grace period when empty.** Room persists while occupied,
-  discarded **1 minute** after the last participant leaves.
 
 ## S1 — Room domain
 
@@ -219,9 +221,8 @@ at the time. Build log: [archive/ux-phase-backlog.md](archive/ux-phase-backlog.m
   the caller's identity at handshake, so the server can only ever rename the
   connected participant, and nobody can rename anyone else. Validation matches the
   join path exactly (trimmed, non-blank, ≤ `MAX_DISPLAY_NAME_LENGTH` — D-34), and
-  names stay non-unique (D-10). Shipped during the UX phase without a matching
-  requirement; FR-19 is to be backfilled (see
-  [07-v0.1-phase.md](07-v0.1-phase.md)).
+  names stay non-unique (D-10). Shipped during the UX phase ahead of its
+  requirement; recorded since as FR-19.
 - **D-43 A round needs a subject, and a reveal needs a vote — enforced in the UI
   only.** The redesign added two preconditions to the round flow that the domain does
   not have: with no `current_item` set, the vote deck and the reveal action are both
@@ -231,8 +232,8 @@ at the time. Build log: [archive/ux-phase-backlog.md](archive/ux-phase-backlog.m
   deliberately left enabled throughout, so a host can always escape a stuck round.
   Rationale: estimating an unnamed subject, or revealing an empty round, are both
   meaningless actions that the pre-redesign UI allowed.
-  _Consequences, both accepted:_ (1) this **narrows FR-12** ("the host, and only the
-  host, reveals the round") with preconditions the requirement does not state; (2)
+  _Consequences, both accepted:_ (1) this **narrows FR-8/FR-12** with UI-only
+  preconditions, since recorded in those requirements; (2)
   because it is UI-only, `Room.reveal` remains unconditional (D-12) and a direct
   WS/HTTP call still reveals a topic-less or vote-less round — the gate is a UX
   affordance, not an invariant. Promote it into the domain if it ever needs to be
@@ -257,374 +258,169 @@ closes.
 - **D-45 Host handover is a *move*, not a grant — and legal at any point in a
   round.** `Room.transfer_host(actor, target)` is one assignment plus
   `host_voting = True`. `Room` holds a single `host_id`, so exactly one host exists
-  at any moment: no co-hosts, no residue, repeatable indefinitely. Unlike the
-  disconnect-driven auto-transfer (D-13) there is **no** transient `host_id: null`,
-  so the host UI never flickers through an unowned state.
-  `host_voting` resets to `True` for the incoming host's sake, exactly as
-  `remove_participant` does on the D-13 path: an inherited opt-out they never chose
-  would silently leave them with no deck and outside the vote-progress denominator.
-  The outgoing host keeps any vote already cast and becomes an ordinary voter — with
-  no new code, because `cast_vote`'s guard keys on `participant_id == self.host_id`,
-  so the instant the role moves they stop matching it. The opt-out was a privilege of
-  the role, not of the person.
-  **Not locked after reveal.** `RoundRevealed` guards the *inputs* to
-  `Room.results()`, which reads only `revealed` and `votes`; a handover writes
-  neither, so a revealed round's votes/average/consensus survive it byte for byte.
-  Locking it would force a host who reveals and then needs to leave to `reset` —
-  destroying the results the room is reading — as the price of handing over, which
-  inverts the guard's purpose.
-  The frame carries `target_id` and **no actor id**: the actor is the socket's
-  handshake identity, extending the anti-spoofing property D-42 documents for
-  `set_name` to an action that moves authority. Authorization is `_require_host` in
-  the domain (the frontend's `isHost` is a rendering affordance, never the boundary).
-  A self-target raises its own `CannotTargetSelf`/`cannot_target_self` rather than
-  reusing `UnknownParticipant`, whose message — "Participant is not in this room" —
-  would be false about the host; an unknown target is a genuine race and keeps
-  `not_in_room`. WS-only, with no HTTP counterpart: D-35's dual-transport period is
-  spent and S10 retires those routes. It is also the first action that **logs**
-  (actor/target/room/outcome, both outcomes, at `info`), which required the app's
-  first logging configuration — see `_configure_logging` and D-45's note below.
-  **Consequences:**
-  - The mid-round denominator grows as the outgoing host rejoins the voter pool
-    (`5/6 → 5/7`). Accepted at [07-v0.1-phase.md](07-v0.1-phase.md) lines 110-113;
-    nothing is blocked, since `reveal` is unconditional in the domain (D-12).
-  - **The denominator can also move *after* reveal** (`5/5 → 5/6`), when the outgoing
-    host had opted out. doc/07 sanctioned only the mid-round case, so this decision
-    **extends** it, on its own argument: the counter reports the *current* voter
-    roster, so freezing it would make the display lie about the room. And post-reveal
-    roster movement already ships in a **more** destructive form — a leave after
-    reveal drops the leaver *and their vote*, rewriting `results` itself, and does so
-    deliberately (`models.py` `remove_participant`) and under test
-    (`test_leave_mid_reveal_flips_consensus`, `test_leave_mid_reveal_empties_revealed_round`).
-    A handover moves the denominator without touching a single vote, so it is
-    strictly less surprising than behavior already shipped. The alternative —
-    snapshotting the voter set at reveal — would reintroduce the
-    `expected_voter_ids()` state D-43 records as *deliberately deleted*.
-  - A post-reveal handover puts a dashed `?` card in a revealed grid. Partial reveals
-    already produce that (D-12), and `ParticipantCard.resolveState` anticipates it in
-    so many words ("an abstainer falls back to the not-voted glyph") — designed for,
-    not tolerated.
+  at any moment, and unlike the disconnect auto-transfer (D-13) there is no
+  transient `host_id: null`. `host_voting` resets for the incoming host — an
+  inherited opt-out they never chose would leave them with no deck — mirroring
+  what `remove_participant` does on the D-13 path. The outgoing host keeps any
+  cast vote and becomes an ordinary voter with no new code: `cast_vote`'s guard
+  keys on `host_id`, and the opt-out was a privilege of the role, not the person.
+  **Not locked after reveal:** a handover writes neither `revealed` nor `votes`,
+  so a revealed round's results survive it byte for byte; locking would force a
+  results-destroying `reset` on a host who reveals and then needs to leave.
+  The frame carries `target_id` and **no actor id** — the socket's handshake
+  identity is the actor, extending D-42's anti-spoofing to an action that moves
+  authority. Authorization is `_require_host` in the domain; a self-target raises
+  its own `CannotTargetSelf` (reusing `UnknownParticipant`'s message would be
+  false about the host). WS-only. First action that **logs**
+  (actor/target/room/outcome, both outcomes), which brought the app's first
+  logging configuration (`_configure_logging`).
+  Accepted consequences: the vote-progress denominator can grow mid-round *and*
+  post-reveal (the counter reports the *current* roster, and a post-reveal leave
+  already rewrites results more destructively, under test), and a post-reveal
+  handover puts a dashed `?` card in a revealed grid — which partial reveals
+  already produce and `ParticipantCard.resolveState` anticipates.
 - **D-46 The roster panel stays `role="group"`; row actions are buttons in a list.**
-  The participants panel gains a per-row "Make host" action with an inline two-step
-  confirm, and **does not** become a `role="menu"`. `menuitem` is not a valid
-  container for interactive descendants, so a row holding both a Confirm and a Cancel
-  control would be invalid; and the menu pattern contracts that activating an item
-  *closes* the menu, which a two-step confirm breaks by design. Assistive tech
+  The per-row "Make host" action with its inline two-step confirm does **not**
+  make the panel a `role="menu"`: `menuitem` cannot contain the confirm's two
+  interactive controls, and the menu pattern contracts that activating an item
+  *closes* the menu, which a two-step confirm breaks by design — assistive tech
   implements that contract, so the role would mislead exactly the users it exists
-  for. The host's own row (never actionable) and the title-plus-count line are not
-  menuitems either.
-  **The trigger keeps no `aria-haspopup`.** `"true"` is synonymous with `"menu"`, and
-  `"dialog"` would promise dialog semantics; the panel is neither. `aria-expanded` +
-  `aria-controls` remain the honest description — the existing comment at
-  `ParticipantsMenu.tsx` explaining the omission gets *stronger*, not obsolete.
-  The panel's keyboard model is deliberately **richer** than `group` implies: arrow
-  keys move across row buttons. ARIA forbids claiming a role you do not implement, not
-  adding affordances beyond one.
-  Two alternatives were weighed and rejected: a **submenu** (valid ARIA, but
-  reintroduces the second popup layer the inline confirm exists to avoid) and a
-  **non-modal `role="dialog"`** panel (fits mixed content and would earn a truthful
-  `aria-haspopup="dialog"`, but is heavier than a list of names warrants and invites
-  focus-trap expectations this panel deliberately does not implement — it dismisses
-  on tab-out, which a dialog contradicts).
+  for. The trigger keeps no `aria-haspopup` (`"true"` is synonymous with
+  `"menu"`); `aria-expanded` + `aria-controls` remain the honest description. The
+  keyboard model is deliberately richer than `group` implies (arrow keys across
+  row buttons) — ARIA forbids claiming a role you do not implement, not adding
+  affordances beyond one. Rejected alternatives: a **submenu** (valid ARIA, but
+  reintroduces the popup layer the inline confirm exists to avoid) and a
+  non-modal **`role="dialog"`** (heavier than a list of names warrants, and
+  invites focus-trap expectations the panel's dismiss-on-tab-out contradicts).
   This **supersedes** the `role="menu"` upgrade promised in
-  `ParticipantsMenu.tsx`'s own comment and assigned to S21 in
-  [07-v0.1-phase.md](07-v0.1-phase.md). S21 keeps the panel in the rest of its scope
-  — keyboard, focus-visible, contrast, semantics — only the role change is retired.
-- **D-47 Removing a participant is the leave path under host authority, and it ends
-  their connection.** `Room.remove_participant_by_host(actor, target)` guards
-  (`_require_host`, then self-target, then membership) and delegates to the existing
-  `remove_participant` primitive, which the disconnect path already uses. Same effect,
-  different authority — so a removal drops the target *and their vote*, exactly as a
-  leave does. The delegate's D-13 host-auto-transfer branch is unreachable from here,
-  and provably rather than incidentally: it fires only when the removed id is
-  `host_id`, and the self-target guard rejects precisely that id, since the actor is
-  already established as the host. A removal therefore never moves the role and can
-  never empty the room, which is why it needs no `empty_since` stamp and stays in the
-  domain rather than routing through `store.leave`.
-  Like the handover, the frame carries `target_id` and **no actor id** (the socket's
-  handshake identity is the actor), authorization is in the domain, and both outcomes
-  **log** actor/target/room/outcome. V1's `_transfer_host_logged` is generalized to a
-  `_logged` wrapper over both, distinguished by a label: the two records are the same
-  four fields by requirement, not coincidence, and a second copy would have duplicated
-  the reasoning rather than the four lines of logging.
-  **Not locked after reveal — and for a different reason than the handover.** D-45
-  could argue a handover writes no input to `results()`. A removal writes `votes`, so
-  it genuinely rewrites a revealed round's average and consensus. It is unlocked
-  anyway, because `RoundRevealed`'s jurisdiction is *re-estimation* — a late vote, a
-  moved topic, a host opting out — and membership is a different axis, on which the
-  leave path already rewrites revealed results deliberately and under test
-  (`test_leave_mid_reveal_flips_consensus`). Locking it would make the guard mean two
-  different things depending on which trigger fired, and would force a host who needs
-  someone out of a revealed room to `reset` first — destroying the results the room is
-  reading, which is the exact trade that guard exists to prevent.
-  **Not a ban** (D-15), and nothing is added to make it one: with no accounts there is
-  no durable per-room state to ban against, the code still works, and a rejoin is a
-  fresh participant with a new id. Explicitly out of scope in
-  [02-current-scope.md](02-current-scope.md), so it is pinned by test as *decided*
-  rather than left as a gap someone later files as a bug. No cooldown either.
-  `CannotTargetSelf` is reused as `errors.py` anticipated, but its **message becomes
-  the caller's** — the one deviation from every sibling error. That class exists
-  *because* reusing `UnknownParticipant` would have shipped a message ("Participant is
-  not in this room") that is false about the host; a single shared wording across two
-  actions would have to be something like "you cannot target yourself", reintroducing
-  the same vagueness one layer down. Two callers, two precise sentences, one slug, so
-  the wire protocol is unchanged.
-  **Consequences:**
-  - **Socket teardown reuses the single-owner property (MF1) rather than working
-    around it.** `apply_and_evict` mutates the domain, then takes the target's socket
-    out of the `ConnectionManager` map via a new identity-blind `detach`, then
-    broadcasts, then sends the notice and closes. Because the map entry is already
-    gone, the removed socket's own handler finds `unregister` returning `False` and
-    correctly skips a domain leave for someone already removed — no duplicate
-    broadcast, no `UnknownParticipant` to suppress. `detach` is identity-blind where
-    `unregister` checks, deliberately: a handler must not retire a socket newer than
-    itself, but a host removing a participant means whichever socket represents them
-    right now — including a second one opened via the `attach` impersonation this phase
-    accepts as a known limitation.
-  - **Detach precedes the broadcast, and that order is load-bearing.** Otherwise the
-    removed client's last frame would be a snapshot of a room it is not in, which its
-    UI would render — a header with no name, a grid missing its own card — for the tick
-    before the notice arrived. Nothing in that state is true, so it never reaches a
-    screen. Pinned by a test that asserts the notice is the *first* frame, not merely
-    some frame.
-  - **Removal is the first action whose effect exceeds a broadcast**, so it is the one
-    round frame `ws._apply_round` does not dispatch: that function is synchronous by
-    contract (it is a `Room` method) and closing a socket is not. The branch lives in
-    the receive loop, where a reader looks to see what a frame does.
-  - **A new terminal error slug, `removed`, and the first mid-session error that is
-    terminal.** `roomSocket`'s terminality was phase-based — a close before any
-    snapshot is a handshake rejection, a close after one is retryable — and this frame
-    breaks that correspondence. Left to the phase rule, the removed client would spend
-    a second "reconnecting", `attach` with an id the server no longer knows, and have
-    the honest "the host removed you" overwritten by a misleading `not_in_room`. So the
-    slug is named explicitly and the state is set on the **frame**, not the close
-    behind it, which also means the reason survives a close that is delayed or lost and
-    that `send` stops accepting frames for a room the client has left.
-  - **The removed participant gets a terminal notice, not the rejoin prompt** a stale
-    identity produces, even though `useRoom` clears the session for both. A stale id is
-    a non-event and the prompt is the message; a removal is something that happened to
-    someone, and a rejoin form would neither say so nor be the right default. The
-    string is the server's, kept beside the slug it travels with, so S22 can settle the
-    copy without touching the protocol.
-  - **The roster row becomes two fixed button positions, and the confirm controls
-    never change sides: Cancel first, Confirm second.** Idle, the positions hold Make
-    host and Remove from room; arming either action replaces both, so a pending confirm
-    hides the actions entirely rather than disabling one — the action the host did not
-    arm cannot be pressed instead, and the two confirm controls are always in the same
-    place whichever action is pending.
-    **What this preserves.** The row is two buttons wide in every state, so neither
-    button ever moves: geometry is identical idle, handover-armed and removal-armed
-    (pinned by an E2E assertion, since jsdom has no layout). Both positions are
-    `button` elements at fixed child indices in every state, so React reuses the nodes
-    across a relabel and nothing is ever detached from under the caret — D-46's
-    DOM-shape constraint satisfied outright rather than narrowly. Positions are
-    rendered by a plain function returning an element, deliberately not a component:
-    one declared inside the render would be a fresh type each pass and remount the node
-    mid-confirm.
-    **What it costs, knowingly.** Confirm shares the second position with Remove, so a
-    removal is a double-press in place — but Make host owns the *first* position, so its
-    Confirm moves away and a second click there lands on Cancel. The mouse and keyboard
-    therefore disagree for the handover, which is the property V1's Cancel-before-action
-    ordering existed to protect. Accepted because it fails **safe**: a stray second
-    click calls the handover off rather than performing it, and the destructive action
-    is the one that stays a press-twice-in-place. Both halves are pinned by E2E so
-    neither is rediscovered as a bug.
-    **It also forces real focus management**, which is not optional. Because the
-    handover's Confirm is not the button just activated, a keyboard user's second Enter
-    would land on Cancel and the handover could never be completed from the keyboard.
-    So focus follows the *action* across the swap: arming moves focus to the Confirm,
-    and cancelling returns it to the slot that action occupies when idle — without the
-    latter, Escape from an armed "Make host" would strand the caret on "Remove from
-    room", one Enter from the destructive action. Confirming deliberately does *not*
-    restore, because the row is usually about to vanish (a removal drops it, a handover
-    unmounts this host-only panel); focus goes to the panel, and if the panel goes too,
-    `RoomHeader`'s existing `activeElement === body` guard catches it.
-    Two smaller consequences: V1's bare `Confirm` becomes `Confirm handover`, because
-    with two irreversible actions on one row "Confirm" tells a screen-reader user that
-    *something* will happen but not which; and the row actions gain the `:disabled`
-    treatment `.icon-btn` never had, off-live now being their only disabled state.
+  `ParticipantsMenu.tsx`'s comment and assigned to S21; S21 keeps the rest of its
+  scope.
+- **D-47 Removing a participant is the leave path under host authority, and it
+  ends their connection.** `Room.remove_participant_by_host(actor, target)`
+  guards (`_require_host`, self-target, membership) and delegates to the
+  `remove_participant` primitive the disconnect path uses — same effect,
+  different authority, so the target's vote goes with them. The delegate's D-13
+  auto-transfer branch is provably unreachable (it fires only for `host_id`,
+  which the self-target guard rejects), so a removal never moves the role and
+  never empties the room. Frame shape, authorization, and logging match D-45;
+  the two actions share a `_logged` wrapper.
+  **Not locked after reveal**, though unlike a handover it genuinely rewrites a
+  revealed round's results: `RoundRevealed`'s jurisdiction is *re-estimation*,
+  and membership is a different axis — the leave path already rewrites revealed
+  results deliberately and under test (`test_leave_mid_reveal_flips_consensus`).
+  **Not a ban** (D-15), no cooldown — pinned by test as *decided* rather than
+  left as a gap. `CannotTargetSelf` is reused with a caller-supplied message:
+  one slug, two precise sentences, wire protocol unchanged.
+  Consequences:
+  - **Teardown order is load-bearing.** `apply_and_evict` mutates the domain,
+    takes the target's socket out of the manager via an identity-blind `detach`
+    (unlike `unregister`, which checks), *then* broadcasts, then sends the notice
+    and closes — so the removed client never renders a room it is not in, and its
+    own handler finds `unregister` returning `False` and skips a duplicate leave.
+    Pinned by a test that asserts the notice is the *first* frame.
+  - **A new terminal `removed` slug — the first mid-session error that is
+    terminal.** The state is set on the **frame**, not the close behind it, so
+    the reason survives a delayed or lost close and the honest "the host removed
+    you" is never overwritten by a misleading `not_in_room` after a reconnect
+    attempt. The wording lives server-side beside the slug (S22 owns the copy).
+  - **The roster row becomes two fixed button positions** (Make host, then
+    Remove) **with fixed confirm sides: Cancel first, Confirm second.** Arming
+    either action replaces both, so the un-armed action cannot be pressed by
+    mistake and neither button ever moves (geometry pinned by E2E). The trade:
+    only removal is a press-twice-in-place; a stray second click on an armed
+    handover lands on Cancel — it fails **safe**. That forces real focus
+    management (focus follows the *action* across the swap; cancelling restores
+    it) and the explicit `Confirm handover` label for screen-reader users.
 - **D-48 The deck is room state, chosen once at creation.** `Room` gains
-  `deck: tuple[str, ...]`, defaulting to `config.FIBONACCI_DECK`; `store.create`
-  threads it; `cast_vote` validates against `self.deck`; `RoomView` carries it. This
-  **supersedes D-7 in part** — Fibonacci becomes the *default* rather than the
-  constraint — and leaves **D-8 standing untouched**: cards are still numbers only,
-  so no `?`, no coffee card, no T-shirt sizes. Named or saved decks, more than one
-  deck per room, and changing a deck after creation all stay out of scope.
-  **Fixed at creation is the load-bearing choice**, not a simplification deferred.
-  It buys the whole slice out of the only hard question a mutable deck poses — a
-  cast vote holding a card that has left the deck — and with it goes any need for a
-  host-only frame, mid-round invalidation, or a control in the roster. A host who
-  wants different values makes a new room. The cost is real and accepted: a typo in
-  the deck is unfixable without abandoning the room.
-  **Validation is at the create boundary and nowhere else** (`app/rooms/deck.py`,
-  called by `CreateRoomRequest`), so a bad deck is a `422` on creation rather than a
-  room that is already broken, and the domain sees a deck valid by construction.
-  The rules: split on commas, trim, **drop empty segments** (a trailing comma is
-  typing, not intent); each value a finite number in `[1, 999]` and at most 6
-  characters once normalized; **2 to 12** cards; order preserved as entered, never
-  sorted. *(Ranges and deck size restated by **D-49**; originally `[0, 1000)` and
-  2 to 15.)*
-  **Duplicates are rejected, not silently deduped** — the one genuinely debatable
-  rule here. Dedup is friendlier; rejection is honest, and `1, 1, 2` is a typo whose
-  quiet correction would hand the host a deck that differs from what they typed.
-  Pinned by test as *decided* rather than left to be rediscovered.
-  **Normalization is load-bearing, not cosmetic.** `1.0` → `1`, `01` → `1`, `1.50`
-  → `1.5`, all before storage, because `Room.results()` computes consensus by
-  comparing the card *strings* (`len(set(votes.values())) == 1`). An un-normalized
-  deck holding both `1` and `1.0` would let two voters who actually agree fail to
-  read as consensus. Canonicalizing also turns that pair into the duplicate it is,
-  so the two rules reinforce each other.
-  **The lower bound is what keeps that normalization honest.** Below `1e-4` `str`
-  switches to exponent form, so a card would store as `1e-05` — contradicting the
-  promise that what the room shows is a plain number, and at five characters short
-  enough to slip the length bound, on a deck that is immutable. Found in review of
-  this slice, when the floor was `0.0001` and admitted exactly that. **D-49** raised
-  the floor to `1` and so excludes the case by range rather than by guard; the
-  argument for *rejecting* rather than re-spelling is recorded there.
-  **Consequences:**
-  - **`results()` had to stop parsing cards as `int`.** `int("1.5")` raises
-    `ValueError` — a 500, not a domain error, and only on reveal, so a room with a
-    decimal card would look fine right up until the first reveal. It is `float` now,
-    pinned by a decimal-deck test at the domain level and an E2E through the real
-    socket. Display needed nothing: `Results.tsx` already formats with `toFixed(1)`.
-    Consensus deliberately still compares strings, which normalization makes exact.
-  - **Distribution is the snapshot, and that is the entire story.** `RoomView.deck`
-    reaches every client on every broadcast (D-36), so a participant who never saw
-    the create form votes from the room's own deck and a reconnecting one gets it
-    for free — `session.ts` persists nothing new.
-  - **`lib/deck.ts` demotes from mirror-of-the-only-deck to mirror-of-the-default.**
-    `VoteDeck` takes the deck as a prop and renders the snapshot's. The constant's
-    one remaining job is telling a host what leaving the field blank will give them.
-    Its old note — that drift between it and the backend was the only route to
-    `invalid_card` — is replaced by something stronger: the deck is immutable and
-    arrives in the snapshot, so a client can only click cards the room holds.
-    `invalid_card` stays unreachable from the UI and remains the guard against
-    hand-crafted frames.
-  - **The client does not pre-validate, deliberately.** `CreateRoomForm` sends the
-    raw string; a second implementation of these rules on that side could only drift
-    from the one that decides. The form surfaces the `422` inline instead, which it
-    must: duplicates and a bad card count are things no input attribute can prevent,
-    unlike the topic and name bounds whose client mirrors make rejection unreachable.
-  - **It exposed pydantic's `"Value error, "` prefix as user-visible copy.** Latent
-    until now — a 422 used to mean a name so malformed the UI had already blocked it
-    — but a mistyped deck is an ordinary outcome, so `api.ts` strips the prefix. That
-    is a leaked implementation detail, not a wording choice, so it is fixed here
-    rather than left to S22.
-
+  `deck: tuple[str, ...]` defaulting to `config.FIBONACCI_DECK`; `store.create`
+  threads it, `cast_vote` validates against it, `RoomView` carries it. This
+  **supersedes D-7 in part** — Fibonacci becomes the *default* — and leaves
+  **D-8 untouched**: cards are still numbers only, no `?`, no coffee card, no
+  T-shirt sizes; named/saved decks and post-creation changes stay out of scope.
+  **Fixed at creation is the load-bearing choice:** it buys the slice out of the
+  only hard question a mutable deck poses — a cast vote holding a card that has
+  left the deck — and with it any host-only frame or mid-round invalidation. Cost
+  accepted: a deck typo means a new room.
+  **Validation lives at the create boundary and nowhere else**
+  (`app/rooms/deck.py`, called by `CreateRoomRequest`), so a bad deck is a `422`
+  at creation, never a broken room: split on commas, trim, drop empty segments;
+  each value a finite number in range and bounded length once normalized; order
+  preserved as entered; **duplicates rejected, not silently deduped** — `1, 1, 2`
+  is a typo whose quiet correction would hand the host a deck that differs from
+  what they typed. *(Bounds since revised by **D-49**; originally `[0, 1000)` and
+  2–15 cards.)* **Normalization is load-bearing, not cosmetic:** consensus
+  compares the card *strings*, so `1` and `1.0` must canonicalize to one form —
+  which also turns that pair into the duplicate it is.
+  Consequences: `results()` parses cards as `float` now (`int("1.5")` raised —
+  a 500 on first reveal, pinned by domain and E2E tests; display already used
+  `toFixed(1)`); the snapshot is the whole distribution story (`RoomView.deck`
+  reaches every client per D-36, `session.ts` persists nothing new);
+  `lib/deck.ts` demotes to mirror-of-the-default; the client deliberately does
+  **not** pre-validate (a second implementation of the rules could only drift
+  from the one that decides — the form surfaces the `422` inline); and pydantic's
+  leaked `"Value error, "` prefix is stripped in `api.ts` — an implementation
+  detail escaping into copy, fixed here rather than left to S22.
 - **D-49 Card values are `1`–`999`; a deck holds at most 12.** Tightens the D-48
-  bounds: the floor rises from `0` to `1`, the ceiling becomes inclusive `999`
-  instead of exclusive `1000`, and `MAX_DECK_SIZE` drops from 15 to 12. Decimals
-  are untouched *inside* the range — `1.5` is still a card — so this bounds how
-  small a value may be, not how round.
-  **The default deck lost its leading `0`**, becoming `1, 2, 3, 5, 8, 13, 21`. This
-  is the consequence that reaches a user, and it is forced rather than incidental:
-  `CreateRoomForm` prints the default verbatim as the "leave blank for…" hint, so a
-  default outside the bounds would be a suggestion the form rejects with a 422 when
-  a host copied it. The alternative — exempt `0` from the floor and keep the eight-
-  card default — was considered and dropped: a floor with a footnote is harder to
-  state than a floor, and the exemption would exist only to preserve one card. The
-  cost is accepted: a host who wants a zero card cannot have one.
-  A test now pins the property rather than the value — `parse_deck` over the joined
-  default must return the default — so any future drift between the constant and
-  the rules fails at the boundary instead of in a host's face. Nothing else pinned
-  it: `Room.deck` accepts any tuple, because validation is at the create boundary
-  and nowhere else (D-48).
-  **It also retires a guard.** With a floor of 1 no accepted value can reach
-  exponent notation, so the `1e-05`-on-a-card-face bug D-48 records is excluded by
-  the range. The reasoning behind *rejecting* such values rather than re-spelling
-  them is kept because it still governs: expanding with `format(…, "f")` rounds to
-  six decimals, which would turn `1e-7` into `0` and `1.0000001` into `1` — a value
-  quietly changed underneath the host, which is worse than a bound they are told
-  about. The same call explains why the negative check is gone: `-1`, `0` and `0.5`
-  now fail one rule with one message instead of two rules with two.
-  `MAX_CARD_LENGTH` stays 6 and is still load-bearing — `1.23456` is inside the
-  range and too long to print on a card.
-
+  bounds: floor `0` → `1`, ceiling inclusive `999`, `MAX_DECK_SIZE` 15 → 12.
+  Decimals inside the range are untouched — `1.5` is still a card.
+  **The default deck lost its leading `0`**, becoming `1, 2, 3, 5, 8, 13, 21` —
+  forced, not incidental: `CreateRoomForm` prints the default verbatim as its
+  "leave blank for…" hint, and a default the validator rejects would be a
+  suggestion the form 422s when copied. Exempting `0` from the floor was
+  considered and dropped — a floor with a footnote is harder to state than a
+  floor. Cost accepted: no zero card. A test pins the *property* (`parse_deck`
+  over the joined default returns the default), so constant/rule drift fails at
+  the boundary rather than in a host's face.
+  The floor also retires the exponent-notation guard (`1e-05` can no longer
+  reach a card face); the reasoning for *rejecting* rather than re-spelling such
+  values still governs — `format(…, "f")` rounds to six decimals and would
+  quietly change a value underneath the host. `MAX_CARD_LENGTH` stays 6 and
+  still bites: `1.23456` is inside the range and too long to print on a card.
 - **D-50 The HTTP round and presence routes are retired; the socket is the only
   transport past the handshake.** Deletes `PUT /{code}/item`, `PUT /{code}/vote`,
   `PUT /{code}/host-voting`, `POST /{code}/reveal`, `POST /{code}/reset`,
-  `DELETE /{code}/participants/{participant_id}`, and the T1 `/ws` echo. `POST /rooms`
-  and `POST /rooms/{code}/participants` stay — they are entry points, and a client has
-  no socket until it knows which room to open one for (D-5, D-38). This **fulfils
-  D-35** rather than reversing it: the dual transport was time-boxed at the moment it
-  was chosen, and the frontend has driven the socket since S7. No new FR — NFR-1
-  already describes the end state, so this brings the code into line with a
-  requirement it already had.
-  **The reason it went ahead of V3, which was the substantive change to the phase
-  plan:** `DELETE /{code}/participants/{participant_id}` read its target from the path
-  and applied *no host check and no actor check at all*. Every participant id ships in
-  every snapshot, so anyone holding the room code could eject any participant — the
-  host included — over plain `curl`, with no socket and no impersonation, and
-  `allow_origins=["*"]` with `allow_methods=["*"]` let a web page preflight it. V2 had
-  just built `_require_host` plus a self-target guard for exactly that operation over
-  the socket; the HTTP door beside it had neither.
-  **This retirement closed six holes, not one — found while reviewing the change, and
-  worth recording because it was not the argument the work was justified on.** The five
-  *round* routes took their `participant_id` from the **request body**, and
-  `_require_host` does nothing but compare that id to `host_id`. Since `RoomView` ships
-  `host_id` to every client (`views.py:82`), any code-holder could join, read the
-  host's id out of a snapshot, and pass it as `participant_id` to satisfy the guard —
-  making `reveal`, `reset`, `set_item`, `vote` and `host-voting` forgeable over HTTP by
-  design, not by oversight. Body-supplied identity is the defect; the socket path takes
-  identity from the connection instead, which is why it has no equivalent.
-  **On sequencing, the honest version is narrower than "strictly worse."** The deleted
-  `DELETE` was strictly cheaper to *exploit* — a `curl` one-liner against a WebSocket
-  client — and that is what justified doing V5 first. It was **not** larger in
-  *capability*: `attach` yields the same arbitrary eject plus every host action,
-  from the same precondition. That argument therefore expired the moment V5 landed. V3
-  shrinks to `attach` plus one string in `session.ts`, and it is now the entire
-  authorization perimeter — see the note on its backlog item.
-  **What became of the D-36 parity tests.** Four tests existed to show an HTTP action
-  and a WS action converge on one snapshot, which is D-36's sharpest claim. With one
-  transport that claim is unfalsifiable — there is nothing left to converge *from* —
-  so three are deleted and D-36 carries a note saying so, because a reader will come
-  looking for the test that proves it. The fourth was **kept in reduced form** as
-  `test_http_join_reflects_to_socket`, and this is a deliberate departure from the
-  plan: the surviving HTTP join still broadcasts to sockets already in the room, and
-  it is the *only* remaining non-socket mutation that reaches connected clients.
-  Nothing else covered it — the existing join fan-out test sends a WS `join` frame —
-  so deleting all four as written would have silently dropped the last test of
-  `join_room`'s `broadcast_room_state`.
-  Three further tests kept their assertion and swapped mechanism, the deck rule and
-  the R6 stale-socket guard among them; the subject was never the transport.
-  **One deletion did lose real coverage, and the plan's own re-check missed it.** V5
-  flagged `test_rejoin_within_grace_succeeds` as the one test to verify rather than
-  assume, and nominated `test_rejoin_clears_empty_since` plus
-  `test_reoccupancy_cancels_cleanup` as its cover. They are not: both assert only on
-  `empty_since` and the sweep count, and neither exercises a room that is actually in
-  grace. What went uncovered was the deleted test's real payload — that someone
-  rejoining an emptied room inside its grace window **becomes host**. Caught by
-  mutation, after the fact: making `add_participant` skip the host assignment for an
-  in-grace room fails on `main` and passed all 244 tests this branch then had. The
-  consequence is not
-  cosmetic — the room returns with `host_id is None`, so nobody can reveal or reset it
-  and it is effectively bricked (D-13, D-18). Now pinned at domain level by
-  `test_rejoin_within_grace_gets_a_host`, which goes through `store.leave`/`store.join`
-  so the grace stamp is real. The lesson is about the method, not the test: "the domain
-  counterpart is strictly richer" was true for 31 of the 32 deletions and read as
-  true for the 32nd, and only mutation testing separated them.
-  Backend 279 → 246 tests, frontend (188) and e2e (44) untouched and verified by
-  running them.
-  **Two defences were broadened rather than pruned**, for the same reason — their value
-  is not tied to the route that used to trigger them. `_ROOM_ERROR_STATUS` now maps six
-  errors no HTTP route can raise (`RoomFull` is the last reachable one); it stays
-  complete so a future route cannot fall through to a 500, which is a property of the
-  error type, not of today's route list. And `ws.py`'s `suppress(UnknownParticipant)` in
-  the disconnect `finally` loses its only *production* trigger — a host removal detaches
-  the socket first, so `unregister` returns `False`, and a swept room fails the
-  `is not None` guard — but it stays, because if the participant is absent for any
-  reason the escaping exception skips `broadcast_room_state` and every *other* client
-  in the room silently loses their FR-17 leave fan-out. Measured, not assumed: removing
-  it makes that fan-out never arrive.
-  **Eight dangling references had to be repointed, across more files than the plan
-  listed.** Beyond `messages.py`'s `SetItemRequest` parity claim: two more in `ws.py`
-  (the re-resolve guard cited the deleted `DELETE` as its only reason, contradicting the
-  `finally` comment 47 lines below), `connection.py`'s "used by both transports",
-  `errors.py`'s HTTP-first framing, `store.py`'s "while we're HTTP-only", a test
-  docstring claiming parity with a route that no longer exists, and `frontend/config.ts`
-  crediting the `/ws` echo's retirement to S10. The pattern is worth naming: a comment
-  that justifies a rule by *naming a route* dangles when the route goes, where one that
-  states the rule does not. Repointing them was the bulk of the review's yield.
-  _Chosen over keeping the routes as a debugging affordance: they were unreachable from
-  the app, untested against the guards the socket path had grown, and every one of them
-  accepted identity from the caller._
+  `DELETE /{code}/participants/{participant_id}`, and the T1 `/ws` echo.
+  `POST /rooms` and `POST /rooms/{code}/participants` stay — they are entry
+  points (D-5, D-38). This **fulfils D-35**, which was time-boxed from the day it
+  was chosen, and adds no FR — NFR-1 already describes the end state.
+  **Sequenced ahead of V3 for a security reason:** the `DELETE` route read its
+  target from the path with **no actor or host check at all** — anyone holding
+  the room code could eject any participant over plain `curl`. Review found the
+  other five were forgeable too: they took `participant_id` from the request
+  body, and `host_id` ships in every snapshot, so any code-holder could pass the
+  host's id and satisfy `_require_host`. Body-supplied identity was the defect;
+  the socket takes identity from the connection. With these gone, `attach` (V3)
+  is the entire authorization perimeter.
+  **Test fallout:** 32 HTTP tests deleted (each with a strictly richer domain
+  counterpart), 3 re-pointed at the socket. Of the four D-36 parity tests —
+  unfalsifiable with one transport, since there is nothing left to converge
+  *from* — three were deleted and one kept in reduced form as
+  `test_http_join_reflects_to_socket`: the surviving HTTP join is the last
+  non-socket mutation that reaches connected clients, and nothing else covered
+  its broadcast. One deletion silently lost real coverage — a rejoin within the
+  grace window must get a host, or the room is bricked — caught by **mutation
+  testing** after the fact and re-pinned at domain level as
+  `test_rejoin_within_grace_gets_a_host`. The lesson is the method: "the domain
+  counterpart is strictly richer" was true for 31 of 32 deletions, and only
+  mutation testing separated them.
+  Two defences were **broadened rather than pruned**: `_ROOM_ERROR_STATUS` stays
+  complete so a future route cannot fall through to a 500 (a property of the
+  error type, not of today's route list), and `ws.py`'s
+  `suppress(UnknownParticipant)` stays in the disconnect `finally` — without it,
+  an escaping exception would deny every *other* client their FR-17 leave
+  fan-out (measured, not assumed). Eight comments that justified a rule by
+  *naming a deleted route* were repointed; ones that state the rule do not
+  dangle. Backend 279 → 246 tests; frontend (188) and e2e (44) untouched,
+  verified by running them.
+  _Chosen over keeping the routes as a debugging affordance: they were
+  unreachable from the app, untested against the guards the socket path had
+  grown, and every one of them accepted identity from the caller._
+- **D-51 The `attach` gap stays accepted; V3 is nice-to-have, not a blocker.**
+  Maintainer's call, July 2026, closing the one open security decision in the
+  phase: the tool will be deployed as an **internal team tool**, so every
+  attacker is an invited teammate and the trusted-room premise (D-9, D-29) holds
+  for the deployment actually planned. V3 (per-participant session token) stays
+  in the backlog as hardening worth doing, not as a gate on v0.1. The standing
+  rule survives the call: revisit if the tool ever goes somewhere less trusted
+  than a team room.

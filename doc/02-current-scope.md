@@ -1,16 +1,10 @@
 # 02 — Current Scope
 
-> **Living doc — what the app does today.** The MVP is complete and working
-> end-to-end, and the UX/UI redesign has shipped (build history:
-> `archive/phase1-mvp-backlog.md` and `archive/ux-phase-backlog.md`; rationale:
-> [03-decisions.md](03-decisions.md)). Keep this updated as scope changes. The
-> current [v0.1 phase](07-v0.1-phase.md) **does** add behavior — host handover,
-> removing a participant, and host-chosen card values — so expect the table below
-> to move with it.
->
-> Known gaps, all tracked in [07-v0.1-phase.md](07-v0.1-phase.md): **deployment
-> polish (S10)** — tighten CORS, finalize Docker/compose, run docs; **interaction
-> polish (S20)**, **accessibility (S21)**, and **copy (S22)**.
+> **Living doc — what the app does today.** Keep this updated as scope changes.
+> Build history lives in `archive/`; rationale in [03-decisions.md](03-decisions.md).
+> Known gaps, all tracked in [07-v0.1-phase.md](07-v0.1-phase.md): **session-token
+> hardening (V3)**, **deployment polish (S10)**, **interaction polish (S20)**,
+> **accessibility (S21)**, and **copy (S22)**.
 
 The smallest set that makes a real estimation session usable.
 
@@ -23,8 +17,7 @@ The smallest set that makes a real estimation session usable.
 | Identity | Name only, non-unique, internal ID distinguishes participants |
 | Rename | A participant can rename themselves at any time; everyone sees it live |
 | Capacity | Up to 30 participants per room |
-| Deck | Numbers only, no special cards; 2–12 cards from 1 to 999, `1,2,3,5,8,13,21` by default |
-| Card values | Host sets the room's cards when creating it (2–15 numbers, comma-separated); fixed for the room's life |
+| Deck | Numbers only, no special cards; host sets 2–12 values from 1 to 999 (comma-separated) at creation, fixed for the room's life; blank means `1,2,3,5,8,13,21` |
 | Item | Single current item with optional free-text topic |
 | Voting | Private selection; changeable until reveal |
 | Reveal | Host-only reveal; shows all cards |
@@ -37,14 +30,6 @@ The smallest set that makes a real estimation session usable.
 | Remove participant | Host removes another participant; they are told why and dropped with their vote, and may rejoin (not a ban) |
 | Room cleanup | In-memory; discarded after grace period when empty |
 | Reconnection | Rejoin as a new participant; in-round vote is lost |
-
-## Planned — in the current phase, not built yet
-
-Listed separately from "Out of scope" because they are committed work, not
-exclusions. See [07-v0.1-phase.md](07-v0.1-phase.md).
-
-- *(Nothing outstanding — host-chosen card values shipped as V4 and is in the
-  table above.)*
 
 ## Out of scope
 

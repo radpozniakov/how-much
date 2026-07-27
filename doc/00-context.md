@@ -7,10 +7,11 @@ each member privately picks an estimate for the current item, and the votes are
 revealed together on the host's command. It removes anchoring bias — nobody sees
 another person's number until everyone has committed.
 
-This is an **MVP**. The goal is a working, self-hostable tool with the smallest
-feature set that makes a real estimation session usable. There are many similar
-tools; we are not trying to differentiate on features, only to have a clean,
-dependency-light implementation we control.
+The MVP is built and working; development continues in small phases (current
+one: [07-v0.1-phase.md](07-v0.1-phase.md)). The goal is unchanged: a working,
+self-hostable tool with the smallest feature set that makes a real estimation
+session usable. There are many similar tools; we are not trying to differentiate
+on features, only to have a clean, dependency-light implementation we control.
 
 ## Problem
 
@@ -25,12 +26,13 @@ sign-up.
 - Show clear results (each vote + basic stats) after reveal.
 - Stay lightweight: no database, no persistence beyond process memory.
 
-## Non-goals (MVP)
+## Non-goals
 
 - User accounts, authentication, or authorization.
 - Persistent history, analytics, or exporting results.
 - Backlog / ticket management or integrations (Jira, etc.).
-- Multiple estimation decks or custom cards.
+- Special cards, T-shirt sizes, saved decks, or changing a room's deck after
+  creation. (The host names the room's numeric card values at creation — FR-22.)
 - Mobile-native apps.
 
 ## High-level architecture
