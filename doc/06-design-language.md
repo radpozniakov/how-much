@@ -7,9 +7,9 @@
 > and kept only for provenance.
 >
 > Read this before adding a screen or component. Currently relevant to the open
-> work in [07-v0.1-phase.md](07-v0.1-phase.md): V7 (visual refinements — the
-> first consumer of `--wash-hover`, which is defined and so far unused), S20
-> (interaction polish), S21 (accessibility), S22 (copy).
+> work in [07-v0.1-phase.md](07-v0.1-phase.md): S20 (interaction polish), S21
+> (accessibility), S22 (copy). V7 is closed; it tried `--wash-hover` and put it
+> back unused (D-53, and the note under the colour table).
 
 ## The one rule
 
@@ -45,6 +45,13 @@ cannot drift into a tint, and `--ink-muted` is neutral by construction.
   panels and cards that are already `--surface`. Translucent on purpose: the same
   value reads correctly on `--surface` and on `--bg`, so hover strength does not
   have to be re-picked per container.
+  **Defined but unused.** V7 was its first intended consumer and rejected it: on a
+  26px icon button the 8% fill did not read as feedback, and those buttons kept
+  inverting instead (D-53). So the value is untested in practice — the next
+  borderless control that wants it should look at it on screen before trusting it,
+  and 8% may simply be too weak for anything small. Do not read the rejection as a
+  ban: the idea it encodes still holds, and a 44px target is a different case from
+  a 26px one.
 
 The `color-mix(in srgb, var(--ink) 4%, transparent)` literal on the stage's topic
 editor predates `--wash-hover` and is deliberately weaker — it washes a 44px title,

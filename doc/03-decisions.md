@@ -463,3 +463,51 @@ closes.
   _Chosen over remembering nothing (the field is retyped every session, and the
   deck is retyped identically by the same host every time) and over server-side
   preferences (no accounts, D-9; no persistence, NFR-2)._
+- **D-53 What V7 shipped that its four items did not say.** V7 was specified in
+  prose and then reviewed in the browser, which changed three of the four. Recorded
+  here because reading the slice alone would leave the differences unexplained.
+  **`--wash-hover` did not survive contact.** Item 1 existed partly to be the
+  token's first consumer, and at 8% of `--ink` the fill was too faint on a 26px
+  button to read as feedback at all — the control looked inert on hover. Hover
+  reverted to the solid-ink inversion the row actions already had, so the change
+  is now "borderless at rest" alone. Since Confirm and Cancel invert identically,
+  the inversion lives once on the shared rule and their duplicate hover blocks are
+  gone. The token stays defined and documented, and is unused again (doc/06).
+  _Chosen over darkening `--wash-hover` itself: it is a shared token, and repicking
+  it for the smallest control in the app would have set the value for every future
+  borderless control from the worst case._
+  The idle row action is `1px solid transparent`, not `border: none`. The armed
+  Confirm puts a visible border back, and a border that appears from nothing
+  would grow the button by 2px and shift the pair sideways under a cursor already
+  resting on it — the exact hazard the fixed slot order in D-47 exists to prevent.
+  The transparent border keeps the box, so only the ink changes.
+  The Confirm is selected by `[data-row-confirm]`, the attribute the focus effect
+  already uses, rather than a new class. One marker for "this is the armed
+  Confirm" cannot disagree with itself; two could.
+  **The separator's spacing is anchored to the host row, not to an ordinal.** The
+  `--space-2` below the rule is `&__item--host + &__item`, not `:nth-child(2)`, so
+  it travels with the line: during the unowned window there is no separator and
+  nothing claims the space either. `:only-child` drops the rule and its padding
+  when the host is alone. Row `gap` moved to `--space-2` at the same time, which
+  silently broke the pair-tightening rule beside it — it subtracts the gap to leave
+  the buttons `--space-1` apart, so at the old `--space-3` the two buttons would
+  have touched. Both now name the same token, and the comment says they must.
+  **Item 4's third clause was already true.** `.host-reveal__btn` carries no
+  declarations of its own — it has always been the global `button` rule — so
+  "Back to start" already matched "Reveal cards" to the pixel, and nothing was
+  generalised or shared. The class remains a hook with no styles behind it.
+  What the landing treatment *did* expose is that the button sits flush against
+  the message: the two views are not a form, so `form button`'s top margin never
+  applied. A narrow `.page > .landing__description + button` rule gives it
+  `--space-4`, matching that rule's job with a smaller reach — `.page` is those two
+  views and nothing else.
+  **Both views also lost their `.card`.** A card is a surface for live content, and
+  these two say the room is over: the white panel promised something still there to
+  come back to. What is left is the title, the sentence, and the way out, on the
+  page background — which is also the whole of the landing treatment's point. The
+  spacing rule hangs off `.page` rather than `.card` precisely so it survived the
+  removal.
+  _The alternative on the last two points was to leave both alone, on the grounds
+  that V7 named three bindings and not a fourth or fifth. Rejected: the flush pair
+  and the empty card are what the restyled text made newly obvious, and shipping
+  the treatment without them would read as unfinished rather than as scoped._

@@ -194,8 +194,8 @@ form button {
 // Layout wrapper for the single-column room screens.
 .page {
   max-width: 560px;
-  margin: var(--space-8) auto;
-  padding: 0 var(--space-5);
+  margin: 0 auto;
+  padding: 30svh var(--space-5) var(--space-8);
   text-align: left;
 }
 .room
@@ -314,6 +314,10 @@ form button {
       grid-template-columns: 1fr;
     }
   }
+}
+
+.page > .landing__description + button {
+  margin-top: var(--space-4);
 }
 
 // Deep-link join prompt (/room/:id with no identity): a single main-page card,
@@ -895,15 +899,27 @@ form button {
   &__item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding: var(--space-1) 0;
+    justify-content: flex-start;
+    gap: var(--space-2);
     font-size: 14px;
 
-    // Hairline rules between rows only, so the panel edge is not doubled.
-    & + & {
-      border-top: 1px solid var(--rule-faint);
+    > span:last-child:not(:first-child) {
+      margin-left: auto;
     }
+  }
+
+  &__item--host {
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--rule-faint);
+
+    &:only-child {
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+  }
+
+  &__item--host + &__item {
+    margin-top: var(--space-2);
   }
 
   // Names run to MAX_DISPLAY_NAME_LENGTH (40), which overruns the panel width.
@@ -944,7 +960,7 @@ form button {
   // …and the second follows the first tightly, overriding its own auto. The row's own
   // `gap` is sized for name-to-badge spacing and is too wide between two buttons.
   &__row-action + &__row-action {
-    margin-left: calc(var(--space-1) - var(--space-3));
+    margin-left: calc(var(--space-1) - var(--space-2));
   }
 }
 
@@ -954,18 +970,19 @@ form button {
 // --surface on hover. This panel *lives* in the header, so the row actions inherit
 // that, and a --surface hover fill is invisible against the panel's own --surface
 // background: the buttons would look like static glyphs with no feedback at all.
-// So they opt back into the default icon-button treatment — a hairline that says
-// "control", and inversion on hover. Monochrome per doc/06: the check and cross
-// carry no colour, and the armed state reads from the glyph plus that inversion.
+// So they keep the default icon-button inversion on hover. Monochrome per doc/06:
+// the check and cross carry no colour, and the armed state reads from the glyph
+// plus that inversion.
 .participants-menu__panel .participants-menu__row-action {
   flex: none;
   // The row is 14px text; shrink the 32px icon button so a roster row does not
   // grow taller than its own name.
   width: 26px;
   height: 26px;
-  border: var(--hairline);
+  border: 1px solid transparent;
   border-radius: 6px;
-  background: var(--surface);
+  background: transparent;
+  color: var(--ink);
 
   &:hover:not(:disabled) {
     background: var(--ink);
@@ -983,12 +1000,16 @@ form button {
   }
 }
 
-// The slot acting as Cancel is secondary: no border until hovered, so an armed row has
-// exactly one emphasised control and the eye lands on the press that counts. Layered
-// after the shared rule above — same specificity (0,2,0), later wins — because every
-// Cancel is also a `__row-action` and takes that treatment first.
+.participants-menu__panel [data-row-confirm] {
+  border-color: var(--ink);
+  background: var(--surface);
+}
+
+// The slot acting as Cancel is secondary, so an armed row has exactly one emphasised
+// control and the eye lands on the press that counts. Layered after the shared rule
+// above — same specificity (0,2,0), later wins — because every Cancel is also a
+// `__row-action` and takes that treatment first.
 .participants-menu__panel .participants-menu__row-cancel {
-  border-color: transparent;
   color: var(--ink-muted);
 }
 

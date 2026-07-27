@@ -3,8 +3,8 @@
 > **Living doc — what the app does today.** Keep this updated as scope changes.
 > Build history lives in `archive/`; rationale in [03-decisions.md](03-decisions.md).
 > Known gaps, all tracked in [07-v0.1-phase.md](07-v0.1-phase.md): **session-token
-> hardening (V3)**, **visual refinements (V7)**, **deployment polish (S10)**,
-> **interaction polish (S20)**, **accessibility (S21)**, and **copy (S22)**.
+> hardening (V3)**, **deployment polish (S10)**, **interaction polish (S20)**,
+> **accessibility (S21)**, and **copy (S22)**.
 
 The smallest set that makes a real estimation session usable.
 
