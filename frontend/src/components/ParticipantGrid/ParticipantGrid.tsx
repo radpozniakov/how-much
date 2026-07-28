@@ -14,14 +14,17 @@ export const ParticipantGrid: FC<ParticipantGridProps> = ({
   results,
 }) => (
   <ul className="participant-grid" aria-label="Participants">
-    {participants.map((p) => (
-      <ParticipantCard
-        key={p.id}
-        name={p.name}
-        hasVoted={p.has_voted}
-        revealed={revealed}
-        value={revealed ? results?.votes[p.id] : undefined}
-      />
-    ))}
+    {participants.map((p) => {
+      const value = revealed ? results?.votes[p.id] : undefined
+      return (
+        <ParticipantCard
+          key={p.id}
+          name={p.name}
+          hasVoted={p.has_voted}
+          revealed={revealed}
+          {...(value === undefined ? {} : { value })}
+        />
+      )
+    })}
   </ul>
 )

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "typecheck": "tsc -b --pretty false",
+    "lint": "eslint . --cache --cache-location node_modules/.cache/eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",

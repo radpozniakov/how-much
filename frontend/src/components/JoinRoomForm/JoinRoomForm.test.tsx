@@ -5,15 +5,16 @@ import * as api from '../../lib/api'
 import { loadRecall, rememberInputs } from '../../lib/recall'
 import * as session from '../../lib/session'
 import { makeRoom } from '../../test/fixtures'
+import type * as ReactRouter from 'react-router'
 
 const navigate = vi.fn()
 
 vi.mock('../../lib/api', async (importActual) => {
-  const actual = await importActual<typeof import('../../lib/api')>()
+  const actual = await importActual<typeof api>()
   return { ...actual, joinRoom: vi.fn() }
 })
 vi.mock('react-router', async (importActual) => ({
-  ...(await importActual<typeof import('react-router')>()),
+  ...(await importActual<typeof ReactRouter>()),
   useNavigate: () => navigate,
 }))
 vi.mock('../../lib/session', () => ({ saveSession: vi.fn() }))

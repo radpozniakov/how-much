@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+
+npm --prefix "$ROOT/frontend" run typecheck
+npm --prefix "$ROOT/frontend" run lint
+npm --prefix "$ROOT/e2e" run typecheck
+npm --prefix "$ROOT/e2e" run lint

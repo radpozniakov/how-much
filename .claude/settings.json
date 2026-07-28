@@ -1,0 +1,48 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "in=$(cat); case \"$in\" in *git*commit*) printf '%s' \"$in\" | /usr/bin/python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-commit-message.py\" ;; *) exit 0 ;; esac"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agent-notify send --json --ignore-errors --source claude --cwd \"$PWD\" --event notification --title 'Claude needs attention' --dedupe-key claude-notification --dedupe-window-sec 60"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agent-notify send --json --ignore-errors --source claude --cwd \"$PWD\" --event stop --title 'Claude finished' --dedupe-window-sec 30"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agent-notify send --json --ignore-errors --source claude --cwd \"$PWD\" --event subagent_stop --title 'Claude subagent finished' --dedupe-window-sec 30"
+          }
+        ]
+      }
+    ]
+  }
+}

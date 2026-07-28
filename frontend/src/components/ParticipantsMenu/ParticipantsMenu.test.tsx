@@ -27,8 +27,7 @@ function renderMenu(currentParticipantId = 'p1', overrides = {}) {
 }
 
 const trigger = () => screen.getByRole('button', { name: 'Room participants' })
-const rowAction = (name: string) =>
-  screen.getByRole('button', { name }) as HTMLButtonElement
+const rowAction = (name: string) => screen.getByRole('button', { name })
 
 const row = (name: string) => screen.getByText(name).closest('li')!
 

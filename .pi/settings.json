@@ -1,0 +1,24 @@
+{
+  "skills": ["../.claude/skills"],
+  "subagents": {
+    "defaultModel": "openai-codex/gpt-5.5",
+    "agentOverrides": {
+      "oracle": {
+        "model": "openai-codex/gpt-5.6-sol",
+        "thinking": "high"
+      },
+      "planner": {
+        "model": "openai-codex/gpt-5.5",
+        "thinking": "high"
+      },
+      "scout": {
+        "model": "openai-codex/gpt-5.6-luna",
+        "thinking": "low"
+      },
+      "worker": {
+        "model": "openai-codex/gpt-5.6-terra",
+        "thinking": "medium"
+      }
+    }
+  }
+}

@@ -22,12 +22,12 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
-  // Type-aware rules for our source (needs a TS program). Scoped to src/ because
-  // these files are the ones covered by tsconfig.app.json. `no-deprecated`
-  // surfaces uses of @deprecated APIs (e.g. React's FormEvent) as lint errors so
-  // they're caught in CI, not just in the editor.
+  // Type-aware rules need the owning TS program. Project service maps source
+  // files to tsconfig.app.json and the Vite config to tsconfig.node.json.
+  // `no-deprecated` surfaces uses of @deprecated APIs (e.g. React's FormEvent)
+  // as lint errors so they're caught in CI, not just in the editor.
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}', 'vite.config.ts'],
     plugins: { '@typescript-eslint': tseslint.plugin },
     languageOptions: {
       parser: tseslint.parser,
@@ -37,7 +37,16 @@ export default defineConfig([
       },
     },
     rules: {
+      '@typescript-eslint/await-thenable': 'error',
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        { prefer: 'type-imports', fixStyle: 'separate-type-imports' },
+      ],
       '@typescript-eslint/no-deprecated': 'error',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+      '@typescript-eslint/restrict-template-expressions': 'error',
+      '@typescript-eslint/switch-exhaustiveness-check': 'error',
+      '@typescript-eslint/use-unknown-in-catch-callback-variable': 'error',
     },
   },
 ])

@@ -12,7 +12,7 @@ const renderInRouter = (ui: ReactElement) =>
   render(<MemoryRouter>{ui}</MemoryRouter>)
 
 vi.mock('../../lib/api', async (importActual) => {
-  const actual = await importActual<typeof import('../../lib/api')>()
+  const actual = await importActual<typeof api>()
   return { ...actual, joinRoom: vi.fn() }
 })
 vi.mock('../../lib/session', () => ({ saveSession: vi.fn() }))

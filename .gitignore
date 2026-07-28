@@ -1,4 +1,5 @@
 .omc/
+.pi-subagents/
 
 # Python
 __pycache__/
