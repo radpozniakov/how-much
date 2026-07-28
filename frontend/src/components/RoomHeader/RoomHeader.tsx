@@ -22,7 +22,9 @@ export const RoomHeader: FC<RoomHeaderProps> = ({
   status,
   participantsMenu,
 }) => {
-  const [copied, setCopied] = useState(false)
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>(
+    'idle',
+  )
   const nameRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -72,14 +74,18 @@ export const RoomHeader: FC<RoomHeaderProps> = ({
         scratch.value = url
         document.body.appendChild(scratch)
         scratch.select()
-        // eslint-disable-next-line @typescript-eslint/no-deprecated
-        document.execCommand('copy')
-        document.body.removeChild(scratch)
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-deprecated
+          if (!document.execCommand('copy')) throw new Error('Copy failed')
+        } finally {
+          document.body.removeChild(scratch)
+        }
       }
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1500)
-    // eslint-disable-next-line no-empty
+      setCopyStatus('copied')
+      window.setTimeout(() => setCopyStatus('idle'), 1500)
     } catch {
+      setCopyStatus('failed')
+      window.setTimeout(() => setCopyStatus('idle'), 3000)
     }
   }
 
@@ -96,7 +102,7 @@ export const RoomHeader: FC<RoomHeaderProps> = ({
             className="icon-btn"
             onClick={copyLink}
             aria-label="Copy room link"
-            title={copied ? 'Copied!' : 'Copy room link'}
+            title={copyStatus === 'copied' ? 'Copied!' : 'Copy room link'}
           >
             <CopyIcon />
           </button>
@@ -110,9 +116,19 @@ export const RoomHeader: FC<RoomHeaderProps> = ({
             <ExitIcon />
           </button>
         </div>
-        <span className="room-header__copied" role="status" aria-live="polite">
-          {copied ? 'Link copied' : ''}
-        </span>
+        {copyStatus === 'failed' ? (
+          <span className="room-header__copied" role="alert">
+            Could not copy link
+          </span>
+        ) : (
+          <span
+            className="room-header__copied"
+            role="status"
+            aria-live="polite"
+          >
+            {copyStatus === 'copied' ? 'Link copied' : ''}
+          </span>
+        )}
       </div>
 
       <div className="room-header__trail">

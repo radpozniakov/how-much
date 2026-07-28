@@ -87,6 +87,21 @@ describe('RoomHeader', () => {
     expect(await screen.findByText('Link copied')).toBeInTheDocument()
   })
 
+  it('shows an error when copying the room link fails', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(
+      new Error('Permission denied'),
+    )
+    renderHeader()
+
+    await user.click(screen.getByRole('button', { name: 'Copy room link' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not copy link',
+    )
+    expect(screen.queryByText('Link copied')).not.toBeInTheDocument()
+  })
+
   it('leaves the room on the exit button', async () => {
     const onExit = vi.fn()
     const user = userEvent.setup()

@@ -52,6 +52,14 @@ describe('RoomSocket', () => {
     expect(state.room).toEqual(fakeRoom)
   })
 
+  it('ignores a malformed server frame', () => {
+    const socket = openSocket()
+    deliver(lastSocket(), { type: 'room_state', room: { code: 'ABCDEF' } })
+
+    expect(socket.getSnapshot().status).toBe('connecting')
+    expect(socket.getSnapshot().room).toBeNull()
+  })
+
   it('treats a handshake-phase close as terminal with no reconnect', () => {
     const socket = openSocket()
     lastSocket().onclose?.()

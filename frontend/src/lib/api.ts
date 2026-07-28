@@ -1,14 +1,6 @@
 import { API_URL } from '../config'
 import type { ApiError, RoomView } from '../types'
-
-interface JoinResponse {
-  participant_id: string
-  room: RoomView
-}
-
-interface CreateResponse extends JoinResponse {
-  link: string
-}
+import { parseCreateResponse, parseJoinResponse } from './protocol'
 
 export interface JoinResult {
   participantId: string
@@ -39,12 +31,12 @@ export function requestErrorMessage(err: unknown): string {
 
 function normalizeDetail(body: unknown): string {
   if (body && typeof body === 'object' && 'detail' in body) {
-    const detail = (body as { detail: unknown }).detail
+    const detail = body.detail
     if (typeof detail === 'string') return detail
     if (Array.isArray(detail) && detail.length > 0) {
       const first: unknown = detail[0]
       if (first && typeof first === 'object' && 'msg' in first) {
-        const msg = (first as { msg: unknown }).msg
+        const msg = first.msg
         if (typeof msg === 'string') return msg.replace(/^Value error, /, '')
       }
     }
@@ -52,7 +44,11 @@ function normalizeDetail(body: unknown): string {
   return 'Request failed.'
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+async function post<T>(
+  path: string,
+  body: unknown,
+  parse: (value: unknown) => T,
+): Promise<T> {
   let res: Response
   try {
     res = await fetch(`${API_URL}${path}`, {
@@ -76,17 +72,21 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     const err: ApiError = { status: res.status, detail: normalizeDetail(data) }
     throw err
   }
-  return data as T
+  return parse(data)
 }
 
 export async function createRoom(
   name: string,
   cards = '',
 ): Promise<CreateResult> {
-  const res = await post<CreateResponse>('/rooms', {
-    name,
-    cards: cards.trim() || null,
-  })
+  const res = await post(
+    '/rooms',
+    {
+      name,
+      cards: cards.trim() || null,
+    },
+    parseCreateResponse,
+  )
   return { participantId: res.participant_id, room: res.room, link: res.link }
 }
 
@@ -94,9 +94,10 @@ export async function joinRoom(
   code: string,
   name: string,
 ): Promise<JoinResult> {
-  const res = await post<JoinResponse>(
+  const res = await post(
     `/rooms/${encodeURIComponent(code)}/participants`,
     { name },
+    parseJoinResponse,
   )
   return { participantId: res.participant_id, room: res.room }
 }

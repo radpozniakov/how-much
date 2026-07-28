@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { makeRoom } from '../test/fixtures'
 import { createRoom, isApiError, joinRoom } from './api'
 
 afterEach(() => {
@@ -93,7 +94,7 @@ describe('api success', () => {
   it('maps a create response to camelCase + canonical code', async () => {
     stubFetch(201, {
       participant_id: 'p1',
-      room: { code: 'ABCDEF', participants: [] },
+      room: makeRoom(),
       link: 'http://localhost:5173/room/ABCDEF',
     })
     const result = await createRoom('Alice')
@@ -102,11 +103,23 @@ describe('api success', () => {
     expect(result.link).toBe('http://localhost:5173/room/ABCDEF')
   })
 
+  it('rejects a malformed success response', async () => {
+    stubFetch(201, {
+      participant_id: 'p1',
+      room: { code: 'ABCDEF' },
+      link: 'http://localhost:5173/room/ABCDEF',
+    })
+
+    await expect(createRoom('Alice')).rejects.toThrow(
+      'Invalid create response payload',
+    )
+  })
+
   it('sends the raw card values, and null when they are blank', async () => {
     const body = async (cards?: string) => {
       stubFetch(201, {
         participant_id: 'p1',
-        room: { code: 'ABCDEF', participants: [] },
+        room: makeRoom(),
         link: 'l',
       })
       await createRoom('Alice', cards)

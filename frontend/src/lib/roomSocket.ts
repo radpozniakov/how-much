@@ -1,5 +1,6 @@
 import { roomSocketUrl } from '../config'
 import type { ClientFrame, RoomView, ServerFrame } from '../types'
+import { parseServerFrame } from './protocol'
 
 const RECONNECT_DELAY_MS = 1000
 
@@ -83,7 +84,8 @@ export class RoomSocket {
   private handleMessage(event: MessageEvent): void {
     let frame: ServerFrame
     try {
-      frame = JSON.parse(String(event.data)) as ServerFrame
+      const raw: unknown = JSON.parse(String(event.data))
+      frame = parseServerFrame(raw)
     } catch {
       return
     }
