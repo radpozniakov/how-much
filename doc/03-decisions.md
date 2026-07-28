@@ -538,3 +538,27 @@ section below this one, starting at **D-55**.
   _Chosen over carrying them a third time (the same non-decision, with more
   history) and over deleting them silently (the phase doc would lose why four
   headings vanished, and the loose ends above would go unrecorded)._
+- **D-55 The Graph view pulls vote-distribution display into scope (V8).**
+  Maintainer's call, July 2026 — the decision that names the v0.2 goal. Since
+  Phase 1 both scope docs carried "no vote-value distribution charts — average +
+  consensus only"; v0.2 reverses exactly that line and no more. The reveal today
+  answers *what* everyone voted but not *how far apart the room is* or *who to
+  ask why* — the two questions a host actually facilitates with, since a spread
+  vote is the marker that the item itself is unclear. Shape fixed up front:
+  **(a) everyone sees the widgets**, not host-only — results are already
+  symmetric, the votes reach every client regardless, and a host-only render
+  would be an `isHost` affordance pretending to be a boundary (the standing S23
+  rule); **(b) the extremes carry names** — the poker ritual is that lowest and
+  highest explain their reasoning, and the names are already on the revealed
+  cards, so counts-only anonymity would be cosmetic; **(c) current round only**
+  — no per-round history, so the round-over-round convergence widget stays out:
+  session history is the first step toward the analytics non-goal (doc/00) and
+  is not taken here; **(d) average stays the only central stat** — no median or
+  mode until a real session misses them. Consequence: V8 is expected to be
+  frontend-only — every input (each revealed vote, the deck, average, consensus)
+  is already in the broadcast `room_view`, so no new frames and no backend
+  change.
+  _Chosen over a host-only analysis panel (a new asymmetry with no real
+  boundary behind it) and over shipping with per-round history (the
+  highest-value widget, but a genuine scope change that deserves its own
+  decision if a later phase wants it)._

@@ -41,7 +41,8 @@ The smallest set that makes a real estimation session usable.
 - T-shirt sizing and special cards (`?`, coffee) — custom decks are numbers-only;
   also out: named or saved decks, more than one deck per room, and changing the
   deck after the room is created
-- Vote-value distribution charts (only average + consensus for now)
+- Vote-value distribution charts (only average + consensus for now) — being
+  pulled into scope by v0.2's V8 (D-55); this line retires when it ships
 - Spectators as a distinct role
 - Banning a removed participant (removal is not a ban — the code still works)
 - Reconnection state restore, timers, per-round history
